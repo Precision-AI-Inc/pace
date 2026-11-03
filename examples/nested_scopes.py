@@ -10,11 +10,13 @@ function calls.
 
 What ``p=`` means for estimates: a reader never adds a child's remaining time on top of its
 parent's. The parent's own estimate already includes the time its children take, so the
-job's estimate is the root's. Children give people the detail (which loop is running, how
-far it is) without changing the number a scheduler uses. Here the root counts epochs, which
-gives the estimate only three data points; when the epoch count is small, one root over
-total steps is smoother (see ``epochs_and_batches.py``). Use children when the detail is
-worth the extra lines.
+job's estimate is the root's. Here the root counts epochs, so it has a rate of its own only
+after three updates. Until then the reader builds the root's estimate from the children:
+after the first epoch from the time an epoch took (training and validation together),
+during the first from the time so far plus what the running loop has left. When the epoch
+count is small, one root over total steps gives a steadier estimate sooner (see
+``epochs_and_batches.py``). Children also give people the detail: which loop is running,
+and how far it is.
 
 Each pass creates new scopes, so give them distinct ids with ``scope=`` (``train-0``,
 ``val-0``, ...). Without ``scope=``, repeated descriptions are numbered for you (``train``,

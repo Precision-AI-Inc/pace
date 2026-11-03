@@ -9,9 +9,13 @@ rough share of the runtime, and each stage runs under the name the plan gave it.
 
 Shows: ``plan([...])`` and ``phase(...)``, in the three shapes a stage can take:
 
-* ``with phase("Preprocess")``: a short stage with no count of its own.
+* ``phase("Preprocess", weight=0.10)``: a short stage with no count of its own, created
+  first so that the plan can take the phase itself, with its weight next to it.
 * ``with phase("Train"): for ... in track(...)``: a long counted stage. A phase has no rate
-  of its own, so the reader uses the estimate of the loop inside it.
+  of its own, so the reader uses the estimate of the loop inside it. While it runs the job
+  estimate is marked ``partial``: the reader cannot know whether more loops will follow in
+  the same phase. To avoid that, make the counted loop the planned stage itself, as
+  ``Evaluate`` is.
 * ``track(..., description="Evaluate")``: the counted scope itself is the planned stage.
 
 There is no ``root=True`` here: the plan covers the whole job, which counts as complete
@@ -54,10 +58,12 @@ def evaluate_batch(batch: int) -> float:
 
 def main() -> None:
     """Run the three stages, declared by a plan."""
-    # Write the plan before the first stage starts.
-    plan([("Preprocess", 0.10), ("Train", 0.80), ("Evaluate", 0.10)])
+    # Write the plan before the first stage starts. A plan entry is a phase or a
+    # (name, weight) pair.
+    prep = phase("Preprocess", weight=0.10)
+    plan([prep, ("Train", 0.80), ("Evaluate", 0.10)])
 
-    with phase("Preprocess"):
+    with prep:
         preprocess()
 
     with phase("Train"):

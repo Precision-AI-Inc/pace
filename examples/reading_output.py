@@ -20,7 +20,8 @@ observations before it calls an estimate ``live``, and calls ``snapshot`` on a t
 well as after each record, so a silent job turns ``stale``. This demo watches a job of a
 second, so it lowers ``min_observed_seconds`` to be able to show a live estimate at all.
 Only the trailer at the end of a ``PROGRESS`` line is a contract: never parse the readable
-text in front of it.
+text in front of it. Show an estimate with ``partial=True`` as a lower bound ("at least
+10 min"): it covers only the work seen so far.
 
 Run: ``python examples/reading_output.py``. The child is ``examples/track_loop.py`` with
 ``PACE_MIN_INTERVAL=0`` so that it writes every update, and ``PACE_BAR=never`` so that it

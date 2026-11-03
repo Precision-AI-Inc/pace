@@ -20,8 +20,9 @@ Run: ``python examples/stdlib_logging.py``. Add ``PACE_MIN_INTERVAL=0`` to see e
 progress line.
 
 Expect: the library's ``INFO``, ``WARNING`` and ``ERROR`` records in Pace's line format on
-stdout, with the traceback of the logged exception, the warning from ``warnings.warn``, and
-a ``Load shards`` progress scope. The ``debug`` record does not appear.
+stdout, with the traceback of the logged exception, the warning from ``warnings.warn``
+(followed, as ``captureWarnings`` always does, by the source line that raised it), and a
+``Load shards`` progress scope. The ``debug`` record does not appear.
 """
 
 from __future__ import annotations

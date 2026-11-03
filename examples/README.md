@@ -41,7 +41,7 @@ pip install "precisionai-pace[transformers]"               # transformers_exampl
 | [`track_loop.py`](track_loop.py) | A plain loop that is nearly the whole job | `track`, `description=`, `unit=`, `root=True` |
 | [`epochs_and_batches.py`](epochs_and_batches.py) | Training for several epochs of batches | One root `progress` over `epochs * batches`, `advance` |
 | [`manual_progress.py`](manual_progress.py) | Concurrent requests that finish out of order | `progress`, `advance`, `concurrent.futures` |
-| [`phases_and_plan.py`](phases_and_plan.py) | Preprocess, then train, then evaluate | `plan`, `phase`, a counted loop inside a phase |
+| [`phases_and_plan.py`](phases_and_plan.py) | Preprocess, then train, then evaluate | `plan`, `phase` (also as a plan entry), a counted loop inside a phase |
 | [`resume.py`](resume.py) | Continuing from a checkpoint | `completed=`, `resumed=True` |
 | [`unknown_total.py`](unknown_total.py) | A paged stream whose length is learned later | `progress` with no total, `set_total` |
 | [`timed_steps.py`](timed_steps.py) | One-off steps (load a model, save results) around a loop | `@timed`, steps nested in a root |
