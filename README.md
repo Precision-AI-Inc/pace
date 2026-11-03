@@ -34,7 +34,9 @@ pip install precisionai-pace
 ## Usage
 
 ```python
-from precisionai.pace import logger, track, progress
+from precisionai.pace import capture_logging, logger, progress, track
+
+capture_logging()  # route PyTorch's and Transformers' standard logging through Pace
 
 logger.info("Loading model")
 logger.success("Model ready")
@@ -48,14 +50,48 @@ with progress(total=len(requests), description="Evaluation", unit="request") as 
         run.advance()
 ```
 
-In a container, a progress line looks like this:
+Also available: `timed`, `phase` and `plan` for multi-stage jobs, `root=True` to mark
+the scope that stands for the whole job, and `completed=` with `resumed=True` to resume
+from a checkpoint. Settings come from `logger.configure(...)` or `PACE_*` environment
+variables, so a scheduler can change them without code changes.
+
+In a terminal, progress is one bar that redraws in place. In a container or a log file it
+is a rate-limited line like this one:
 
 ```text
 2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 u=step e=763.1 q=57]
 ```
 
 The part before `[pace:1 ...]` is for people. The bracketed trailer is a stable,
-versioned format described in [docs/design.md](docs/design.md).
+versioned format described in [docs/design.md](docs/design.md); a program that reads it
+should use `parse_line`, `LineSplitter` and `JobForecast` (see
+[Reading Pace output](docs/reading-output.md)).
+
+---
+
+## Documentation
+
+| Page | Read it for |
+|---|---|
+| [Getting started](docs/getting-started.md) | Install, first log lines, first progress loop, terminal vs container output. |
+| [Logging](docs/logging.md) | Levels, `exception`, `configure` and precedence, `capture_logging`, colour, encodings, ranks. |
+| [Progress](docs/progress.md) | `track`, `progress`, `timed`, `phase`, `plan`, nesting, resuming, root scope, emission rates, the terminal bar. |
+| [Framework integrations](docs/frameworks.md) | The PyTorch Lightning and Hugging Face Transformers callbacks. |
+| [Migrating](docs/migrating.md) | From `print`, `tqdm`, Loguru and `logging`. |
+| [Configuration](docs/configuration.md) | Every `PACE_*` variable and its `configure` equivalent. |
+| [Reading Pace output](docs/reading-output.md) | For programs that read logs: parsing, de-duplication, estimates, conformance fixtures. |
+| [FAQ](docs/faq.md) | Short answers. |
+| [Design](docs/design.md) | The specification: line format, forecasting rules, decisions. |
+
+The HTML build of these pages (and the module reference) is produced with Sphinx:
+
+```bash
+cd docs
+make html       # HTML docs → docs/_build/html/index.html
+make latexpdf   # PDF      → docs/_build/latex/documentation.pdf
+```
+
+Dependencies: `pip install -r docs/requirements.txt`
 
 ---
 
@@ -85,18 +121,6 @@ tests/              # mirrors the package structure
 ```
 
 See [CLAUDE.md](CLAUDE.md) for the coding standard.
-
----
-
-## Documentation
-
-```bash
-cd docs
-make html       # HTML docs → docs/_build/html/index.html
-make latexpdf   # PDF      → docs/_build/latex/documentation.pdf
-```
-
-Dependencies: `pip install -r docs/requirements.txt`
 
 ---
 

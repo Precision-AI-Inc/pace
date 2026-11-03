@@ -1,7 +1,6 @@
 # Configuration file for the Sphinx documentation builder.
 # See https://www.sphinx-doc.org/en/master/usage/configuration.html
 import os
-import shutil
 import subprocess
 import sys
 
@@ -14,7 +13,17 @@ _docs_dir = os.path.dirname(os.path.abspath(__file__))
 _readme_src = os.path.join(_root, "README.md")
 _readme_copy = os.path.join(_docs_dir, "readme.md")
 if os.path.isfile(_readme_src):
-    shutil.copy2(_readme_src, _readme_copy)
+    with open(_readme_src, encoding="utf-8") as _handle:
+        _readme_text = _handle.read()
+    # The README links to pages as docs/<name>; inside docs/ they are siblings.
+    _readme_text = _readme_text.replace("](docs/", "](").replace('src="docs/', 'src="')
+    # Files at the repository root are not part of the docs; link to them on GitHub.
+    for _name in ("LICENSE", "CLAUDE", "SECURITY", "CONTRIBUTING", "CODE_OF_CONDUCT"):
+        _readme_text = _readme_text.replace(
+            "](%s.md)" % _name, "](https://github.com/Precision-AI-Inc/pace/blob/main/%s.md)" % _name
+        )
+    with open(_readme_copy, "w", encoding="utf-8", newline="\n") as _handle:
+        _handle.write(_readme_text)
 
 
 def _get_version_from_git() -> str:
@@ -60,6 +69,8 @@ source_suffix = {
     ".rst": "restructuredtext",
     ".md": "markdown",
 }
+
+myst_heading_anchors = 4
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

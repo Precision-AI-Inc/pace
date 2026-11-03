@@ -17,5 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `capture_logging()` to route the standard library's `logging` (and so PyTorch's and Transformers') through Pace.
 - `parse_line` and `LineSplitter` for programs that read Pace output, with shared conformance fixtures.
 - Time-remaining estimates (`ScopeForecast`, `JobForecast`) shared by the terminal display and by schedulers.
+- User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
 [Unreleased]: https://github.com/Precision-AI-Inc/pace/commits/main
