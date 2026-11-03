@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes are provided for the latest released version of `pai-myproject`.
+Security fixes are provided for the latest released version of `precisionai-pace`.
 
 Older versions are not guaranteed to receive patches. Please upgrade to the latest release before reporting a vulnerability where practical.
 
@@ -17,9 +17,9 @@ Instead, report suspected vulnerabilities privately by emailing:
 Please include as much of the following as possible:
 
 - A brief description of the issue
-- Steps to reproduce, including any relevant request payload or input data
+- Steps to reproduce, including any relevant log output or input data
 - A minimal proof of concept, if available
-- The affected package version (`pip show pai-myproject`)
+- The affected package version (`pip show precisionai-pace`)
 - Python version and operating system
 - Any known impact or realistic attack scenario
 
@@ -29,17 +29,15 @@ We will acknowledge receipt within 7 business days and follow up with any questi
 
 Issues are considered security-relevant when they allow:
 
-- Unauthorized access to data or results served through the API
-- Arbitrary code execution triggered by a crafted input payload
-- Privilege escalation through the service
+- Secrets, credentials or arbitrary configuration written to logs by the package itself
+- Arbitrary code execution, or unbounded memory or CPU use, triggered by parsing crafted log lines
 - Supply-chain compromise of the package or its release artifacts
-- Denial of service caused by malformed or adversarially large input where the service is expected to handle untrusted data
 
 The following are generally out of scope:
 
 - Issues that require pre-existing arbitrary code execution on the host
 - Vulnerabilities only affecting unsupported versions
-- Problems caused by intentionally unsafe deployment (e.g. exposing the API to the public internet without authentication)
+- Values a caller deliberately passes into a log message
 - Reports without enough information to reproduce or assess the issue
 
 ## Coordinated Disclosure
@@ -58,5 +56,5 @@ If a vulnerability is confirmed, we will:
 Security fixes are distributed through normal package channels. Upgrade with:
 
 ```bash
-pip install --upgrade pai-myproject
+pip install --upgrade precisionai-pace
 ```

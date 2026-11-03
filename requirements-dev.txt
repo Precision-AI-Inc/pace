@@ -7,10 +7,9 @@
 # Testing
 pytest>=7.0
 pytest-cov>=5.0
-httpx>=0.28
 
-# Pre-commit
-pre-commit>=3.7
+# Pre-commit (needs Python 3.9+; on 3.8 run the tests directly)
+pre-commit>=3.7; python_version >= '3.9'
 
 # Type checking
 pyright>=1.1

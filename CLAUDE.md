@@ -1,67 +1,39 @@
-# Precision AI — Python Project Standards
+# Pace — Project Standards
 
-Apply these standards when writing, reviewing, or refactoring code in any PAI Python project.
-
----
-
-## Using this template
-
-When starting a new project from this template, complete these steps in order.
-
-**1. Global find-and-replace** (in the order shown — `myproject` last to avoid partial matches):
-
-| Find | Replace with | Notes |
-|---|---|---|
-| `agri-template` | your GitHub repository name | badge/logo URLs in `README.md`, comment in `.github/workflows/ci.yml`, issue template links |
-| `pai-myproject` | your distribution name (kebab-case, e.g. `pai-ag-emb`) | `pyproject.toml` `[project]` name and `[project.scripts]`, PyPI badge URLs |
-| `PAI MyProject` | your human-readable project name | `pyproject.toml` description, `docs/conf.py`, `docs/index.rst`, `docs/modules.rst` |
-| `myproject` | your project namespace (snake_case, e.g. `ag_emb`) | all Python source files, all `docs/` files, `pyproject.toml` |
-
-The `precisionai` top-level namespace package is **fixed** across all PAI Python projects — never rename it. Your project lives at `precisionai/<namespace>/`.
-
-**2. Update `pyproject.toml`:**
-- `description` — one-line description of what this project does
-- `dependencies` — remove FastAPI/uvicorn if not building an API; add domain-specific deps
-- `keywords`, `classifiers`, `[project.urls]` — adjust for your domain and repository
-
-**3. Replace the hello-world scaffold** in `precisionai/<namespace>/` with real domain logic, following the layer rules documented in [Project layout](#project-layout) below.
-
-**4. Update `docs/`** — `conf.py` project name and header, `index.rst` and `modules.rst` autodoc references.
-
-**5. Review `LICENSE.md`** — update the copyright year if needed. The license is Apache 2.0.
-
-**6. Seed `CHANGELOG.md`** with your first release notes under `[Unreleased]` — see [Releasing](#releasing).
-
-**7. Remove this section** from `CLAUDE.md` once setup is complete.
+Apply these standards when writing, reviewing, or refactoring code in Pace. This document extends the Precision AI Python project standards ([agri-template](https://github.com/Precision-AI-Inc/agri-template)) with rules specific to this repository. Read [docs/design.md](docs/design.md) before changing behaviour: it is the specification for the logger, the progress line format and the forecasting rules.
 
 ---
 
 ## Environment
 
-- Python 3.10+, managed with `python -m venv .venv` (never conda)
+- Python 3.8+ is supported; develop on 3.9+ (pre-commit needs it), managed with `python -m venv .venv` (never conda)
 - Install: `pip install -e ".[dev]"` → installs all deps including pre-commit
 - Register hooks once: `pre-commit install`
+- CI runs the tests on 3.8 through 3.13. 3.8 runs on `ubuntu-22.04`, because `actions/setup-python` has no 3.8 build for `ubuntu-latest`.
+
+---
+
+## The rules that matter most
+
+1. **The core has no runtime dependencies.** `precisionai.pace` imports only the standard library. It is installed into users' training images and into other packages, and must never add to them. A framework adapter imports its framework only inside its own module, behind an extra (`[lightning]`, `[transformers]`).
+2. **The line format is a public contract.** Anything a consumer parses (the `[pace:N ...]` trailer) changes only as documented in `docs/design.md`: new optional keys within a major version, anything else is a new major version. A format change updates `docs/design.md` and the fixtures in `tests/fixtures/protocol/` in the same PR. The readable text before the trailer is for people and may change freely; never make a consumer depend on it.
+3. **Python 3.8 compatible.** See [Type hints](#type-hints) for what that rules out.
+4. **Never log secrets on the package's own initiative.** Pace never writes environment variables, configuration or credentials by itself, and labels stay short and are not repeated on every update.
+5. **Parsing is defensive.** Log lines are untrusted input. The parser bounds every size and value, never evaluates anything, and ignores (never raises on) a malformed or unsupported line.
 
 ---
 
 ## Project layout
 
 ```
-precisionai/<namespace>/
-  api/
-    routes/      # FastAPI route handlers (thin — delegate to services)
-    config.py    # env-var config only
-    app.py       # FastAPI app factory
-  schemas/       # Pydantic v2 request/response models
-  services/      # Business logic (orchestrates metrics, handles I/O)
-  metrics/       # Pure computation modules
-    __init__.py  # re-exports only — no logic
-docs/            # Sphinx (HTML + LaTeX/PDF)
-tests/           # mirrors package structure
-examples/        # standalone runnable scripts
+precisionai/pace/
+  version.py       # installed package version
+  __init__.py      # re-exports only — no logic
+docs/              # Sphinx (HTML + LaTeX/PDF); design.md is the specification
+tests/             # mirrors package structure; fixtures/protocol/ holds format conformance cases
 ```
 
-`precisionai` is a fixed, namespace-only top-level package (no logic, just an SPDX header) shared by every PAI Python project — it is what makes `precisionai.<namespace>.*` imports consistent across the org. Multi-product repositories (e.g. one repo serving several related tools) may add another level, `precisionai/<product>/<namespace>/...`.
+`precisionai` is a fixed, namespace-only top-level package (no logic, just an SPDX header) shared by every PAI Python project — it is what makes `precisionai.<namespace>.*` imports consistent across the org.
 
 ---
 
@@ -70,6 +42,8 @@ examples/        # standalone runnable scripts
 ```toml
 [project]
 dynamic = ["version"]   # version comes from the git tag via setuptools-scm, never hardcoded
+requires-python = ">=3.8"
+dependencies = []       # see "The rules that matter most"
 
 [tool.setuptools_scm]
 version_scheme = "no-guess-dev"
@@ -78,25 +52,22 @@ fallback_version = "0.0.0"
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py38"
 
 [tool.ruff.lint]
-select = ["E","W","F","I","UP","B","SIM","N","C90","D","PT","RUF","PL","ANN","PERF","S"]
+select = ["E","W","F","I","UP","B","SIM","N","C90","D","PT","RUF","PL","ANN","PERF","S","FA"]
 ignore = [
     "E501",    # enforced by ruff-format
-    "B008",    # FastAPI default-arg pattern
     "SIM108",  # ternary readability
     "D100","D104",          # module/package docstrings optional
     "D203","D213",          # pydocstyle conflicts — always ignore these two
-    "PLR0913","PLR2004",    # arg count + magic values common in metrics/tests
+    "PLR0913","PLR2004",    # arg count (progress scopes take several optional fields) + magic values in tests
     "ANN401",              # Any is allowed for genuinely dynamic types
-    "S311",                # pseudo-random generators are intentional in scientific code
-    "S104",                # binding to 0.0.0.0 is intentional for a configurable server host
 ]
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
 "tests/**"       = ["D","PLR","ANN","S"]
-"docs/conf.py"   = ["E402","UP031","ANN","S"]
+"docs/conf.py"   = ["E402","UP031","ANN","S","FA"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"          # enforces NumPy docstring style
@@ -118,10 +89,10 @@ addopts = "--cov=precisionai --cov-report=term-missing --cov-fail-under=90"
 [tool.coverage.report]
 fail_under = 90
 exclude_lines = ["pragma: no cover","if __name__ == .__main__.:",
-                 "raise ImportError","except ImportError"]
+                 "raise ImportError","except ImportError","if TYPE_CHECKING:"]
 
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.8"
 typeCheckingMode = "standard"
 reportMissingImports = false
 reportMissingModuleSource = false
@@ -176,22 +147,22 @@ repos:
 
 ### Imports
 - All imports at the **top of the file** — never inside functions
-- Optional/unavailable deps: module-level `try/except ImportError` with a flag variable
+- Optional framework deps (adapters only): module-level `try/except ImportError` with a flag variable
 - No silent fallbacks unless mathematically equivalent (document why)
 - `__init__.py` re-exports only — no logic, no comments between import blocks
 - `__all__` must be **alphabetically sorted**
 
 ```python
-# optional dep pattern
+# optional dep pattern (adapter modules only — never in the core)
 try:
-    import plotly.graph_objects as go  # type: ignore[import]
-    _PLOTLY_AVAILABLE = True
+    import lightning.pytorch as pl  # type: ignore[import]
+    _LIGHTNING_AVAILABLE = True
 except ImportError:
-    _PLOTLY_AVAILABLE = False
+    _LIGHTNING_AVAILABLE = False
 
-# inside function that needs it
-if not _PLOTLY_AVAILABLE:
-    raise ImportError("plotly is required: pip install plotly") from None
+# inside the class/function that needs it
+if not _LIGHTNING_AVAILABLE:
+    raise ImportError("lightning is required: pip install precisionai-pace[lightning]") from None
 ```
 
 ### Docstrings
@@ -202,7 +173,8 @@ if not _PLOTLY_AVAILABLE:
 
 ### Type hints
 - Required on **all** function signatures (public and private) — enforced by ruff (`ANN`) and pyright
-- Use `X | Y` union syntax (Python 3.10+), not `Union[X, Y]` or `(X, Y)` in isinstance
+- Every module with annotations starts with `from __future__ import annotations` (enforced by ruff `FA`). With it, `X | Y` and `list[int]` are fine **in annotations** on 3.8.
+- **Outside annotations**, code runs on 3.8: no `X | Y` in `isinstance`, casts or type aliases evaluated at runtime, no `match`, no `str.removeprefix`, no parenthesised context managers, no `dataclass(slots=True)` or `kw_only`. Use `isinstance(x, (A, B))`, `typing.Union`/`Optional` in runtime aliases, and `typing.TYPE_CHECKING` for import-only types.
 - Use `Any` from `typing` for genuinely dynamic types — don't use `object` when methods will be called on it
 - pyright config lives in `[tool.pyright]` in `pyproject.toml` — never pass type-checker flags inline
 
@@ -213,6 +185,7 @@ if not _PLOTLY_AVAILABLE:
 
 ### Exception handling
 - Always `raise X from err` or `raise X from None` inside `except` blocks (B904)
+- Logging and progress calls never raise into user code because of a formatting or I/O problem; they degrade (drop the record, fall back to plain text) instead
 
 ### General
 - `len()` returns `int` — never `int(len(...))`
@@ -221,6 +194,7 @@ if not _PLOTLY_AVAILABLE:
 - `@pytest.fixture` not `@pytest.fixture()`
 - `pytest.raises` always includes `match=` parameter
 - No `# type: ignore[attr-defined]` when `Any` already covers the attribute
+- Rates and intervals use `time.monotonic()`; wall-clock time is only for the printed timestamp
 
 ---
 
@@ -229,7 +203,8 @@ if not _PLOTLY_AVAILABLE:
 ```
 docs/
   conf.py          # version from git tag, logo, LaTeX/fancyhdr, enumitem fix
-  index.rst        # toctree: readme, modules
+  index.rst        # toctree: readme, design, modules
+  design.md        # the specification — update it with any behaviour or format change
   modules.rst      # autodoc for all public submodules
   requirements.txt # sphinx, sphinx-rtd-theme, myst-parser, sphinx-autodoc-typehints
   Makefile         # make html | make latexpdf | make clean
@@ -246,7 +221,8 @@ docs/
 - Mirror package structure: `tests/test_<module>.py`
 - Shared fixtures in `tests/conftest.py`
 - 90% coverage hard minimum — enforced by pytest and pre-commit
-- No mocks for database/filesystem unless truly unavoidable
+- Format conformance cases live in `tests/fixtures/protocol/` as input lines plus expected parse results; consumers run the same files
+- Tests that depend on time use an injected clock, never `sleep`
 - Integration tests marked `@pytest.mark.integration` and excluded from default runs
 
 ---
@@ -289,8 +265,12 @@ These are not optional extras — treat them as part of the standard layout when
 
 | Pattern | Instead |
 |---|---|
+| A new entry in `dependencies` | Put it behind an extra, imported only by the adapter module |
+| Parsing the readable part of a progress line | Parse only the `[pace:N ...]` trailer |
+| Changing or removing a trailer key in place | New optional key, or a new major version (see `docs/design.md`) |
+| `isinstance(x, A \| B)`, `match`, other 3.10+ runtime syntax | `isinstance(x, (A, B))` and 3.8-compatible equivalents |
+| `time.time()` for rates or intervals | `time.monotonic()` |
 | `int(len(x))` | `len(x)` |
-| `isinstance(x, (A, B))` | `isinstance(x, A \| B)` |
 | `assert a and b` (tests) | two separate asserts |
 | `@pytest.fixture()` | `@pytest.fixture` |
 | `pytest.raises(ValueError)` | `pytest.raises(ValueError, match="…")` |
