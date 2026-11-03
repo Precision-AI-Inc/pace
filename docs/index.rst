@@ -1,10 +1,11 @@
-PAI MyProject
-=============
+Pace
+====
 
-Welcome to the **PAI MyProject** documentation.
+Welcome to the **Pace** documentation.
 
-- The **Getting started** chapter is the project README: installation, API usage, and example scripts.
-- The **Module Reference** chapter documents the full ``precisionai.myproject`` API — metrics, services, schemas, and routes.
+- The **Getting started** chapter is the project README: installation and usage.
+- The **Design** chapter covers the line format, the forecasting rules, and the decisions behind them.
+- The **Module Reference** chapter documents the full ``precisionai.pace`` API.
 
 Contents
 --------
@@ -13,6 +14,7 @@ Contents
    :maxdepth: 2
 
    readme
+   design
    modules
 
 Indices and tables

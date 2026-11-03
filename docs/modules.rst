@@ -1,74 +1,24 @@
 Module Reference
 ================
 
-API documentation for the ``precisionai.myproject`` package — metrics, services, schemas, and routes.
+API documentation for the ``precisionai.pace`` package.
 
-precisionai.myproject.metrics
-------------------------------
+precisionai.pace
+----------------
 
-Top-level re-exports from the metrics package.
+Top-level re-exports.
 
-.. automodule:: precisionai.myproject.metrics
+.. automodule:: precisionai.pace
    :members:
    :undoc-members:
    :show-inheritance:
 
-precisionai.myproject.metrics.compute
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+precisionai.pace.version
+------------------------
 
-Pure computation utilities (stateless functions, no I/O).
+Installed package version.
 
-.. automodule:: precisionai.myproject.metrics.compute
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-precisionai.myproject.services.hello
---------------------------------------
-
-Business logic for greeting operations.
-
-.. automodule:: precisionai.myproject.services.hello
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-precisionai.myproject.schemas.hello
---------------------------------------
-
-Pydantic request and response schemas for the hello endpoint.
-
-.. automodule:: precisionai.myproject.schemas.hello
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-precisionai.myproject.api.routes.hello
-------------------------------------------
-
-FastAPI route handler for ``POST /v1/hello``.
-
-.. automodule:: precisionai.myproject.api.routes.hello
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-precisionai.myproject.api.config
-------------------------------------
-
-Environment-variable configuration.
-
-.. automodule:: precisionai.myproject.api.config
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-precisionai.myproject.api.app
-------------------------------------
-
-FastAPI application factory and CLI entry point.
-
-.. automodule:: precisionai.myproject.api.app
+.. automodule:: precisionai.pace.version
    :members:
    :undoc-members:
    :show-inheritance:

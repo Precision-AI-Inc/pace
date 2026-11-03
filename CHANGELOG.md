@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial release.
+- Package scaffold for `precisionai-pace`, with no runtime dependencies and support for Python 3.8 and later.
+- Design document for the logger, the progress line format and the completion-forecast rules.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pai-myproject/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/commits/main

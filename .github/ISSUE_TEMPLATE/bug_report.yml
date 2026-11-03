@@ -21,8 +21,7 @@ body:
       label: Steps to reproduce
       description: Minimal code or steps to reproduce the issue.
       placeholder: |
-        from precisionai.myproject.services.hello import say_hello
-        say_hello("World")
+        from precisionai.pace import ...
         ...
     validations:
       required: true
@@ -41,7 +40,7 @@ body:
       label: Environment
       description: |
         - Python version
-        - `pip show pai-myproject` output
+        - `pip show precisionai-pace` output
         - OS
     validations:
       required: true

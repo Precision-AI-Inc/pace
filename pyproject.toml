@@ -1,69 +1,66 @@
 # ── Project identity ──────────────────────────────────────────────────────────
-# Replace every occurrence of "myproject" / "pai-myproject" / "PAI MyProject"
-# with your actual project name before shipping. Leave the "precisionai" top-level
-# namespace as-is — it is fixed across all PAI Python projects.
 
 [build-system]
 requires = ["setuptools>=61", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pai-myproject"
+name = "precisionai-pace"
 dynamic = ["version"]
-description = "Precision AI — <short project description>"
+description = "Precision AI — a logger with progress reporting whose output also tells you, or a scheduler, when the job will finish."
 readme = "README.md"
 license = { file = "LICENSE.md" }
 authors = [{ name = "Precision AI", email = "michael@precision.ai" }]
 maintainers = [{ name = "Precision AI", email = "michael@precision.ai" }]
-requires-python = ">=3.10"
+# The core has no dependencies and runs on 3.8, so it can go into older training
+# images and into packages that still support 3.8. Optional adapters inherit the
+# minimum of the framework they wrap.
+requires-python = ">=3.8"
 keywords = [
-    "agriculture",
-    "computer-vision",
+    "logging",
+    "progress",
+    "eta",
     "machine-learning",
+    "training",
+    "scheduling",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Logging",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = [
-    "fastapi>=0.111",
-    "uvicorn[standard]>=0.29",
-    "pydantic>=2.0",
-]
+# Deliberately empty: the core must never pull anything into a user's image.
+dependencies = []
 
 [project.optional-dependencies]
 test = [
     "pytest>=7.0",
     "pytest-cov>=5.0",
-    "httpx>=0.28",
 ]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=5.0",
-    "httpx>=0.28",
-    "pre-commit>=3.7",
+    "pre-commit>=3.7; python_version >= '3.9'",
     "pyright>=1.1",
     "genbadge[coverage]>=1.1",
 ]
 
-[project.scripts]
-# Rename the CLI entry point to match your project.
-pai-myproject = "precisionai.myproject.api.app:main"
-
 [project.urls]
-Homepage = "https://github.com/Precision-AI-Inc/pai-myproject"
-Repository = "https://github.com/Precision-AI-Inc/pai-myproject"
-Issues = "https://github.com/Precision-AI-Inc/pai-myproject/issues"
-Changelog = "https://github.com/Precision-AI-Inc/pai-myproject/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Precision-AI-Inc/pace"
+Repository = "https://github.com/Precision-AI-Inc/pace"
+Issues = "https://github.com/Precision-AI-Inc/pace/issues"
+Changelog = "https://github.com/Precision-AI-Inc/pace/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -88,6 +85,7 @@ markers = [
 source = ["precisionai"]
 omit = ["*/tests/*", "*/__init__.py"]
 relative_files = true
+branch = true
 
 [tool.coverage.report]
 fail_under = 90
@@ -97,11 +95,12 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "raise ImportError",
     "except ImportError",
+    "if TYPE_CHECKING:",
 ]
 
 # ── pyright ───────────────────────────────────────────────────────────────────
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.8"
 typeCheckingMode = "standard"
 reportMissingImports = false
 reportMissingModuleSource = false
@@ -109,7 +108,7 @@ reportMissingModuleSource = false
 # ── ruff ──────────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py38"
 
 [tool.ruff.lint]
 select = [
@@ -129,26 +128,24 @@ select = [
     "ANN",  # flake8-annotations — enforce PEP 484 type hints
     "PERF", # perflint — performance anti-patterns
     "S",    # flake8-bandit — security linting
+    "FA",   # flake8-future-annotations — `X | Y` hints need the __future__ import on 3.8
 ]
 ignore = [
     "E501",    # line too long — enforced by ruff-format at 120 chars
-    "B008",    # function calls in default args (FastAPI uses this pattern)
     "SIM108",  # ternary operator — sometimes less readable
     "D100",    # missing docstring in public module
     "D104",    # missing docstring in public package
     "D203",    # one-blank-line-before-class (conflicts with D211)
     "D213",    # multi-line-summary-second-line (conflicts with D212)
-    "PLR0913", # too many arguments — common in evaluation functions
-    "PLR2004", # magic value comparisons — acceptable in tests/metrics
+    "PLR0913", # too many arguments — progress scopes take several optional fields
+    "PLR2004", # magic value comparisons — acceptable in tests
     "ANN401",  # typing.Any is allowed for genuinely dynamic types
-    "S311",    # pseudo-random generators are intentional in scientific code
-    "S104",    # binding to 0.0.0.0 is intentional for a configurable server host
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
 "tests/**"       = ["D", "PLR", "ANN", "S"]
-"docs/conf.py"   = ["E402", "UP031", "ANN", "S"]
+"docs/conf.py"   = ["E402", "UP031", "ANN", "S", "FA"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
