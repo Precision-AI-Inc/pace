@@ -69,22 +69,29 @@ def main() -> None:
 
     last_state = None
     last_printed = 0.0
+
+    def handle(line: str) -> None:
+        nonlocal last_state, last_printed
+        record = parse_line(line)
+        if record is None:
+            return  # an ordinary log line
+        now = time.monotonic()
+        job.observe(record, received_at=now)
+        estimate = job.snapshot(now)
+        if estimate.state is not last_state or now - last_printed >= PRINT_EVERY:
+            print(describe(record, estimate), flush=True)
+            last_state, last_printed = estimate.state, now
+
     while True:
         chunk = os.read(child.stdout.fileno(), 65536)  # whatever has arrived, split anywhere
         if not chunk:
             break
         for line in splitter.feed(chunk):
-            record = parse_line(line)
-            if record is None:
-                continue  # an ordinary log line
-            now = time.monotonic()
-            job.observe(record, received_at=now)
-            estimate = job.snapshot(now)
-            if estimate.state is not last_state or now - last_printed >= PRINT_EVERY:
-                print(describe(record, estimate), flush=True)
-                last_state, last_printed = estimate.state, now
+            handle(line)
 
-    splitter.flush()  # a last line with no trailing newline, if any
+    # A last line with no trailing newline can still be the final record.
+    for line in splitter.flush():
+        handle(line)
     print(f"child exited with {child.wait()}", flush=True)
 
 
