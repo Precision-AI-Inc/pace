@@ -53,7 +53,9 @@ What it reports:
   in the trailer), counting batches. Each pass is its own scope: `validation`,
   `validation-2`, and so on. The sanity-check pass before training is not reported.
 - `trainer.validate()`, `trainer.test()` or `trainer.predict()` called on their own,
-  without a fit, report a root scope of their own (`validation`, `test`, `predict`).
+  without a fit, report a top-level scope (`validation`, `test`, `predict`) that is
+  not the root, so a baseline evaluation before training never marks the job
+  complete. Only training is the root.
 - On resume, the scope starts from the checkpoint's global step with `res=1`, so the
   estimate measures the work left rather than the work already done
   (see [Resuming from a checkpoint](progress.md#resuming-from-a-checkpoint)).

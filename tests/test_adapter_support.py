@@ -72,16 +72,16 @@ def test_parent_binding_does_not_leak_into_scopes_opened_afterwards(quiet: Logge
     assert {r.parent for r in records(stream) if r.scope == "other"} == {None}
 
 
-def test_a_child_without_a_main_scope_is_the_root_once(quiet: Logger, stream: FakeStream) -> None:
+def test_a_child_without_a_main_scope_is_never_the_root(quiet: Logger, stream: FakeStream) -> None:
     scopes = AdapterScopes("Train", logger=quiet)
     scopes.begin_child("Validation", 2, "batch")
     scopes.end_child()
-    scopes.begin_child("Test", 2, "batch")
-    scopes.end_child()
+    scopes.begin(5)
+    scopes.end()
     found = records(stream)
-    assert {r.root for r in found if r.scope == "validation"} == {True}
-    assert {r.root for r in found if r.scope == "test"} == {False}
-    assert {r.parent for r in found} == {None}
+    assert {r.root for r in found if r.scope == "validation"} == {False}
+    assert {r.root for r in found if r.scope == "train"} == {True}
+    assert {r.parent for r in found if r.scope == "validation"} == {None}
 
 
 def test_root_can_be_declined(quiet: Logger, stream: FakeStream) -> None:

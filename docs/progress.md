@@ -418,3 +418,9 @@ with progress(total=len(loader), description="Train") as run:
 Abandoning a `track` loop with `break` or `return` also writes `end` with the count
 reached, because the loop finished on your terms. Either way, a reader should treat
 process exit, not a scope's `end`, as the end of the job unless there is a `root` scope.
+
+The `end` on `break` is written when Python closes the generator. Looping directly
+over `track(...)` closes it as soon as the loop is left. If you keep the iterator in a
+variable (`items = track(...)`) and break out of a loop over it, the generator stays
+open, and no `end` is written, until it is garbage-collected or you call
+`items.close()`. Use `progress()` when you need to say exactly when a scope ends.

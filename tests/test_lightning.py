@@ -177,13 +177,13 @@ def test_a_non_zero_rank_writes_nothing(
     assert stream.getvalue() == ""
 
 
-def test_a_standalone_pass_is_the_root(quiet: Logger, stream: FakeStream, tmp_path: Path) -> None:
+def test_a_standalone_pass_is_top_level_but_not_the_root(quiet: Logger, stream: FakeStream, tmp_path: Path) -> None:
     runner = trainer(quiet, tmp_path)
     runner.validate(TinyModel(), loader(3))
     runner.test(TinyModel(), loader(2))
     found = records(stream)
     validation, test = of(found, "validation"), of(found, "test")
-    assert validation[0].root
+    assert not validation[0].root
     assert validation[0].parent is None
     assert validation[-1].event is Event.END
     assert validation[-1].completed == 3
