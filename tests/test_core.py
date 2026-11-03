@@ -267,3 +267,9 @@ def test_scope_id_suffix_keeps_the_id_within_64_characters(log: Logger) -> None:
 
 def test_default_logger_is_a_logger_instance() -> None:
     assert isinstance(logger, Logger)
+
+
+@pytest.mark.parametrize("value", ["soon", float("inf"), float("nan"), -1, True])
+def test_configure_rejects_intervals_that_are_not_finite_seconds(log: Logger, value: object) -> None:
+    with pytest.raises(ValueError, match="non-negative number of seconds"):
+        log.configure(min_interval=value)  # type: ignore[arg-type]

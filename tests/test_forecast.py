@@ -817,3 +817,15 @@ def test_a_top_level_phase_without_a_plan_borrows_its_child_estimate() -> None:
     est = job.snapshot(loop.now)
     assert est.source == "concurrent"
     assert est.remaining_seconds == pytest.approx(410.0)
+
+
+def test_child_estimates_reach_the_top_through_nested_phases() -> None:
+    job = JobForecast()
+    outer = Run(job, "outer", total=1.0)
+    outer.start()
+    inner = Run(job, "inner", total=1.0, parent="outer")
+    inner.start()
+    loop = _live_scope(job, "batches", total=1000.0, parent="inner")
+    est = job.snapshot(loop.now)
+    assert est.state is ForecastState.LIVE
+    assert est.remaining_seconds == pytest.approx(410.0)

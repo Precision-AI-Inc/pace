@@ -36,7 +36,7 @@ from precisionai.pace._render import PROGRESS_LABEL, colorize, format_timestamp,
 from precisionai.pace.core import Logger, Target
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import ScopeForecast
-from precisionai.pace.protocol import SCOPE_PATTERN, Event, Record, format_trailer
+from precisionai.pace.protocol import MAX_LINE_BYTES, SCOPE_PATTERN, Event, Record, format_trailer
 
 REDRAW_INTERVAL = 0.1
 MAX_DERIVED_ID_CHARS = 48
@@ -145,7 +145,6 @@ class Scope:
         self._last_out = 0.0
         self._last_completed = 0.0
         self._next_check = 0.0
-        self._active = self._out.settings.progress_enabled()
         self._forecast = ScopeForecast(self.id)
         self._token: Token[str | None] | None = None
 
@@ -229,10 +228,11 @@ class Scope:
     def _after_change(self) -> None:
         if self._state == "new":
             self.start()
-        if self._state != "open" or not self._active:
+        if self._state != "open":
             return
         now = self._out.clock.monotonic()
-        if now < self._next_check:
+        # The rank check reads the environment, so it comes after the cheap time gate.
+        if now < self._next_check or not self._out.settings.progress_enabled():
             return
         target = self._out.target()
         if target is None:
@@ -288,7 +288,7 @@ class Scope:
         target: Target | None = None,
         phases: tuple[tuple[str, float], ...] = (),
     ) -> None:
-        if not self._active:
+        if not self._out.settings.progress_enabled():
             return
         target = target or self._out.target()
         if target is None:
@@ -311,7 +311,11 @@ class Scope:
     def _progress_line(self, text: str, record: Record, target: Target) -> str:
         stamp = format_timestamp(self._out.clock.wall())
         label = colorize(PROGRESS_LABEL, target.color)
-        return f"{stamp} {label} {text}  {format_trailer(record)}"
+        prefix = f"{stamp} {label} "
+        trailer = f"  {format_trailer(record)}"
+        # A reader rejects lines over MAX_LINE_BYTES, so the readable text gives way.
+        budget = MAX_LINE_BYTES - len(prefix.encode("utf-8")) - len(trailer.encode("utf-8"))
+        return prefix + _fit_bytes(text, budget) + trailer
 
 
 class Phase(Scope):
@@ -552,7 +556,23 @@ def plan(phases: Sequence[PlanEntry], *, scope: str | None = None, logger: Logge
     """
     out = logger or default_logger
     with contextlib.suppress(Exception), out.lock:
-        Scope(scope=scope or "plan", logger=out).declare(_weighted(phases, out))
+        name = scope or "plan"
+        # Every plan() under one name shares a scope, so q orders them and a reader
+        # never lets a late copy of an older plan replace a newer one.
+        declaring = out.plan_scopes.get(name)
+        if declaring is None:
+            declaring = out.plan_scopes[name] = Scope(scope=name, logger=out)
+        declaring.declare(_weighted(phases, out))
+
+
+def _fit_bytes(text: str, budget: int) -> str:
+    """Return ``text`` cut to at most ``budget`` UTF-8 bytes, ending in ``...`` when cut."""
+    data = text.encode("utf-8")
+    if len(data) <= budget:
+        return text
+    if budget <= 3:
+        return ""
+    return data[: budget - 3].decode("utf-8", errors="ignore") + "..."
 
 
 def _entry(entry: PlanEntry, out: Logger, reserved: set[str]) -> tuple[str, float | None]:

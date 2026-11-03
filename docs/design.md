@@ -130,7 +130,7 @@ One line serves both readers. The readable part comes first; a short trailer at 
 end carries the fields a consumer parses.
 
 ```text
-2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 u=step e=763.1 q=57]
+2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]
 2026-11-03T17:23:59Z INFO     Loading model Qwen2.5-7B
 ```
 
@@ -174,6 +174,11 @@ so it never produces a line the parser rejects.
 | `ph` | `plan` only | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
 | `n` | optional, `start` only | Short label, at most 64 characters after decoding, no control characters. |
 | `run` | optional, `start` only | Id of the process run, `[a-z0-9]{1,16}`, the same for every scope in one process. A `start` with the run id already seen for that scope is a duplicate (the line was read from both streams); a different run id is a restart. |
+
+Keys belong to particular events, and a reader rejects a record that carries one
+on the wrong event: `run`, `n` and `res` only on `start`, `ph` only on `plan`, and
+no `c`, `t` or `u` on `plan`. A writer keeps every line within 4096 bytes by
+shortening the readable text before the trailer, never the trailer.
 
 Additions within version 1 are new optional keys; consumers ignore keys they do not
 know. Removing or redefining a key requires `pace:2`.
@@ -311,8 +316,10 @@ Reviewed 2026-11-03.
 
 ## Behaviour settled during implementation
 
-- `plan()` writes its record under a scope of its own (`plan`, then `plan-2`, ...),
-  listing the scope ids the phases will get, including the `-2` suffix for a repeated name.
+- `plan()` writes its record under a scope of its own (`plan`, or the `scope=` given).
+  Repeated calls under the same name share that scope, so their `q` orders them
+  and a late copy of an older plan never replaces a newer one. The record lists the
+  scope ids the phases will get, including the `-2` suffix for a repeated name.
 - `track()` cannot tell a `break` from an exception raised in the loop body: Python
   delivers both to the generator as the same `GeneratorExit`. It therefore writes `end`
   with the count reached for either; `fail` is written only when the iterable itself

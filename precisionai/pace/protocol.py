@@ -363,6 +363,7 @@ def _build_record(fields: dict[str, str]) -> Record:
     event = Event(fields["k"])
     if event in _COUNTED_EVENTS and ("c" not in fields or "t" not in fields):
         raise ValueError(f"{event.value} requires c and t")
+    _check_event_fields(event, fields)
     return Record(
         scope=_parse_scope(fields["s"]),
         event=event,
@@ -378,6 +379,18 @@ def _build_record(fields: dict[str, str]) -> Record:
         label=_optional(fields, "n", _parse_label),
         run=_optional(fields, "run", _parse_run),
     )
+
+
+def _check_event_fields(event: Event, fields: dict[str, str]) -> None:
+    """Reject keys that belong to another event: run, n, res and u on start, ph on plan."""
+    if event is not Event.START and any(key in fields for key in ("run", "n", "res", "u")):
+        raise ValueError(f"run, n, res and u belong on start, not {event.value}")
+    if event is Event.FAIL and ("c" in fields) != ("t" in fields):
+        raise ValueError("a fail carries both c and t, or neither")
+    if event is not Event.PLAN and "ph" in fields:
+        raise ValueError(f"ph belongs on plan, not {event.value}")
+    if event is Event.PLAN and any(key in fields for key in ("c", "t")):
+        raise ValueError("a plan carries no counts")
 
 
 def _optional(fields: dict[str, str], key: str, parse: Callable[[str], _T]) -> _T | None:

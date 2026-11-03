@@ -48,6 +48,8 @@ _COLOR_CODES: dict[str, str] = {
 }
 _ESCAPE = "\x1b["
 _WHITESPACE = re.compile(r"\s+")
+# The same escape sequences precisionai.pace.protocol strips before parsing.
+_ANSI_SEQUENCE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 _FORGED_MARKER = re.compile(r"\[(?=pace:)")
 
 
@@ -105,8 +107,14 @@ def log_line(timestamp: str, label: str, message: str, color: bool) -> str:
 
 
 def neutralize(message: str) -> str:
-    """Break up any ``[pace:`` in a user message so it cannot pass for a progress trailer."""
-    return _FORGED_MARKER.sub("[ ", message)
+    """Break up any ``[pace:`` in a user message so it cannot pass for a progress trailer.
+
+    A reader removes terminal escape sequences before it looks for a trailer, so they
+    are removed here first: ``[pa`` + ESC ``[31m`` + ``ce:`` must not survive as a
+    marker. Any ESC left over is dropped too.
+    """
+    plain = _ANSI_SEQUENCE.sub("", message).replace("\x1b", "")
+    return _FORGED_MARKER.sub("[ ", plain)
 
 
 def clean_text(text: str, limit: int = MAX_DESCRIPTION_CHARS) -> str:

@@ -112,7 +112,7 @@ splitter.feed(b"ne\n")          # ['ne']
 from precisionai.pace import parse_line
 
 record = parse_line("2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  "
-                    "[pace:1 s=train root=1 k=upd c=1840 t=5000 u=step e=763.1 q=57]")
+                    "[pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]")
 ```
 
 ```text

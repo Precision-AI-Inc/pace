@@ -59,7 +59,7 @@ In a terminal, progress is one bar that redraws in place. In a container or a lo
 is a rate-limited line like this one:
 
 ```text
-2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 u=step e=763.1 q=57]
+2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]
 ```
 
 The part before `[pace:1 ...]` is for people. The bracketed trailer is a stable,

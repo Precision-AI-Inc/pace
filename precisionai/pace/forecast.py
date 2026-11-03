@@ -497,13 +497,21 @@ class JobForecast:
         top level is a phase would have no estimate for the whole of that phase.
         """
         effective = dict(forecasts)
-        for name, forecast in forecasts.items():
+        # One pass per level of nesting: repeat until no scope gains an estimate.
+        for _ in range(len(effective)):
+            if not self._borrow_once(effective):
+                break
+        return effective
+
+    def _borrow_once(self, effective: dict[str, Forecast]) -> bool:
+        changed = False
+        for name, forecast in list(effective.items()):
             if forecast.state in _ENDED_STATES or self._has_estimate(forecast):
                 continue
             children = [
-                forecasts[child]
+                effective[child]
                 for child, scope in self._scopes.items()
-                if scope.parent == name and self._has_estimate(forecasts[child])
+                if scope.parent == name and self._has_estimate(effective[child])
             ]
             if children:
                 longest = max(children, key=lambda child: child.remaining_seconds or 0.0)
@@ -513,7 +521,8 @@ class JobForecast:
                     state=ForecastState.STALE if stale else ForecastState.LIVE,
                     remaining_seconds=longest.remaining_seconds,
                 )
-        return effective
+                changed = True
+        return changed
 
     def _top_level(self) -> list[str]:
         return [name for name, scope in self._scopes.items() if scope.parent is None or scope.root]
