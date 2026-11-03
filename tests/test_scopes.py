@@ -15,7 +15,7 @@ from precisionai.pace import scopes
 from precisionai.pace.core import Logger
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import Record
+from precisionai.pace.protocol import MAX_LINE_BYTES, Record, parse_line
 from precisionai.pace.scopes import (
     Phase,
     Scope,
@@ -487,10 +487,30 @@ def test_plan_with_repeated_names_matches_the_phase_scopes(log: Logger, stream: 
     assert planned == started == ["train", "train-2"]
 
 
-def test_plan_ids_are_unique_when_called_twice(log: Logger, stream: FakeStream) -> None:
+def test_repeated_plans_share_a_scope_in_q_order(log: Logger, stream: FakeStream) -> None:
     plan(["a"], logger=log)
-    plan(["a"], logger=log)
-    assert [item["s"] for item in records(stream)] == ["plan", "plan-2"]
+    plan(["a", "b"], logger=log)
+    assert [(item["s"], item["q"]) for item in records(stream)] == [("plan", "1"), ("plan", "2")]
+
+
+def test_a_plan_of_long_names_stays_within_the_parser_limit(log: Logger, stream: FakeStream) -> None:
+    plan([f"phase-{index:02d}-" + "x" * 55 for index in range(32)], logger=log)
+    (line,) = stream.lines()
+    assert len(line.encode("utf-8")) <= MAX_LINE_BYTES
+    record = parse_line(line)
+    assert record is not None
+    assert len(record.phases) == 32
+
+
+def test_a_rank_change_applies_to_the_next_line(
+    log: Logger, clock: FakeClock, stream: FakeStream, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with progress(100, "Train", "step", logger=log) as run:
+        monkeypatch.setenv("RANK", "1")
+        clock.advance(20)
+        run.advance(50)
+        monkeypatch.setenv("RANK", "0")
+    assert kinds(stream) == ["start", "end"]
 
 
 # ---- scope ids -------------------------------------------------------------------------------

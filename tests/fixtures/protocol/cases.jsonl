@@ -130,3 +130,8 @@
 {"name": "reject: control character in decoded label", "line": "x [pace:1 s=a k=start c=0 t=1 e=0 q=1 n=bad%0Aline]", "record": null}
 {"name": "reject: escape character in decoded unit", "line": "x [pace:1 s=a k=start c=0 t=1 u=%1B%5B31m e=0 q=1]", "record": null}
 {"name": "64-character CJK label is accepted", "line": "x [pace:1 s=a k=start c=0 t=1 e=0 q=1 n=%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD%E8%AE%AD]", "record": {"scope": "a", "event": "start", "seq": 1, "elapsed": 0.0, "completed": 0.0, "total": 1.0, "label": "训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训训"}}
+{"name": "reject: run on an update", "line": "x [pace:1 s=a k=upd c=1 t=2 e=1 q=2 run=abcd1234]", "record": null}
+{"name": "reject: label on an update", "line": "x [pace:1 s=a k=upd c=1 t=2 e=1 q=2 n=Train]", "record": null}
+{"name": "reject: res on an end", "line": "x [pace:1 s=a k=end c=2 t=2 e=1 q=3 res=1]", "record": null}
+{"name": "reject: ph on a start", "line": "x [pace:1 s=a k=start c=0 t=2 e=0 q=1 ph=a:1]", "record": null}
+{"name": "reject: counts on a plan", "line": "x [pace:1 s=plan k=plan c=0 t=1 e=0 q=1 ph=a:1]", "record": null}

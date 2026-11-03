@@ -92,6 +92,8 @@ class Logger:
         # Written on every start record, so a reader can tell a restarted process
         # from the same start line read twice.
         self.run_id = secrets.token_hex(4)
+        # plan() scopes by name, kept so repeated plans share a scope and a q sequence.
+        self.plan_scopes: dict[str, Any] = {}
         self._scope_ids: set[str] = set()
         self._next_suffix: dict[str, int] = {}
         self._bar_width = 0
