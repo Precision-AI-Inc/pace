@@ -1,10 +1,22 @@
 # Copyright 2026 Precision AI
 # SPDX-License-Identifier: Apache-2.0
 
-"""Report a PyTorch Lightning run through Pace.
+"""Report a PyTorch Lightning run through Pace with ``PaceCallback``.
 
-Runs a tiny model on random data on the CPU in a few seconds. Needs
-``pip install precisionai-pace[lightning]``. Every progress line ends with the
+Situation: a Lightning ``Trainer`` fits a tiny model on random data on the CPU, for 3 epochs
+with a validation pass after each. The callback reports the whole run, so the training
+loop needs no changes: one ``root`` scope counting global steps against
+``trainer.estimated_stepping_batches``, and a child scope for each validation pass.
+
+Shows: ``PaceCallback()`` from ``precisionai.pace.lightning``, and ``logger.configure`` to
+make a run of a few seconds write more than its first and last progress line.
+
+Needs: ``pip install precisionai-pace[lightning]``. The other examples need no extras.
+
+Run: ``python examples/lightning_example.py``
+
+Expect: a ``train`` scope marked ``root=1`` counting steps, ``validation`` scopes whose
+trailers carry ``p=train``, and the ``end`` of the root. Every progress line ends with the
 ``[pace:1 ...]`` trailer a scheduler reads.
 """
 

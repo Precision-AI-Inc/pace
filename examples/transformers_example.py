@@ -1,12 +1,25 @@
 # Copyright 2026 Precision AI
 # SPDX-License-Identifier: Apache-2.0
 
-"""Report a Hugging Face ``Trainer`` run through Pace.
+"""Report a Hugging Face ``Trainer`` run through Pace with ``PaceCallback``.
 
-Trains a tiny BERT built from a config, so nothing is downloaded, on random token ids on
-the CPU in a few seconds. Needs ``pip install precisionai-pace[transformers] accelerate``.
-A TRL trainer takes the same callback. Every progress line ends with the ``[pace:1 ...]``
-trailer a scheduler reads.
+Situation: a ``Trainer`` fits a tiny BERT, built from a config so nothing is downloaded, on
+random token ids on the CPU, for 3 epochs with an evaluation pass after each. The callback
+reports the whole run, so the training code needs no changes: one ``root`` scope counting
+``state.global_step`` against ``state.max_steps``, and a child scope for each evaluation.
+A TRL trainer takes the same callback.
+
+Shows: ``PaceCallback()`` from ``precisionai.pace.transformers``, and ``logger.configure``
+to make a run of a few seconds write more than its first and last progress line.
+
+Needs: ``pip install precisionai-pace[transformers] accelerate``. The other examples need
+no extras.
+
+Run: ``python examples/transformers_example.py``
+
+Expect: a ``train`` scope marked ``root=1`` counting steps, ``evaluation`` scopes whose
+trailers carry ``p=train``, and the ``end`` of the root. Every progress line ends with the
+``[pace:1 ...]`` trailer a scheduler reads.
 """
 
 from __future__ import annotations

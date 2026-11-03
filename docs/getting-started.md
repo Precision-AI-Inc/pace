@@ -129,6 +129,8 @@ removes the duplicates; see [Reading Pace output](reading-output.md).
 
 ## Next
 
+- [Examples](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md): one
+  runnable script per style of logging and progress. Copy the one that matches your job.
 - [Logging](logging.md): levels, `exception`, configuration, capturing the
   standard `logging` module.
 - [Progress](progress.md): `track`, `progress`, `timed`, `phase`, `plan`,
