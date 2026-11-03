@@ -829,3 +829,15 @@ def test_child_estimates_reach_the_top_through_nested_phases() -> None:
     est = job.snapshot(loop.now)
     assert est.state is ForecastState.LIVE
     assert est.remaining_seconds == pytest.approx(410.0)
+
+
+def test_a_restart_forgets_the_previous_run_hierarchy() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc, parent="job", root=True)
+    run.start(run="aaaa1111")
+    assert fc.parent == "job"
+    assert fc.root
+    fresh = Run(fc)
+    fresh.start(run="bbbb2222")
+    assert fc.parent is None
+    assert not fc.root

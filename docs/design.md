@@ -178,7 +178,9 @@ so it never produces a line the parser rejects.
 Keys belong to particular events, and a reader rejects a record that carries one
 on the wrong event: `run`, `n` and `res` only on `start`, `ph` only on `plan`, and
 no `c`, `t` or `u` on `plan`. A writer keeps every line within 4096 bytes by
-shortening the readable text before the trailer, never the trailer.
+shortening the readable text before the trailer, never the trailer. It never writes a
+number above 1e15, the parser's limit: a larger total is reported as unknown and a
+larger count is capped.
 
 Additions within version 1 are new optional keys; consumers ignore keys they do not
 know. Removing or redefining a key requires `pace:2`.

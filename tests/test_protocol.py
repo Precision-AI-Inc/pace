@@ -93,7 +93,7 @@ def test_format_number(value: float, expected: str) -> None:
 
 @pytest.mark.parametrize("value", [-1.0, float("inf"), float("nan")])
 def test_format_number_rejects_invalid(value: float) -> None:
-    with pytest.raises(ValueError, match="finite and non-negative"):
+    with pytest.raises(ValueError, match="finite, non-negative"):
         format_number(value)
 
 
@@ -127,3 +127,8 @@ def test_format_trailer_truncates_unit_and_replaces_control_characters() -> None
 def test_format_trailer_label_of_only_control_characters_becomes_dash() -> None:
     record = Record(scope="a", event=Event.START, seq=1, elapsed=0.0, completed=0, total=1, label="\x1b\x07")
     assert format_trailer(record).endswith("n=-]")
+
+
+def test_format_number_rejects_values_the_parser_would_reject() -> None:
+    with pytest.raises(ValueError, match="at most"):
+        format_number(1e16)

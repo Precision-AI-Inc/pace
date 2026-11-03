@@ -805,3 +805,11 @@ def test_a_number_passed_as_the_unit_is_an_error(log: Logger) -> None:
     # tqdm(iterable, desc, total) ordering moved over to track() unchanged.
     with pytest.raises(TypeError, match="pass the total as total="):
         track(range(3), "Train", 3000, logger=log)  # type: ignore[arg-type]
+
+
+def test_a_total_too_large_for_a_trailer_is_reported_as_unknown(log: Logger, stream: FakeStream) -> None:
+    with progress(1e16, "Huge", "item", logger=log) as run:
+        run.advance(5)
+    start = parse_line(stream.lines()[0])
+    assert start is not None
+    assert start.total is None

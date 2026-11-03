@@ -36,7 +36,7 @@ from precisionai.pace._render import PROGRESS_LABEL, colorize, format_timestamp,
 from precisionai.pace.core import Logger, Target
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import ScopeForecast
-from precisionai.pace.protocol import MAX_LINE_BYTES, SCOPE_PATTERN, Event, Record, format_trailer
+from precisionai.pace.protocol import MAX_LINE_BYTES, MAX_NUMBER, SCOPE_PATTERN, Event, Record, format_trailer
 
 REDRAW_INTERVAL = 0.1
 MAX_DERIVED_ID_CHARS = 48
@@ -61,12 +61,13 @@ def _number(value: Any) -> float | None:
 
 def _count(value: Any) -> float:
     number = _number(value)
-    return 0.0 if number is None or number < 0 else number
+    return 0.0 if number is None or number < 0 else min(number, MAX_NUMBER)
 
 
 def _total(value: Any) -> float | None:
     number = _number(value)
-    return None if number is None or number <= 0 else number
+    # A total no trailer can carry is reported as unknown rather than dropped.
+    return None if number is None or number <= 0 or number > MAX_NUMBER else number
 
 
 def derive_scope_id(description: str) -> str:

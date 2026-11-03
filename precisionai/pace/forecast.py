@@ -295,6 +295,9 @@ class ScopeForecast:
         self._live = False
         self._ended = None
         self._elapsed = 0.0
+        # A restarted process may place the scope differently; its records say where.
+        self._parent = None
+        self._root = False
 
     def _is_restart(self, record: Record) -> bool:
         # With run ids, a start from another run is a restart and one from the same run is

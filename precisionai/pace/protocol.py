@@ -25,6 +25,8 @@ MARKER = "pace"
 VERSION = 1
 
 MAX_LINE_BYTES = 4096
+# Largest count, total, elapsed time or weight a trailer may carry.
+MAX_NUMBER = 1e15
 MAX_FIELDS = 32
 # Raw (still percent-encoded) length. 768 holds a 64-character label or unit of
 # 4-byte characters, each written as 12 escape characters.
@@ -139,7 +141,7 @@ def format_number(value: float) -> str:
     Parameters
     ----------
     value : float
-        A finite, non-negative number.
+        A finite, non-negative number no larger than ``MAX_NUMBER``.
 
     Returns
     -------
@@ -149,10 +151,10 @@ def format_number(value: float) -> str:
     Raises
     ------
     ValueError
-        If ``value`` is negative, infinite or NaN.
+        If ``value`` is negative, infinite, NaN or above ``MAX_NUMBER``.
     """
-    if not math.isfinite(value) or value < 0:
-        raise ValueError(f"trailer numbers must be finite and non-negative, got {value!r}")
+    if not math.isfinite(value) or value < 0 or value > MAX_NUMBER:
+        raise ValueError(f"trailer numbers must be finite, non-negative and at most {MAX_NUMBER:g}, got {value!r}")
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.6f}".rstrip("0").rstrip(".")
@@ -247,7 +249,6 @@ def _is_control(char: str) -> bool:
     return code < 0x20 or 0x7F <= code <= 0x9F
 
 
-MAX_NUMBER = 1e15
 MAX_SEQ = 10**12
 
 _T = TypeVar("_T")
