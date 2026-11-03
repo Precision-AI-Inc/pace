@@ -13,7 +13,7 @@ bytes ──> LineSplitter ──> parse_line ──> Record ──> JobForecast
 Only the `[pace:1 ...]` trailer at the end of a `PROGRESS` line is a contract. The
 text before it is for people and changes between releases. Never parse it, and never infer
 progress from other output such as a `tqdm` bar. The grammar, the fields and the
-forecasting rules are specified in [Design](design.md#line-format-version-1); this page
+forecasting rules are specified in the [specification](design.md#line-format-version-1); this page
 shows how to use them.
 
 ## A complete reader
@@ -231,8 +231,8 @@ The states:
 A scope goes from `learning` to `live` after at least 60 seconds of observations, three
 measured intervals and 1% of its total done. Until then the estimate is `learning`, which
 is why the first minute of any job says `estimating…`. These thresholds are in
-`ForecastConfig` (`min_observed_seconds`, `min_intervals`, `min_fraction`) and were
-chosen as starting points; see [Design](design.md#forecasting-rules).
+`ForecastConfig` (`min_observed_seconds`, `min_intervals`, `min_fraction`); they are
+defaults that may be tuned in later releases. See the [specification](design.md#forecasting-rules).
 
 `expected_seconds` is a runtime the user supplied, for example from the job spec. It is
 used only until some scope is live, and never again afterwards, so the guess cannot

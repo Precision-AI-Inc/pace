@@ -10,7 +10,7 @@
 
 ---
 
-> **Pre-release.** The API may still change before 1.0. The design and the line format are specified in [docs/design.md](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md).
+> Pace follows semantic versioning. Before 1.0, a minor version may change the Python API but not the `pace:1` line format.
 
 Pace is a logger with progress reporting built in. Its output reads like any good
 logger in a terminal, and every progress line also carries a short, versioned trailer
@@ -81,7 +81,7 @@ should use `parse_line`, `LineSplitter` and `JobForecast` (see
 | [Configuration](https://github.com/Precision-AI-Inc/pace/blob/main/docs/configuration.md) | Every `PACE_*` variable and its `configure` equivalent. |
 | [Reading Pace output](https://github.com/Precision-AI-Inc/pace/blob/main/docs/reading-output.md) | For programs that read logs: parsing, de-duplication, estimates, conformance fixtures. |
 | [FAQ](https://github.com/Precision-AI-Inc/pace/blob/main/docs/faq.md) | Short answers. |
-| [Design](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md) | The specification: line format, forecasting rules, decisions. |
+| [Specification](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md) | The line format and the forecasting rules. |
 
 The HTML build of these pages (and the module reference) is produced with Sphinx:
 

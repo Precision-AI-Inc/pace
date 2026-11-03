@@ -1,6 +1,6 @@
 # Pace — Project Standards
 
-Apply these standards when writing, reviewing, or refactoring code in Pace. This document extends the Precision AI Python project standards ([agri-template](https://github.com/Precision-AI-Inc/agri-template)) with rules specific to this repository. Read [docs/design.md](docs/design.md) before changing behaviour: it is the specification for the logger, the progress line format and the forecasting rules.
+Apply these standards when writing, reviewing, or refactoring code in Pace. Read [docs/design.md](docs/design.md) before changing behaviour: it is the specification for the logger, the progress line format and the forecasting rules.
 
 ---
 
@@ -40,7 +40,7 @@ examples/          # runnable examples
 tests/             # mirrors package structure; fixtures/protocol/ holds format conformance cases
 ```
 
-`precisionai` is a fixed, namespace-only top-level package (no logic, just an SPDX header) shared by every PAI Python project — it is what makes `precisionai.<namespace>.*` imports consistent across the org.
+`precisionai` is a fixed, namespace-only top-level package (no logic, just an SPDX header) shared by Precision AI Python projects, which is what makes `precisionai.<namespace>.*` imports consistent across them.
 
 ---
 
@@ -240,9 +240,9 @@ docs/
 
 ---
 
-## Repository scaffolding
+## Repository files
 
-Every PAI Python project repository, in addition to the source layout above, ships with:
+Besides the source layout above, the repository carries:
 
 ```
 .gitattributes              # normalize line endings to LF; declare binary assets
@@ -262,8 +262,6 @@ MANIFEST.in                 # sdist packaging — include docs/license/changelog
     unit-test.yml
     release.yml               # tag push → build, PyPI publish, GitHub Release
 ```
-
-These are not optional extras — treat them as part of the standard layout when auditing a project against this document.
 
 ## Releasing
 

@@ -177,7 +177,7 @@ for batch in track(val_loader, description="Evaluate", unit="batch"):
 2026-11-03T17:12:54Z PROGRESS Plan  preprocess 5%, train 90%, evaluate 5%  [pace:1 s=plan k=plan e=0 q=1 ph=preprocess:0.05,train:0.9,evaluate:0.05]
 ```
 
-How a reader uses it (see [Design: forecasting rules](design.md#several-scopes)):
+How a reader uses it (see [Specification: plans](design.md#plans)):
 finished phases count zero, the running phase uses its own estimate, and each phase
 not yet started is estimated as `weight x seconds-per-weight`, where seconds-per-weight is
 taken from the phases that have finished or are running.

@@ -7,8 +7,7 @@ Welcome to the **Pace** documentation.
 - **Getting started** through **FAQ** are the user guide, for people adding Pace to a
   training or evaluation repository. **Reading Pace output** is for programs that read
   Pace's logs, such as a scheduler or a dashboard.
-- The **Design** chapter covers the line format, the forecasting rules, and the decisions
-  behind them.
+- The **Pace specification** chapter covers the line format and the forecasting rules.
 - The **Module Reference** chapter documents the full ``precisionai.pace`` API.
 
 Contents
