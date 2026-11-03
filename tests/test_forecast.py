@@ -689,14 +689,46 @@ def test_a_failed_nested_scope_does_not_fail_the_job() -> None:
     assert job.snapshot(root.now).state is ForecastState.LIVE
 
 
-def test_without_a_root_every_top_level_scope_must_end() -> None:
+def test_without_a_root_or_plan_the_job_is_never_called_complete() -> None:
     job = JobForecast()
     a = _live_scope(job, "a")
     b = _live_scope(job, "b")
     a.end()
     assert job.snapshot(b.now).state is ForecastState.LIVE
     b.end()
-    assert job.snapshot(b.now).state is ForecastState.COMPLETE
+    # More unplanned phases may follow, so only a root or a finished plan proves the end.
+    est = job.snapshot(b.now)
+    assert est.state is ForecastState.UNKNOWN
+    assert est.remaining_seconds is None
+
+
+def test_root_decides_alone_when_another_top_level_scope_fails() -> None:
+    job = JobForecast()
+    root = _live_root(job)
+    other = Run(job, "download")
+    other.start()
+    other.fail()
+    assert job.snapshot(root.now).state is ForecastState.LIVE
+
+
+def test_an_older_plan_read_late_does_not_replace_a_newer_one() -> None:
+    job = JobForecast()
+    newer = Record(scope="plan", event=Event.PLAN, seq=2, elapsed=0.0, phases=(("prep", 0.1), ("train", 0.9)))
+    older = Record(scope="plan", event=Event.PLAN, seq=1, elapsed=0.0, phases=(("prep", 0.5), ("train", 0.5)))
+    job.observe(newer, 1000.0)
+    job.observe(older, 1000.0)
+    _, train = _prep_then_train(job)
+    assert job.snapshot(train.now).remaining_seconds == pytest.approx(1600.0)
+
+
+def test_a_stale_concurrent_scope_makes_the_job_stale() -> None:
+    job = JobForecast()
+    _live_scope(job, "short", total=300.0)
+    longer = _live_scope(job, "long", total=5000.0, offset=1400.0)
+    est = job.snapshot(longer.now)
+    assert est.source == "concurrent"
+    assert est.state is ForecastState.STALE
+    assert est.remaining_seconds == pytest.approx((5000.0 - 180.0) / 2.0)
 
 
 def test_without_a_root_any_failed_top_level_scope_fails_the_job() -> None:
@@ -730,3 +762,13 @@ def test_job_config_reaches_every_scope() -> None:
     run.start()
     run.tick(10.0, 1.0)
     assert job.snapshot(run.now).state is ForecastState.LIVE
+
+
+def test_live_estimate_counts_down_between_records() -> None:
+    fc, run = _live_run()
+    at_record = fc.snapshot(run.now).remaining_seconds
+    assert at_record is not None
+    later = fc.snapshot(run.now + 10.0)
+    assert later.state is ForecastState.LIVE
+    assert later.remaining_seconds == pytest.approx(at_record - 10.0)
+    assert fc.snapshot(run.now + 10_000.0).remaining_seconds == at_record

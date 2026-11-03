@@ -254,8 +254,8 @@ class ScopeForecast:
     def snapshot(self, now: float) -> Forecast:
         """Return the estimate as of ``now``.
 
-        The remaining time is the estimate as of the latest record; it does not count
-        down between records, and a Stale scope keeps it unchanged.
+        While Live, the remaining time counts down from the latest record by the time
+        received since it. A Stale scope keeps the estimate from its latest record.
 
         Parameters
         ----------
@@ -277,8 +277,12 @@ class ScopeForecast:
             return Forecast(ForecastState.UNKNOWN, **common)
         if not self._live or rate is None:
             return Forecast(ForecastState.LEARNING, **common)
-        state = ForecastState.STALE if self._is_stale(now) else ForecastState.LIVE
-        return Forecast(state, remaining_seconds=self._remaining(rate), rate=rate, **common)
+        remaining = self._remaining(rate)
+        if self._is_stale(now):
+            return Forecast(ForecastState.STALE, remaining_seconds=remaining, rate=rate, **common)
+        if remaining is not None:
+            remaining = max(remaining - max(now - self._receipts[-1], 0.0), 0.0)
+        return Forecast(ForecastState.LIVE, remaining_seconds=remaining, rate=rate, **common)
 
     def _begin_segment(self) -> None:
         self._estimator = _RateEstimator(self._config)
@@ -421,6 +425,7 @@ class JobForecast:
         self._config = config
         self._scopes: dict[str, ScopeForecast] = {}
         self._plan: tuple[tuple[str, float], ...] = ()
+        self._plan_seq: dict[str, int] = {}
         self._first_received: float | None = None
         self._ever_live = False
 
@@ -437,7 +442,9 @@ class JobForecast:
         if self._first_received is None:
             self._first_received = received_at
         if record.event is Event.PLAN:
-            if record.phases:
+            # A plan read late from the other stream must not replace a newer one.
+            if record.phases and record.seq > self._plan_seq.get(record.scope, 0):
+                self._plan_seq[record.scope] = record.seq
                 self._plan = record.phases
             return
         scope = self._scopes.get(record.scope)
@@ -474,16 +481,21 @@ class JobForecast:
         return next((name for name, scope in self._scopes.items() if scope.root), None)
 
     def _ended_state(self, forecasts: Mapping[str, Forecast]) -> ForecastState | None:
+        root = self._root()
+        if root is not None:
+            state = forecasts[root].state
+            return state if state in (ForecastState.COMPLETE, ForecastState.FAILED) else None
         top = self._top_level()
         if any(forecasts[name].state is ForecastState.FAILED for name in top):
             return ForecastState.FAILED
-        root = self._root()
-        if root is not None:
-            return ForecastState.COMPLETE if forecasts[root].state is ForecastState.COMPLETE else None
+        # Without a root, only a finished plan proves the job is done: between two
+        # unplanned phases every scope seen so far has ended, but more work may follow.
+        if not self._plan:
+            return None
         phases_done = all(
             name in forecasts and forecasts[name].state is ForecastState.COMPLETE for name, _ in self._plan
         )
-        if top and phases_done and all(forecasts[name].state is ForecastState.COMPLETE for name in top):
+        if phases_done and all(forecasts[name].state is ForecastState.COMPLETE for name in top):
             return ForecastState.COMPLETE
         return None
 
@@ -536,7 +548,9 @@ class JobForecast:
         if not running:
             return None
         longest = max(running, key=lambda forecast: forecast.remaining_seconds or 0.0)
-        return JobEstimate(longest.state, longest.remaining_seconds, source="concurrent", partial=True)
+        stale = any(forecast.state is ForecastState.STALE for forecast in running)
+        state = ForecastState.STALE if stale else ForecastState.LIVE
+        return JobEstimate(state, longest.remaining_seconds, source="concurrent", partial=True)
 
     def _without_estimate(self, now: float, forecasts: Mapping[str, Forecast]) -> JobEstimate:
         if self._expected is not None and not self._ever_live:
