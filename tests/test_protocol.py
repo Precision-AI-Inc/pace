@@ -5,7 +5,7 @@
 
 import pytest
 
-from precisionai.pace.protocol import Event, Record, encode_value, format_number, format_trailer
+from precisionai.pace.protocol import Event, Record, encode_value, format_number, format_trailer, parse_line
 
 
 def test_format_trailer_update_matches_design_example() -> None:
@@ -132,3 +132,17 @@ def test_format_trailer_label_of_only_control_characters_becomes_dash() -> None:
 def test_format_number_rejects_values_the_parser_would_reject() -> None:
     with pytest.raises(ValueError, match="at most"):
         format_number(1e16)
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        Record(scope="a", event=Event.FAIL, seq=2, elapsed=1.0, completed=1, total=2, unit="step"),
+        Record(scope="a", event=Event.UPDATE, seq=2, elapsed=1.0, completed=1, total=2, run="abcd1234"),
+        Record(scope="a", event=Event.END, seq=3, elapsed=1.0, completed=2, total=2, resumed=True, label="x"),
+        Record(scope="a", event=Event.PLAN, seq=1, elapsed=0.0, phases=(("b", 1.0),), label="x", unit="it"),
+        Record(scope="a", event=Event.UPDATE, seq=2, elapsed=1.0, completed=1, total=2, phases=(("b", 1.0),)),
+    ],
+)
+def test_format_trailer_leaves_out_keys_the_event_may_not_carry(record: Record) -> None:
+    assert parse_line(format_trailer(record)) is not None

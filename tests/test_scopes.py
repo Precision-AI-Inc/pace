@@ -15,7 +15,7 @@ from precisionai.pace import scopes
 from precisionai.pace.core import Logger
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import MAX_LINE_BYTES, Record, parse_line
+from precisionai.pace.protocol import MAX_LINE_BYTES, MAX_NUMBER, Record, parse_line
 from precisionai.pace.scopes import (
     Phase,
     Scope,
@@ -813,3 +813,11 @@ def test_a_total_too_large_for_a_trailer_is_reported_as_unknown(log: Logger, str
     start = parse_line(stream.lines()[0])
     assert start is not None
     assert start.total is None
+
+
+def test_a_count_pushed_past_the_trailer_limit_is_capped(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    with progress(None, "Huge", "item", logger=log) as run:
+        run.update(1e16)
+    end = parse_line(stream.lines()[-1])
+    assert end is not None
+    assert end.completed == MAX_NUMBER

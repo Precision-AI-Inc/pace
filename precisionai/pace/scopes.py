@@ -223,7 +223,7 @@ class Scope:
             _PARENT.set(self.parent)
 
     def _set_completed(self, completed: float) -> None:
-        self.completed = completed
+        self.completed = min(completed, MAX_NUMBER)
         self._after_change()
 
     def _after_change(self) -> None:

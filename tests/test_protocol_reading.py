@@ -437,3 +437,12 @@ def test_line_splitter_drops_huge_line_in_one_chunk_without_buffering() -> None:
     chunk = b"a" * 10_000_000 + b"\nok\n" + b"b" * 10_000_000
     assert splitter.feed(chunk) == ["ok"]
     assert splitter.feed(b"tail\nnext\n") == ["next"]
+
+
+def test_a_line_of_exactly_the_limit_parses_with_its_line_ending() -> None:
+    trailer = "[pace:1 s=a k=upd c=1 t=2 e=1 q=2]"
+    line = "x" * (MAX_LINE_BYTES - len(trailer) - 1) + " " + trailer
+    assert len(line.encode("utf-8")) == MAX_LINE_BYTES
+    assert parse_line(line) is not None
+    assert parse_line(line + "\n") is not None
+    assert parse_line(line + "\r\n") is not None

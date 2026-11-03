@@ -221,20 +221,22 @@ def _count_fields(record: Record) -> list[str]:
     ):
         fields.append(f"c={format_number(record.completed or 0.0)}")
         fields.append(f"t={'?' if record.total is None else format_number(record.total)}")
-    if record.unit is not None:
+    if record.unit is not None and record.event is Event.START:
         fields.append(f"u={encode_value(_printable(record.unit, MAX_UNIT_CHARS))}")
     return fields
 
 
 def _tail_fields(record: Record) -> list[str]:
+    # Only the keys this event may carry (docs/design.md): res, run and n on start, ph on plan.
+    start = record.event is Event.START
     fields = []
-    if record.resumed:
+    if record.resumed and start:
         fields.append("res=1")
-    if record.run is not None:
+    if record.run is not None and start:
         fields.append(f"run={record.run}")
-    if record.phases:
+    if record.phases and record.event is Event.PLAN:
         fields.append("ph=" + ",".join(f"{name}:{format_number(weight)}" for name, weight in record.phases))
-    if record.label is not None:
+    if record.label is not None and start:
         fields.append(f"n={encode_value(_printable(record.label, MAX_LABEL_CHARS))}")
     return fields
 
@@ -309,7 +311,10 @@ def parse_line(line: str) -> Record | None:
     Record or None
         The record, or ``None`` when the line carries no valid version-1 trailer.
     """
-    if not isinstance(line, str) or len(line) > MAX_LINE_BYTES:
+    if not isinstance(line, str):
+        return None
+    line = line.rstrip("\r\n")
+    if len(line) > MAX_LINE_BYTES:
         return None
     # U+FFFD stands for one undecodable source byte (see LineSplitter), so count it as one.
     if len(line.encode("utf-8", errors="surrogatepass")) - 2 * line.count("�") > MAX_LINE_BYTES:
