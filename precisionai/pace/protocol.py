@@ -15,6 +15,11 @@ import math
 import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING, TypeVar
+from urllib.parse import unquote_to_bytes
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 MARKER = "pace"
 VERSION = 1
@@ -209,3 +214,291 @@ def _tail_fields(record: Record) -> list[str]:
     if record.label is not None:
         fields.append(f"n={encode_value(record.label[:MAX_LABEL_CHARS])}")
     return fields
+
+
+MAX_NUMBER = 1e15
+MAX_SEQ = 10**12
+MAX_UNIT_CHARS = 64
+MAX_PHASES = 32
+
+_T = TypeVar("_T")
+
+_ANSI_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+_KEY_PATTERN = re.compile(r"[a-z0-9]+")
+_VALUE_PATTERN = re.compile(r"(?:[A-Za-z0-9._:,-]|%[0-9A-Fa-f]{2})+")
+_NUMBER_PATTERN = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+_INTEGER_PATTERN = re.compile(r"[0-9]+")
+_BAD_ESCAPE_PATTERN = re.compile(r"%(?![0-9A-Fa-f]{2})")
+_COUNTED_EVENTS = (Event.START, Event.UPDATE, Event.END)
+
+
+def decode_value(value: str) -> str:
+    """Reverse :func:`encode_value`.
+
+    Parameters
+    ----------
+    value : str
+        An encoded trailer value. Each ``%XX`` escape stands for one byte of
+        UTF-8; every other character stands for itself.
+
+    Returns
+    -------
+    str
+        The decoded text.
+
+    Raises
+    ------
+    ValueError
+        If a ``%`` is not followed by two hexadecimal digits, or the decoded
+        bytes are not valid UTF-8.
+    """
+    if _BAD_ESCAPE_PATTERN.search(value):
+        raise ValueError(f"malformed percent escape in {value!r}")
+    try:
+        return unquote_to_bytes(value).decode("utf-8")
+    except UnicodeError as err:
+        raise ValueError(f"value {value!r} is not valid UTF-8") from err
+
+
+def parse_line(line: str) -> Record | None:
+    """Return the record carried by the trailer at the end of ``line``, if any.
+
+    A consumer must treat every log line as untrusted input, so this never
+    raises: a line without a trailer, or with one that breaks any rule in
+    ``docs/design.md``, yields ``None``. Keys this version does not know are
+    ignored, so a later minor version stays readable.
+
+    Parameters
+    ----------
+    line : str
+        One log line, with or without its line ending. ANSI escape sequences
+        and trailing whitespace are ignored.
+
+    Returns
+    -------
+    Record or None
+        The record, or ``None`` when the line carries no valid version-1 trailer.
+    """
+    if not isinstance(line, str) or len(line) > MAX_LINE_BYTES:
+        return None
+    if len(line.encode("utf-8", errors="surrogatepass")) > MAX_LINE_BYTES:
+        return None
+    tokens = _trailer_tokens(line)
+    if tokens is None:
+        return None
+    try:
+        return _build_record(_parse_fields(tokens))
+    except ValueError:
+        return None
+
+
+def _trailer_tokens(line: str) -> list[str] | None:
+    text = _ANSI_PATTERN.sub("", line).rstrip()
+    if not text.endswith("]"):
+        return None
+    start = text.rfind(f"[{MARKER}:")
+    if start < 0 or (start > 0 and text[start - 1] != " "):
+        return None
+    tokens = text[start + 1 : -1].split(" ")
+    if tokens[0] != f"{MARKER}:{VERSION}":
+        return None
+    return tokens[1:]
+
+
+def _parse_fields(tokens: list[str]) -> dict[str, str]:
+    if len(tokens) > MAX_FIELDS:
+        raise ValueError("too many fields")
+    fields: dict[str, str] = {}
+    for token in tokens:
+        key, sep, value = token.partition("=")
+        if not sep or not _KEY_PATTERN.fullmatch(key) or not _valid_value(key, value):
+            raise ValueError(f"malformed field {token!r}")
+        if key in fields:
+            raise ValueError(f"duplicate key {key!r}")
+        fields[key] = value
+    return fields
+
+
+def _valid_value(key: str, value: str) -> bool:
+    if value == "?":
+        return key == "t"
+    return len(value) <= MAX_VALUE_CHARS and _VALUE_PATTERN.fullmatch(value) is not None
+
+
+def _build_record(fields: dict[str, str]) -> Record:
+    for key in ("s", "k", "q", "e"):
+        if key not in fields:
+            raise ValueError(f"missing required key {key!r}")
+    event = Event(fields["k"])
+    if event in _COUNTED_EVENTS and ("c" not in fields or "t" not in fields):
+        raise ValueError(f"{event.value} requires c and t")
+    return Record(
+        scope=_parse_scope(fields["s"]),
+        event=event,
+        seq=_parse_seq(fields["q"]),
+        elapsed=_parse_number(fields["e"]),
+        completed=_optional(fields, "c", _parse_number),
+        total=_optional(fields, "t", _parse_total),
+        unit=_optional(fields, "u", _parse_unit),
+        parent=_optional(fields, "p", _parse_scope),
+        root=_parse_flag(fields, "root"),
+        resumed=_parse_flag(fields, "res"),
+        phases=_optional(fields, "ph", _parse_phases) or (),
+        label=_optional(fields, "n", _parse_label),
+    )
+
+
+def _optional(fields: dict[str, str], key: str, parse: Callable[[str], _T]) -> _T | None:
+    return parse(fields[key]) if key in fields else None
+
+
+def _parse_scope(value: str) -> str:
+    if not SCOPE_PATTERN.fullmatch(value):
+        raise ValueError(f"invalid scope id {value!r}")
+    return value
+
+
+def _parse_seq(value: str) -> int:
+    if not _INTEGER_PATTERN.fullmatch(value):
+        raise ValueError(f"invalid sequence number {value!r}")
+    seq = int(value)
+    if not 1 <= seq <= MAX_SEQ:
+        raise ValueError(f"sequence number out of range: {value!r}")
+    return seq
+
+
+def _parse_number(value: str) -> float:
+    if not _NUMBER_PATTERN.fullmatch(value):
+        raise ValueError(f"invalid number {value!r}")
+    number = float(value)
+    if number > MAX_NUMBER:
+        raise ValueError(f"number out of range: {value!r}")
+    return number
+
+
+def _parse_total(value: str) -> float | None:
+    if value == "?":
+        return None
+    total = _parse_number(value)
+    if total <= 0:
+        raise ValueError("total must be positive")
+    return total
+
+
+def _parse_flag(fields: dict[str, str], key: str) -> bool:
+    if key not in fields:
+        return False
+    if fields[key] != "1":
+        raise ValueError(f"{key} must be 1, got {fields[key]!r}")
+    return True
+
+
+def _parse_unit(value: str) -> str:
+    unit = decode_value(value)
+    if len(unit) > MAX_UNIT_CHARS:
+        raise ValueError("unit too long")
+    return unit
+
+
+def _parse_label(value: str) -> str:
+    label = decode_value(value)
+    if len(label) > MAX_LABEL_CHARS:
+        raise ValueError("label too long")
+    return label
+
+
+def _parse_phases(value: str) -> tuple[tuple[str, float], ...]:
+    pairs = value.split(",")
+    if len(pairs) > MAX_PHASES:
+        raise ValueError("too many phases")
+    phases = []
+    for pair in pairs:
+        name, sep, weight = pair.partition(":")
+        if not sep:
+            raise ValueError(f"malformed phase {pair!r}")
+        phases.append((_parse_scope(name), _parse_number(weight)))
+    return tuple(phases)
+
+
+class LineSplitter:
+    r"""Cut a byte stream read in arbitrary chunks into text lines.
+
+    Memory stays bounded however hostile the stream: a line longer than
+    ``MAX_LINE_BYTES`` cannot hold a valid trailer, so it is dropped rather
+    than buffered, and the result does not depend on where the chunks fall.
+    ``\n`` and ``\r\n`` both end a line.
+    """
+
+    def __init__(self) -> None:
+        self._tail = bytearray()
+        self._skipping = False
+
+    def feed(self, chunk: bytes) -> list[str]:
+        r"""Add ``chunk`` and return the lines it completes.
+
+        Parameters
+        ----------
+        chunk : bytes
+            The next bytes of the stream, split anywhere (even inside a
+            multi-byte character or between ``\r`` and ``\n``).
+
+        Returns
+        -------
+        list of str
+            Each completed line, decoded as UTF-8 with undecodable bytes
+            replaced, without its line ending. Over-long lines are omitted.
+        """
+        lines: list[str] = []
+        start = 0
+        while True:
+            end = chunk.find(b"\n", start)
+            if end < 0:
+                break
+            self._complete(chunk[start:end], lines)
+            start = end + 1
+        self._keep(chunk[start:])
+        return lines
+
+    def reset(self) -> None:
+        """Drop the partial line, for when the consumer detects a gap in the log."""
+        self._tail.clear()
+        self._skipping = False
+
+    def flush(self) -> list[str]:
+        """Return the partial line left at the end of the stream, if any.
+
+        Returns
+        -------
+        list of str
+            The pending text as one line, or an empty list when there is none.
+        """
+        lines: list[str] = []
+        if not self._skipping:
+            self._emit(bytes(self._tail), lines, drop_empty=True)
+        self.reset()
+        return lines
+
+    def _complete(self, piece: bytes, lines: list[str]) -> None:
+        if self._skipping:
+            self._skipping = False
+            return
+        data = bytes(self._tail) + piece
+        self._tail.clear()
+        self._emit(data, lines)
+
+    def _keep(self, rest: bytes) -> None:
+        if self._skipping:
+            return
+        self._tail += rest
+        # One byte of slack: a line of exactly MAX_LINE_BYTES waits here with its "\r".
+        if len(self._tail) > MAX_LINE_BYTES + 1:
+            self._tail.clear()
+            self._skipping = True
+
+    @staticmethod
+    def _emit(data: bytes, lines: list[str], *, drop_empty: bool = False) -> None:
+        if data.endswith(b"\r"):
+            data = data[:-1]
+        if len(data) > MAX_LINE_BYTES or (drop_empty and not data):
+            return
+        lines.append(data.decode("utf-8", errors="replace"))
