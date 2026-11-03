@@ -11,12 +11,12 @@ from typing import Any, Iterator
 
 import pytest
 
-from precisionai.pace import Event, Record, parse_line
+from precisionai.pace import Event, Record, ScopeForecast, parse_line
 from precisionai.pace import transformers as pace_transformers
 from precisionai.pace.capture import capture_logging
 from precisionai.pace.core import Logger
 from precisionai.pace.transformers import PaceCallback
-from tests.conftest import FakeStream
+from tests.conftest import FakeClock, FakeStream
 
 torch = pytest.importorskip("torch")
 transformers = pytest.importorskip("transformers")
@@ -261,3 +261,52 @@ def test_capture_logging_takes_over_the_transformers_logger(
     transformers.utils.logging.get_logger("transformers.trainer").warning("from transformers")
     assert [line.split(" ", 2)[1:] for line in stream.lines()] == [["WARNING", " from transformers"]]
     assert capsys.readouterr().err == ""
+
+
+def test_an_evaluation_pass_counts_the_batch_that_ran_before_the_scope_opened(
+    quiet: Logger, stream: FakeStream, tmp_path: Path
+) -> None:
+    trainer(quiet, tmp_path, eval_strategy="epoch").train()
+    first = of(records(stream), "evaluation")
+    assert first[0].event is Event.START
+    assert first[0].completed == 1
+    assert first[0].total == 3
+
+
+def test_an_evaluation_pass_reports_the_speed_of_the_batches_it_timed(
+    quiet: Logger, stream: FakeStream, clock: FakeClock
+) -> None:
+    # The Trainer calls on_prediction_step after each batch has run, so batch 1 finishes
+    # before the scope exists. The scope must not record it as done at elapsed zero, which
+    # reads as an enormous rate.
+    callback = PaceCallback(logger=quiet)
+    state = transformers.TrainerState()
+    state.is_world_process_zero = True
+    dataloader = [None] * 4
+    for _ in dataloader:
+        clock.advance(2.0)
+        callback.on_prediction_step(None, state, None, eval_dataloader=dataloader)
+    callback.on_evaluate(None, state, None, metrics={})
+    found = of(records(stream), "evaluation")
+    assert [(r.event, r.completed, r.elapsed) for r in found] == [
+        (Event.START, 1, 0),
+        (Event.UPDATE, 2, 2),
+        (Event.UPDATE, 3, 4),
+        (Event.UPDATE, 4, 6),
+        (Event.END, 4, 6),
+    ]
+    assert stream.lines()[-1].count("0.5 batch/s") == 1
+    forecast = ScopeForecast("evaluation")
+    for record in found:
+        forecast.observe(record, record.elapsed)
+    assert forecast.snapshot(found[-1].elapsed).rate == pytest.approx(0.5)
+
+
+def test_an_evaluation_pass_of_one_batch_starts_and_ends_complete(quiet: Logger, stream: FakeStream) -> None:
+    callback = PaceCallback(logger=quiet)
+    state = transformers.TrainerState()
+    state.is_world_process_zero = True
+    callback.on_prediction_step(None, state, None, eval_dataloader=[None])
+    callback.on_evaluate(None, state, None, metrics={})
+    found = of(records(stream), "evaluation")
+    assert [(r.event, r.completed, r.total) for r in found] == [(Event.START, 1, 1), (Event.END, 1, 1)]

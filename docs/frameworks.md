@@ -88,7 +88,11 @@ What it reports:
 - One `root` scope for training: `state.global_step` against `state.max_steps`, from
   rank 0 only. With no step budget (`max_steps=-1` and no length), the total is unknown.
 - A child scope for each evaluation or prediction pass (`evaluation`, `evaluation-2`,
-  ...), counting batches, nested under the training scope.
+  ...), counting batches, nested under the training scope. The Trainer tells the callback
+  about a batch only after it has run, and has no hook before the first, so the scope opens
+  already at `c=1`. Its rate and its "done in" time cover the batches after the first, and
+  leave out how long the first one took. (Lightning has a hook before the first batch, so
+  its validation scopes start at `c=0` and time every batch.)
 - On `resume_from_checkpoint`, the scope starts from the restored global step with `res=1`.
 - **A crash writes no `fail`.** Transformers gives callbacks no hook when training
   raises, so the scope stays open until the process exits. A scheduler should treat

@@ -100,7 +100,7 @@ class AdapterScopes:
         if self._main is not None:
             self._main.update(completed)
 
-    def begin_child(self, description: str, total: float | None, unit: str) -> Scope:
+    def begin_child(self, description: str, total: float | None, unit: str, completed: float = 0.0) -> Scope:
         """Start a child scope, ending the previous one if it is still open.
 
         Its parent is the main scope while that is open. With no main scope it is a
@@ -115,6 +115,9 @@ class AdapterScopes:
             Total amount; ``None`` when unknown.
         unit : str
             Unit of the child scope's counts.
+        completed : float
+            Amount already done when the scope starts, for a pass whose first unit has
+            finished before the adapter hears of it.
 
         Returns
         -------
@@ -122,7 +125,7 @@ class AdapterScopes:
             The started scope.
         """
         self.end_child()
-        scope = Scope(description, total, unit, logger=self._logger)
+        scope = Scope(description, total, unit, completed=completed, logger=self._logger)
         if self._main is None:
             scope.start()
         else:

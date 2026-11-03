@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Iterator
 
 import pytest
@@ -16,7 +17,7 @@ from precisionai.pace import lightning as pace_lightning
 from precisionai.pace.capture import capture_logging
 from precisionai.pace.core import Logger
 from precisionai.pace.lightning import PaceCallback
-from tests.conftest import FakeStream
+from tests.conftest import FakeClock, FakeStream
 
 torch = pytest.importorskip("torch")
 pl = pytest.importorskip("lightning.pytorch")
@@ -265,3 +266,28 @@ def test_capture_logging_takes_over_lightnings_own_log_lines(
     captured = capsys.readouterr()
     assert captured.err == ""
     assert "GPU available" not in captured.out
+
+
+def test_a_validation_pass_is_timed_from_before_its_first_batch(
+    quiet: Logger, stream: FakeStream, clock: FakeClock
+) -> None:
+    # Lightning opens the scope in on_validation_start, before batch 1, and counts a batch in
+    # on_validation_batch_end, so batch 1's time is inside the pass. The Transformers callback
+    # has to start its pass with one batch counted because its hook comes after the batch.
+    callback = PaceCallback(logger=quiet)
+    trainer_stub = SimpleNamespace(is_global_zero=True, sanity_checking=False, num_val_batches=[4])
+    callback.on_validation_start(trainer_stub, None)
+    for index in range(4):
+        clock.advance(2.0)
+        callback.on_validation_batch_end(trainer_stub, None, None, None, index)
+    callback.on_validation_end(trainer_stub, None)
+    found = of(records(stream), "validation")
+    assert [(r.event, r.completed, r.elapsed) for r in found] == [
+        (Event.START, 0, 0),
+        (Event.UPDATE, 1, 2),
+        (Event.UPDATE, 2, 4),
+        (Event.UPDATE, 3, 6),
+        (Event.UPDATE, 4, 8),
+        (Event.END, 4, 8),
+    ]
+    assert stream.lines()[-1].count("0.5 batch/s") == 1
