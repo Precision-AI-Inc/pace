@@ -59,6 +59,7 @@ class ScopeSummary:
     status: str = "open"
     first_index: int = 0
     closed_index: int | None = None
+    last_index: int = 0
 
 
 @dataclass
@@ -178,6 +179,7 @@ class _Reader:
         if scope is None:
             scope = self.report.scopes[record.scope] = ScopeSummary(record.scope, first_index=index)
         scope.records += 1
+        scope.last_index = index
         scope.root = scope.root or record.root
         scope.parent = record.parent or scope.parent
         if record.event is Event.START:
@@ -266,22 +268,34 @@ def _check_scope(report: Report, scope: ScopeSummary) -> None:
 
 
 def _check_plans(report: Report) -> None:
-    parents = {scope.parent for scope in report.scopes.values()}
     for phases in report.plans[-1:]:
-        for name, _ in phases:
-            scope = report.scopes.get(name)
-            if scope is None:
+        planned = [name for name, _ in phases]
+        for name in planned:
+            if name not in report.scopes:
                 report.findings.append(
                     Finding("error", f"the plan lists {name!r} but no scope has that id (check the name or scope=)")
                 )
-            elif scope.unit == "phase" and name in parents:
-                report.findings.append(
-                    Finding(
-                        "warning",
-                        f"planned phase {name!r} is a phase() wrapper around other scopes: it has no estimate "
-                        "while it runs, so the plan gives none; make the counted scope itself the plan entry",
-                    )
-                )
+        _check_plan_covers_job(report, planned)
+
+
+def _check_plan_covers_job(report: Report, planned: list[str]) -> None:
+    closed = [report.scopes[name].closed_index for name in planned if name in report.scopes]
+    if not closed or any(index is None for index in closed):
+        return
+    plan_end = max(index for index in closed if index is not None)
+    late = [
+        scope.scope
+        for scope in report.scopes.values()
+        if scope.parent is None and not scope.root and scope.scope not in planned and scope.last_index > plan_end
+    ]
+    if late:
+        report.findings.append(
+            Finding(
+                "warning",
+                f"{', '.join(late)} ran after the last planned phase ended but is not in the plan: "
+                "the scheduler treats the job as complete once every planned phase has ended",
+            )
+        )
 
 
 def _check_root_covers_job(report: Report) -> None:
@@ -294,13 +308,13 @@ def _check_root_covers_job(report: Report) -> None:
     later = [
         scope.scope
         for scope in report.scopes.values()
-        if scope.scope != root.scope and scope.parent is None and scope.first_index > root.closed_index
+        if scope.scope != root.scope and scope.parent is None and scope.last_index > root.closed_index
     ]
     if later:
         report.findings.append(
             Finding(
                 "warning",
-                f"root {root.scope!r} ended before {', '.join(later)} started: "
+                f"root {root.scope!r} ended while {', '.join(later)} was still to run or running: "
                 "the scheduler treats the job as complete when the root ends",
             )
         )

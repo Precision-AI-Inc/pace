@@ -175,12 +175,10 @@ with progress(total=len(val_set), description="Evaluate", unit="sample", scope="
   silent at runtime, and `verify.py` reports it.
 - There is no `root=True` here: the plan covers the whole job, and the job counts as
   complete when every planned phase has ended.
-- **Do not wrap a long phase in `with phase("Train"):` and put the counted loop inside
-  it.** A `phase` is a scope of total 1 that stays at 0 until it exits, so it has no
-  estimate while it runs, and a plan cannot give an estimate while any of its phases
-  has none. The scheduler sees nothing during the longest phase. Make the counted
-  scope itself the plan entry, as above. Use `phase()` only for short, uncounted
-  steps:
+- Wrapping a counted loop in `with phase("Train"):` is fine: a phase has no rate of its
+  own, so the scheduler uses the estimate of the loop inside it. Making the counted
+  scope itself the plan entry, as above, works too. `phase()` on its own suits short,
+  uncounted steps:
 
 ```python
 from precisionai.pace import phase, timed

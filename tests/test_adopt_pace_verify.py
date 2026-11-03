@@ -194,25 +194,31 @@ def test_a_plan_name_with_no_scope_is_an_error() -> None:
     assert any("'trian' but no scope has that id" in text for text in messages(report, "error"))
 
 
-def test_a_phase_wrapper_in_a_plan_is_a_warning() -> None:
+def test_unplanned_work_after_the_last_planned_phase_is_a_warning() -> None:
     phases = (("train", 1.0),)
     lines = run_lines(
         Record(scope="plan", event=Event.PLAN, seq=1, elapsed=0.0, phases=phases),
-        start("train", total=1, unit="phase"),
-        start("steps", parent="train"),
-        end("steps", parent="train"),
-        end("train", total=1, completed=1),
+        start("train"),
+        end("train"),
+        start("export"),
+        end("export"),
     )
 
     report = verify.analyze(lines)
 
-    assert any("phase() wrapper" in text for text in messages(report, "warning"))
+    assert any("export ran after the last planned phase ended" in text for text in messages(report, "warning"))
 
 
 def test_work_after_the_root_ended_is_a_warning() -> None:
     report = verify.analyze(run_lines(start("main", root=True), end("main", root=True), start("export"), end("export")))
 
-    assert any("root 'main' ended before export started" in text for text in messages(report, "warning"))
+    assert any("root 'main' ended while export was still" in text for text in messages(report, "warning"))
+
+
+def test_work_still_running_when_the_root_ended_is_a_warning() -> None:
+    report = verify.analyze(run_lines(start("main", root=True), start("upload"), end("main", root=True), end("upload")))
+
+    assert any("root 'main' ended while upload was still" in text for text in messages(report, "warning"))
 
 
 def test_nested_scopes_after_the_root_ended_are_not_flagged() -> None:
@@ -326,7 +332,7 @@ def test_real_logger_output_passes(log: Logger, stream: FakeStream, clock: FakeC
     assert report.estimate.state is ForecastState.COMPLETE
 
 
-def test_real_logger_phase_wrapper_is_caught(log: Logger, stream: FakeStream) -> None:
+def test_real_logger_phase_wrapper_is_fine(log: Logger, stream: FakeStream) -> None:
     plan(["train"], logger=log)
     with phase("train", logger=log):
         for _ in track(range(3), "Steps", "step", logger=log):
@@ -334,7 +340,8 @@ def test_real_logger_phase_wrapper_is_caught(log: Logger, stream: FakeStream) ->
 
     report = verify.analyze(stream.lines())
 
-    assert any("phase() wrapper" in text for text in messages(report, "warning"))
+    assert not messages(report, "error")
+    assert report.estimate.state is ForecastState.COMPLETE
 
 
 @pytest.mark.parametrize(
