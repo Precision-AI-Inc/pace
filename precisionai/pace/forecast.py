@@ -631,15 +631,10 @@ class JobForecast:
             in_unit = scope.elapsed_at(now)
             per_unit = in_unit + child_left
         elif per_unit is None:
-            # A larger parent need not write every advance, so its silence does not mean
-            # no unit has finished: time a unit by one child until the parent has a pace.
-            if running:
-                longest = max(running, key=lambda child: effective[child].remaining_seconds or 0.0)
-                in_unit = self._scopes[longest].elapsed_at(now)
-                per_unit = in_unit + child_left
-            else:
-                in_unit = 0.0
-                per_unit = sum(self._scopes[child].elapsed for child in finished) / len(finished)
+            # A larger parent need not write every advance, and its units are often steps
+            # rather than children (a model load inside a root over 5000 steps), so no
+            # child says how long a unit takes. Wait for the parent's own pace.
+            return None
         else:
             # Units left and the time since are both measured from the parent's latest record.
             in_unit = scope.elapsed_at(now) - scope.elapsed

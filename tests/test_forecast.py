@@ -1034,15 +1034,29 @@ def test_between_children_the_parents_own_stale_limit_applies() -> None:
     assert job.snapshot(1900.0 + 1801.0).state is ForecastState.STALE
 
 
-def test_a_large_parent_that_skipped_an_advance_is_timed_by_its_child() -> None:
+def test_a_large_parent_without_a_pace_has_no_estimate_from_its_children() -> None:
     # 200 epochs: the parent writes an advance only every 1% (2 epochs) or heartbeat, so
     # its silence since the start does not mean the first epoch is still running.
     job = JobForecast()
     epochs = Run(job, "epochs", total=200.0, root=True)
     epochs.start()
     second = _epoch(job, 1, 1500.0, "epochs")
-    est = job.snapshot(second.now)
-    assert est.remaining_seconds == pytest.approx(410.0 + 199 * 500.0)
+    assert job.snapshot(second.now).remaining_seconds is None
+
+
+def test_a_step_root_is_not_timed_by_a_child_before_its_first_update() -> None:
+    # A 60 s model load inside a root over 5000 steps is not the length of a step.
+    job = JobForecast()
+    root = Run(job, "train", total=5000.0, root=True)
+    root.start()
+    load = Run(job, "load", total=1.0, parent="train")
+    load.start()
+    load.t = 60.0
+    load.end()
+    assert job.snapshot(1065.0).remaining_seconds is None
+    # Once the root reports progress, its own pace is used.
+    root.mark(100.0, 80.0)
+    assert job.snapshot(1100.0).remaining_seconds == pytest.approx(4920 * 1.25)
 
 
 def test_seconds_per_unit_restarts_when_the_count_goes_backwards() -> None:
