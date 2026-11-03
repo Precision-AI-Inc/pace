@@ -34,8 +34,9 @@ MAX_VALUE_CHARS = 768
 MAX_LABEL_CHARS = 64
 MAX_UNIT_CHARS = 64
 MAX_PHASES = 32
-# A full plan: 32 phases of a 64-character scope id plus a weight.
-MAX_PHASES_CHARS = 2560
+# A full plan: 32 phases, each a 64-character scope id, ":" and the widest weight the
+# writer produces ("999999999999999.999999", 22 characters), joined by 31 commas.
+MAX_PHASES_CHARS = 32 * (64 + 1 + 22) + 31
 
 RUN_PATTERN = re.compile(r"[a-z0-9]{1,16}")
 

@@ -161,7 +161,12 @@ class _Reader:
 
     def _is_duplicate(self, record: Record) -> bool:
         scope = record.scope
-        if record.event is Event.START and record.run != self._run.get(scope):
+        restart = record.event is Event.START and (
+            record.run != self._run.get(scope)
+            if record.run is not None and self._run.get(scope) is not None
+            else self._last_seq.get(scope, 0) > 1
+        )
+        if restart or (record.event is Event.START and scope not in self._run):
             self._segment[scope] = self._segment.get(scope, 0) + 1
             self._run[scope] = record.run
             self._last_seq[scope] = 0

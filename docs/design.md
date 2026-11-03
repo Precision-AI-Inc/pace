@@ -153,7 +153,7 @@ escape sequences and trailing whitespace. Any character outside the value alphab
 is percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, an unknown major
 version, a missing required field, or a value that fails to parse is ignored.
 A raw (still encoded) value may be at most 768 characters, enough for a 64-character
-label of 4-byte characters; `ph` may be up to 2560, enough for 32 phases. The writer
+label of 4-byte characters; `ph` may be up to 2815, enough for 32 phases with the longest ids and weights. The writer
 shortens labels and units to 64 characters and replaces control characters with spaces,
 so it never produces a line the parser rejects.
 

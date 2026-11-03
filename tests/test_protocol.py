@@ -152,3 +152,11 @@ def test_a_total_too_small_to_write_is_written_as_unknown() -> None:
     record = Record(scope="a", event=Event.UPDATE, seq=2, elapsed=1.0, completed=0, total=1e-7)
     assert "t=?" in format_trailer(record)
     assert parse_line(format_trailer(record)) is not None
+
+
+def test_the_largest_plan_the_writer_can_produce_parses() -> None:
+    phases = tuple((f"{index:02d}" + "p" * 62, 999999999999999.999999) for index in range(32))
+    record = Record(scope="plan", event=Event.PLAN, seq=1, elapsed=0.0, phases=phases)
+    parsed = parse_line(format_trailer(record))
+    assert parsed is not None
+    assert len(parsed.phases) == 32
