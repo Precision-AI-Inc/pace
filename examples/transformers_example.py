@@ -12,7 +12,7 @@ A TRL trainer takes the same callback.
 Shows: ``PaceCallback()`` from ``precisionai.pace.transformers``, and ``logger.configure``
 to make a run of a few seconds write more than its first and last progress line.
 
-Needs: ``pip install precisionai-pace[transformers] accelerate``. The other examples need
+Needs: ``pip install precisionai-pace[transformers]``. The other examples need
 no extras.
 
 Run: ``python examples/transformers_example.py``

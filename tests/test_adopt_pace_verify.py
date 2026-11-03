@@ -386,3 +386,24 @@ def test_main_returns_two_for_a_missing_file_or_empty_input(tmp_path: Path) -> N
     assert verify.main([str(tmp_path / "missing.log")], stdout=out) == 2
     assert "cannot read input" in out.getvalue()
     assert verify.main([], stdin=io.StringIO(""), stdout=io.StringIO()) == 2
+
+
+def test_a_restart_without_run_ids_is_not_hidden_as_a_duplicate() -> None:
+    lines = run_lines(
+        start(run=None, root=True),
+        update(seq=2, root=True),
+        start(run=None, root=True),
+        update(seq=2, root=True),
+        end(seq=3, root=True),
+    )
+
+    report = verify.analyze(lines)
+
+    assert report.duplicates == 0
+    assert report.scopes["train"].starts == 2
+
+
+def test_the_same_start_read_twice_without_run_ids_is_a_duplicate() -> None:
+    report = verify.analyze(run_lines(start(run=None, root=True), start(run=None, root=True), end(seq=2, root=True)))
+
+    assert report.duplicates == 1

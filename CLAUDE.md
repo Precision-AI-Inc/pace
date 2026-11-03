@@ -27,9 +27,16 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. This
 
 ```
 precisionai/pace/
+  core.py, _env.py, _render.py, capture.py   # the logger
+  scopes.py        # track, progress, timed, phase, plan
+  protocol.py      # Record, the [pace:1 ...] trailer, parse_line, LineSplitter
+  forecast.py      # ScopeForecast, JobForecast
+  lightning.py, transformers.py, _adapters.py   # framework callbacks (extras only)
   version.py       # installed package version
   __init__.py      # re-exports only — no logic
 docs/              # Sphinx (HTML + LaTeX/PDF); design.md is the specification
+skills/adopt-pace/ # Claude Code skill that adds Pace to a repo; verify.py checks a log
+examples/          # runnable examples
 tests/             # mirrors package structure; fixtures/protocol/ holds format conformance cases
 ```
 
@@ -209,7 +216,7 @@ if not _LIGHTNING_AVAILABLE:
 ```
 docs/
   conf.py          # version from git tag, logo, LaTeX/fancyhdr, enumitem fix
-  index.rst        # toctree: readme, design, modules
+  index.rst        # toctrees: user guide, reading output, reference
   design.md        # the specification — update it with any behaviour or format change
   modules.rst      # autodoc for all public submodules
   requirements.txt # sphinx, sphinx-rtd-theme, myst-parser, sphinx-autodoc-typehints

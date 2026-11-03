@@ -15,7 +15,8 @@ pip install "precisionai-pace[all]"            # both
 
 Each extra inherits its framework's own Python minimum, which may be higher than
 the core's 3.8. The callbacks are tested with Lightning 2.6, Transformers 5.22 and
-TRL 1.17 on CPU.
+TRL 1. The lower bounds in
+the extras are what the callbacks import; behaviour on older versions is untested.17 on CPU.
 
 Both callbacks take the same arguments, all optional:
 
@@ -53,7 +54,9 @@ What it reports:
   in the trailer), counting batches. Each pass is its own scope: `validation`,
   `validation-2`, and so on. The sanity-check pass before training is not reported.
 - `trainer.validate()`, `trainer.test()` or `trainer.predict()` called on their own,
-  without a fit, report a root scope of their own (`validation`, `test`, `predict`).
+  without a fit, report a top-level scope (`validation`, `test`, `predict`) that is
+  not the root, so a baseline evaluation before training never marks the job
+  complete. Only training is the root.
 - On resume, the scope starts from the checkpoint's global step with `res=1`, so the
   estimate measures the work left rather than the work already done
   (see [Resuming from a checkpoint](progress.md#resuming-from-a-checkpoint)).

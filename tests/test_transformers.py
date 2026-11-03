@@ -130,10 +130,12 @@ def test_an_evaluation_after_training_is_not_a_second_root(quiet: Logger, stream
     assert {r.scope for r in found if r.root} == {"train"}
 
 
-def test_a_standalone_evaluation_is_the_root(quiet: Logger, stream: FakeStream, tmp_path: Path) -> None:
+def test_a_standalone_evaluation_is_top_level_but_not_the_root(
+    quiet: Logger, stream: FakeStream, tmp_path: Path
+) -> None:
     trainer(quiet, tmp_path).evaluate()
     evaluation = of(records(stream), "evaluation")
-    assert evaluation[0].root
+    assert not evaluation[0].root
     assert evaluation[0].parent is None
     assert evaluation[-1].event is Event.END
 
@@ -220,3 +222,13 @@ def test_without_transformers_installed_the_callback_says_how_to_install_it(monk
     monkeypatch.setattr(pace_transformers, "_TRANSFORMERS_AVAILABLE", False)
     with pytest.raises(ImportError, match=r"precisionai-pace\[transformers\]"):
         PaceCallback()
+
+
+def test_an_evaluation_before_training_leaves_training_as_the_root(
+    quiet: Logger, stream: FakeStream, tmp_path: Path
+) -> None:
+    runner = trainer(quiet, tmp_path)
+    runner.evaluate()
+    runner.train()
+    found = records(stream)
+    assert {r.scope for r in found if r.root} == {"train"}

@@ -5,7 +5,7 @@
 
 import pytest
 
-from precisionai.pace.protocol import Event, Record, encode_value, format_number, format_trailer
+from precisionai.pace.protocol import Event, Record, encode_value, format_number, format_trailer, parse_line
 
 
 def test_format_trailer_update_matches_design_example() -> None:
@@ -93,7 +93,7 @@ def test_format_number(value: float, expected: str) -> None:
 
 @pytest.mark.parametrize("value", [-1.0, float("inf"), float("nan")])
 def test_format_number_rejects_invalid(value: float) -> None:
-    with pytest.raises(ValueError, match="finite and non-negative"):
+    with pytest.raises(ValueError, match="finite, non-negative"):
         format_number(value)
 
 
@@ -127,3 +127,36 @@ def test_format_trailer_truncates_unit_and_replaces_control_characters() -> None
 def test_format_trailer_label_of_only_control_characters_becomes_dash() -> None:
     record = Record(scope="a", event=Event.START, seq=1, elapsed=0.0, completed=0, total=1, label="\x1b\x07")
     assert format_trailer(record).endswith("n=-]")
+
+
+def test_format_number_rejects_values_the_parser_would_reject() -> None:
+    with pytest.raises(ValueError, match="at most"):
+        format_number(1e16)
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        Record(scope="a", event=Event.FAIL, seq=2, elapsed=1.0, completed=1, total=2, unit="step"),
+        Record(scope="a", event=Event.UPDATE, seq=2, elapsed=1.0, completed=1, total=2, run="abcd1234"),
+        Record(scope="a", event=Event.END, seq=3, elapsed=1.0, completed=2, total=2, resumed=True, label="x"),
+        Record(scope="a", event=Event.PLAN, seq=1, elapsed=0.0, phases=(("b", 1.0),), label="x", unit="it"),
+        Record(scope="a", event=Event.UPDATE, seq=2, elapsed=1.0, completed=1, total=2, phases=(("b", 1.0),)),
+    ],
+)
+def test_format_trailer_leaves_out_keys_the_event_may_not_carry(record: Record) -> None:
+    assert parse_line(format_trailer(record)) is not None
+
+
+def test_a_total_too_small_to_write_is_written_as_unknown() -> None:
+    record = Record(scope="a", event=Event.UPDATE, seq=2, elapsed=1.0, completed=0, total=1e-7)
+    assert "t=?" in format_trailer(record)
+    assert parse_line(format_trailer(record)) is not None
+
+
+def test_the_largest_plan_the_writer_can_produce_parses() -> None:
+    phases = tuple((f"{index:02d}" + "p" * 62, 999999999999999.999999) for index in range(32))
+    record = Record(scope="plan", event=Event.PLAN, seq=1, elapsed=0.0, phases=phases)
+    parsed = parse_line(format_trailer(record))
+    assert parsed is not None
+    assert len(parsed.phases) == 32

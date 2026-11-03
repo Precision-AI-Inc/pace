@@ -25,6 +25,8 @@ MARKER = "pace"
 VERSION = 1
 
 MAX_LINE_BYTES = 4096
+# Largest count, total, elapsed time or weight a trailer may carry.
+MAX_NUMBER = 1e15
 MAX_FIELDS = 32
 # Raw (still percent-encoded) length. 768 holds a 64-character label or unit of
 # 4-byte characters, each written as 12 escape characters.
@@ -32,8 +34,9 @@ MAX_VALUE_CHARS = 768
 MAX_LABEL_CHARS = 64
 MAX_UNIT_CHARS = 64
 MAX_PHASES = 32
-# A full plan: 32 phases of a 64-character scope id plus a weight.
-MAX_PHASES_CHARS = 2560
+# A full plan: 32 phases, each a 64-character scope id, ":" and the widest weight the
+# writer produces ("999999999999999.999999", 22 characters), joined by 31 commas.
+MAX_PHASES_CHARS = 32 * (64 + 1 + 22) + 31
 
 RUN_PATTERN = re.compile(r"[a-z0-9]{1,16}")
 
@@ -139,7 +142,7 @@ def format_number(value: float) -> str:
     Parameters
     ----------
     value : float
-        A finite, non-negative number.
+        A finite, non-negative number no larger than ``MAX_NUMBER``.
 
     Returns
     -------
@@ -149,10 +152,10 @@ def format_number(value: float) -> str:
     Raises
     ------
     ValueError
-        If ``value`` is negative, infinite or NaN.
+        If ``value`` is negative, infinite, NaN or above ``MAX_NUMBER``.
     """
-    if not math.isfinite(value) or value < 0:
-        raise ValueError(f"trailer numbers must be finite and non-negative, got {value!r}")
+    if not math.isfinite(value) or value < 0 or value > MAX_NUMBER:
+        raise ValueError(f"trailer numbers must be finite, non-negative and at most {MAX_NUMBER:g}, got {value!r}")
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.6f}".rstrip("0").rstrip(".")
@@ -218,21 +221,30 @@ def _count_fields(record: Record) -> list[str]:
         record.event is Event.FAIL and record.completed is not None
     ):
         fields.append(f"c={format_number(record.completed or 0.0)}")
-        fields.append(f"t={'?' if record.total is None else format_number(record.total)}")
-    if record.unit is not None:
+        fields.append(f"t={_format_total(record.total)}")
+    if record.unit is not None and record.event is Event.START:
         fields.append(f"u={encode_value(_printable(record.unit, MAX_UNIT_CHARS))}")
     return fields
 
 
+def _format_total(total: float | None) -> str:
+    # A total too small to show at six decimal places would read as t=0, which no reader
+    # accepts (a total must be positive), so it is written as unknown instead.
+    text = "?" if total is None else format_number(total)
+    return "?" if text == "0" else text
+
+
 def _tail_fields(record: Record) -> list[str]:
+    # Only the keys this event may carry (docs/design.md): res, run and n on start, ph on plan.
+    start = record.event is Event.START
     fields = []
-    if record.resumed:
+    if record.resumed and start:
         fields.append("res=1")
-    if record.run is not None:
+    if record.run is not None and start:
         fields.append(f"run={record.run}")
-    if record.phases:
+    if record.phases and record.event is Event.PLAN:
         fields.append("ph=" + ",".join(f"{name}:{format_number(weight)}" for name, weight in record.phases))
-    if record.label is not None:
+    if record.label is not None and start:
         fields.append(f"n={encode_value(_printable(record.label, MAX_LABEL_CHARS))}")
     return fields
 
@@ -247,7 +259,6 @@ def _is_control(char: str) -> bool:
     return code < 0x20 or 0x7F <= code <= 0x9F
 
 
-MAX_NUMBER = 1e15
 MAX_SEQ = 10**12
 
 _T = TypeVar("_T")
@@ -308,7 +319,10 @@ def parse_line(line: str) -> Record | None:
     Record or None
         The record, or ``None`` when the line carries no valid version-1 trailer.
     """
-    if not isinstance(line, str) or len(line) > MAX_LINE_BYTES:
+    if not isinstance(line, str):
+        return None
+    line = line.rstrip("\r\n")
+    if len(line) > MAX_LINE_BYTES:
         return None
     # U+FFFD stands for one undecodable source byte (see LineSplitter), so count it as one.
     if len(line.encode("utf-8", errors="surrogatepass")) - 2 * line.count("�") > MAX_LINE_BYTES:

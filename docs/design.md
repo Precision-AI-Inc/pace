@@ -30,7 +30,7 @@ starting points to be tuned against real runs, not commitments.
 | Import | `precisionai.pace` |
 | Python | 3.8 and later |
 | Runtime dependencies | none in the core |
-| Extras (planned) | `[lightning]`, `[transformers]`, `[all]` |
+| Extras | `[lightning]`, `[transformers]` (includes `accelerate`), `[all]` |
 
 Everything lives in this one repository and package: the logger, the progress APIs,
 the line parser, the estimator and the framework adapters. The core imports only the standard library. It is installed into users' training
@@ -38,7 +38,7 @@ images and into other packages (such as data-transfer tooling), so it must never
 add to them. Framework adapters live in their own modules and import their framework
 only there; their extras inherit that framework's own Python minimum.
 
-## Public API (proposed)
+## Public API
 
 ```python
 from precisionai.pace import logger, track, progress, timed, phase
@@ -153,7 +153,7 @@ escape sequences and trailing whitespace. Any character outside the value alphab
 is percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, an unknown major
 version, a missing required field, or a value that fails to parse is ignored.
 A raw (still encoded) value may be at most 768 characters, enough for a 64-character
-label of 4-byte characters; `ph` may be up to 2560, enough for 32 phases. The writer
+label of 4-byte characters; `ph` may be up to 2815, enough for 32 phases with the longest ids and weights. The writer
 shortens labels and units to 64 characters and replaces control characters with spaces,
 so it never produces a line the parser rejects.
 
@@ -176,9 +176,11 @@ so it never produces a line the parser rejects.
 | `run` | optional, `start` only | Id of the process run, `[a-z0-9]{1,16}`, the same for every scope in one process. A `start` with the run id already seen for that scope is a duplicate (the line was read from both streams); a different run id is a restart. |
 
 Keys belong to particular events, and a reader rejects a record that carries one
-on the wrong event: `run`, `n` and `res` only on `start`, `ph` only on `plan`, and
-no `c`, `t` or `u` on `plan`. A writer keeps every line within 4096 bytes by
-shortening the readable text before the trailer, never the trailer.
+on the wrong event: `run`, `n`, `res` and `u` only on `start`, `ph` only on `plan`,
+and no `c` or `t` on `plan`. A writer keeps every line within 4096 bytes by
+shortening the readable text before the trailer, never the trailer. It never writes a
+number above 1e15, the parser's limit: a larger total is reported as unknown and a
+larger count is capped.
 
 Additions within version 1 are new optional keys; consumers ignore keys they do not
 know. Removing or redefining a key requires `pace:2`.
@@ -270,9 +272,12 @@ finished plan proves the job is done.
 - Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
 - A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
   the other stream never overrides a newer one.
-- A running scope with no estimate of its own, such as a `phase()` (one unit of work),
-  takes the longest estimate among its children, so `with phase("train"): track(...)`
-  gives the job an estimate for the whole of training.
+- A running scope with no estimate of its own takes one from its children. A counted
+  parent (one unit per child, such as `Epochs` of 3) adds, to the running child's
+  remaining time, one child's duration for each unit still to come; between two
+  children it uses the average of the finished ones. A `phase()` or a parent with no
+  total cannot know how many children are still to come, so it takes only the running
+  child's estimate and the job estimate is marked partial (a lower bound).
 
 ## Framework adapters
 
@@ -315,6 +320,15 @@ Reviewed 2026-11-03.
    `precisionai-pace`; there is no separate repository for any of them.
 
 ## Behaviour settled during implementation
+
+- The public API also includes `plan`, `capture_logging`, `parse_line`, `LineSplitter`,
+  `ScopeForecast` and `JobForecast`; `precisionai.pace.__all__` is the full list.
+- No record is written when the process is killed. A `SIGKILL` cannot be caught, and
+  the scheduler already knows when the process exits, so the consumer treats process
+  exit as the end. This is deliberate, not an omission.
+- Estimates are point estimates. `JobEstimate` carries a state, a source and `partial`,
+  but no range or confidence yet; those can be added later without changing the line
+  format.
 
 - `plan()` writes its record under a scope of its own (`plan`, or the `scope=` given).
   Repeated calls under the same name share that scope, so their `q` orders them

@@ -118,6 +118,8 @@ CI runs the tests on Python 3.8 through 3.13. `pre-commit` itself needs Python 3
 ```
 precisionai/pace/   # the package (core: standard library only)
 docs/               # Sphinx (HTML + LaTeX/PDF), including design.md
+skills/adopt-pace/  # Claude Code skill that adds Pace to a repository
+examples/           # runnable examples
 tests/              # mirrors the package structure
 ```
 

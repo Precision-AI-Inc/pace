@@ -295,6 +295,9 @@ class ScopeForecast:
         self._live = False
         self._ended = None
         self._elapsed = 0.0
+        # A restarted process may place the scope differently; its records say where.
+        self._parent = None
+        self._root = False
 
     def _is_restart(self, record: Record) -> bool:
         # With run ids, a start from another run is a restart and one from the same run is
@@ -487,16 +490,22 @@ class JobForecast:
             remaining = 0.0 if ended is ForecastState.COMPLETE else None
             return JobEstimate(ended, remaining_seconds=remaining, scopes=forecasts)
         estimate = self._pick(forecasts) or self._without_estimate(now, forecasts)
+        if estimate.source in ("root", "plan") and self._rests_on_partial():
+            estimate = replace(estimate, partial=True)
         return replace(estimate, scopes=forecasts)
 
     def _with_child_estimates(self, forecasts: Mapping[str, Forecast]) -> dict[str, Forecast]:
-        """Give a running scope with no estimate of its own the longest estimate among its children.
+        """Give a running scope with no estimate of its own one built from its children.
 
-        A ``phase()`` counts as one unit of work, so it has no rate while it runs; the
-        ``track()`` or ``progress()`` inside it does. Without this, a plan or a job whose
-        top level is a phase would have no estimate for the whole of that phase.
+        A ``phase()`` counts as one unit of work, and a parent such as ``Epochs`` (one unit
+        per child) reports too rarely to have a rate of its own early on; the scopes inside
+        them do. A counted parent's estimate is the running child's remaining time plus,
+        for each unit still to come, the duration of one child. A parent with no count of
+        its own (a phase, or no total) cannot know how many children are still to come, so
+        its estimate is only the running child's and is marked partial.
         """
         effective = dict(forecasts)
+        self._partial_scopes: set[str] = set()
         # One pass per level of nesting: repeat until no scope gains an estimate.
         for _ in range(len(effective)):
             if not self._borrow_once(effective):
@@ -508,21 +517,48 @@ class JobForecast:
         for name, forecast in list(effective.items()):
             if forecast.state in _ENDED_STATES or self._has_estimate(forecast):
                 continue
-            children = [
-                effective[child]
-                for child, scope in self._scopes.items()
-                if scope.parent == name and self._has_estimate(effective[child])
-            ]
-            if children:
-                longest = max(children, key=lambda child: child.remaining_seconds or 0.0)
-                stale = any(child.state is ForecastState.STALE for child in children)
-                effective[name] = replace(
-                    forecast,
-                    state=ForecastState.STALE if stale else ForecastState.LIVE,
-                    remaining_seconds=longest.remaining_seconds,
-                )
+            children = [child for child, scope in self._scopes.items() if scope.parent == name]
+            borrowed = self._from_children(forecast, children, effective)
+            if borrowed is not None:
+                effective[name] = borrowed[0]
+                if borrowed[1]:
+                    self._partial_scopes.add(name)
                 changed = True
         return changed
+
+    def _from_children(
+        self, parent: Forecast, children: list[str], effective: Mapping[str, Forecast]
+    ) -> tuple[Forecast, bool] | None:
+        """Return the parent's estimate from its children and whether it is partial, if any."""
+        running = [child for child in children if self._has_estimate(effective[child])]
+        finished = [child for child in children if effective[child].state is ForecastState.COMPLETE]
+        counted = parent.total is not None and parent.total > 1 and parent.completed is not None
+        if running:
+            longest = max(running, key=lambda child: effective[child].remaining_seconds or 0.0)
+            now = effective[longest]
+            remaining = now.remaining_seconds or 0.0
+            per_unit = self._scopes[longest].elapsed + remaining
+            stale = any(effective[child].state is ForecastState.STALE for child in running)
+        elif counted and finished:
+            # Between two children: the next has not reported yet, so use the finished ones.
+            remaining = 0.0
+            per_unit = sum(self._scopes[child].elapsed for child in finished) / len(finished)
+            stale = False
+        else:
+            return None
+        partial = not counted
+        if counted:
+            units_after = max((parent.total or 0.0) - (parent.completed or 0.0) - (1 if running else 0), 0.0)
+            remaining += units_after * per_unit
+        state = ForecastState.STALE if stale else ForecastState.LIVE
+        return replace(parent, state=state, remaining_seconds=remaining), partial
+
+    def _rests_on_partial(self) -> bool:
+        partial = getattr(self, "_partial_scopes", set())
+        root = self._root()
+        if root is not None:
+            return root in partial
+        return any(name in partial for name, _ in self._plan)
 
     def _top_level(self) -> list[str]:
         return [name for name, scope in self._scopes.items() if scope.parent is None or scope.root]

@@ -104,7 +104,8 @@ class AdapterScopes:
         """Start a child scope, ending the previous one if it is still open.
 
         Its parent is the main scope while that is open. With no main scope it is a
-        top-level scope, and the job's root when nothing has claimed that yet.
+        top-level scope but never the root: an evaluation run before training must
+        not mark the job complete when it ends, so only training can be the root.
 
         Parameters
         ----------
@@ -121,7 +122,7 @@ class AdapterScopes:
             The started scope.
         """
         self.end_child()
-        scope = Scope(description, total, unit, root=self._main is None and self._take_root(), logger=self._logger)
+        scope = Scope(description, total, unit, logger=self._logger)
         if self._main is None:
             scope.start()
         else:
