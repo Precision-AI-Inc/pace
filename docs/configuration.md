@@ -41,7 +41,7 @@ Pace does not read `PYTHONIOENCODING`, but it follows the encoding of the stream
 
 | Option | Meaning |
 |---|---|
-| `clock=` | A `precisionai.pace._env.Clock` of two functions, `monotonic` and `wall`. Tests use it to run without sleeping. |
+| `clock=` | For tests only: a clock of two functions, `monotonic` and `wall`, so a test runs without sleeping (see `FakeClock` in the repository's `tests/conftest.py`). |
 
 `logger.reset()` drops every explicit setting so the environment and the defaults apply
 again.

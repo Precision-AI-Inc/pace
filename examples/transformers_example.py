@@ -4,7 +4,7 @@
 """Report a Hugging Face ``Trainer`` run through Pace.
 
 Trains a tiny BERT built from a config, so nothing is downloaded, on random token ids on
-the CPU in a few seconds. Needs ``pip install precisionai-pace[transformers] accelerate``.
+the CPU in a few seconds. Needs ``pip install precisionai-pace[transformers]``.
 A TRL trainer takes the same callback. Every progress line ends with the ``[pace:1 ...]``
 trailer a scheduler reads.
 """

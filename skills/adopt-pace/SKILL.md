@@ -7,7 +7,7 @@ description: Add Pace (precisionai-pace) logging and progress reporting to this 
 
 Pace (`precisionai-pace`, import `precisionai.pace`) is a zero-dependency Python
 logger with progress reporting. Each progress line ends with a trailer such as
-`[pace:1 s=train root=1 k=upd c=1840 t=5000 u=step e=763.1 q=57]`. A scheduler reads
+`[pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]`. A scheduler reads
 the trailers from the job's output to estimate when the job will finish. Your task is to
 make this repository's jobs write them, with the smallest correct change, and to prove it.
 
@@ -86,8 +86,10 @@ few percent of the runtime comes after the loop (final evaluation, export, uploa
 loop alone is not the root: use a plan, or a root over a common unit. Never mark two roots.
 A framework callback is the root; do not add another.
 
-**Do not** put a long counted loop inside `with phase(...)`: a `phase` has no estimate while
-it runs, and the scheduler would see nothing for the longest part of the job (pattern 4a).
+A long counted loop inside `with phase(...)` is fine: a `phase` has no rate of its own, so
+the scheduler uses the estimate of the loop inside it. If the phase holds several loops one
+after another (one per epoch), that estimate covers only the running loop and is a lower
+bound, so count the whole stage in one scope instead (pattern 4a).
 
 ## 3. Plan (before any edit)
 

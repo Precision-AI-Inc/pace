@@ -310,8 +310,8 @@ Two consequences:
 ## Conformance fixtures for other languages
 
 `tests/fixtures/protocol/cases.jsonl` in the repository is the shared specification of
-the line format as test data. It holds 132 cases, one JSON object per line: 38 lines
-that parse and 94 that must be rejected (oversize, bad escapes, wrong version, wrong
+the line format as test data. It holds 140 cases, one JSON object per line: 38 lines
+that parse and 102 that must be rejected (oversize, bad escapes, wrong version, wrong
 number syntax, trailer not at the end, ANSI colour, CRLF and so on). The Python parser
 passes every case in `tests/test_protocol_reading.py`.
 
