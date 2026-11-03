@@ -243,7 +243,7 @@ with progress(total=3, description="Epochs", unit="epoch", root=True) as epochs:
 A nested scope is never added on top of its parent's remaining time: the parent's
 own estimate already includes the time the children take.
 
-Until `Epochs` has an estimate of its own (it needs three updates), the reader builds one
+Until `Epochs` has an estimate of its own (it needs three updates spanning a minute), the reader builds one
 from the children. After the first epoch it uses the time the finished epochs took,
 however many loops each holds; during the first, the time so far plus what the running
 loop has left.

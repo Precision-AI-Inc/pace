@@ -236,8 +236,8 @@ class ScopeForecast:
         A running scope's elapsed time counts on from its latest record by the time
         received since it, so a ``phase()``, which writes only when it starts and ends,
         has the right elapsed time while the work inside it runs. An ended scope keeps
-        the elapsed time of its last record, and so does a Stale one, which also keeps
-        the estimate of its last record.
+        the elapsed time of its last record, and so does a scope that is Stale on its own
+        records, which also keeps the estimate of its last record.
 
         Parameters
         ----------
@@ -256,8 +256,9 @@ class ScopeForecast:
     def seconds_per_unit(self) -> float | None:
         """Return the mean seconds per unit over the current segment's records.
 
-        Measured from the segment's first record with a count to its latest, so a resumed
-        scope counts only the units done in this run.
+        Measured from the segment's first record with a count (or the latest record where
+        the count went backwards) to its latest, so a resumed scope counts only the units
+        done in this run.
 
         Returns
         -------
@@ -266,8 +267,8 @@ class ScopeForecast:
         """
         if self._completed is None:
             return None
-        units = self._completed - self._baseline_completed
-        seconds = self._elapsed - self._baseline_elapsed
+        units = self._completed - self._pace_origin[1]
+        seconds = self._elapsed - self._pace_origin[0]
         if units <= 0 or seconds <= 0:
             return None
         return seconds / units
@@ -338,6 +339,7 @@ class ScopeForecast:
         self._receipts: deque[float] = deque(maxlen=self._config.reference_window + 1)
         self._baseline_elapsed = 0.0
         self._baseline_completed = 0.0
+        self._pace_origin = (0.0, 0.0)
         self._previous: tuple[float, float] | None = None
         self._live = False
         self._ended = None
@@ -379,6 +381,7 @@ class ScopeForecast:
             self._previous = (record.elapsed, completed)
             self._baseline_elapsed = record.elapsed
             self._baseline_completed = completed
+            self._pace_origin = (record.elapsed, completed)
             return
         if record.event is Event.END:
             return
@@ -388,6 +391,7 @@ class ScopeForecast:
             return
         if done < 0:
             self._previous = (record.elapsed, completed)
+            self._pace_origin = (record.elapsed, completed)
             return
         # No progress yet: keep the old baseline so the next interval spans the stall
         # and a slow step is measured at its true speed rather than skipped.
@@ -409,12 +413,22 @@ class ScopeForecast:
             and fraction >= cfg.min_fraction
         )
 
-    def _is_stale(self, now: float) -> bool:
+    def stale_limit(self) -> float:
+        """Return how long the scope may go without a record before it is Stale, in seconds.
+
+        Returns
+        -------
+        float
+            ``stale_factor`` times the median gap between its recent records, and at least
+            twice the heartbeat.
+        """
         receipts = list(self._receipts)
         gaps = [later - earlier for earlier, later in zip(receipts, receipts[1:])]
         median_gap = statistics.median(gaps) if gaps else 0.0
-        limit = max(self._config.stale_factor * median_gap, 2 * self._config.heartbeat_seconds)
-        return now - receipts[-1] > limit
+        return max(self._config.stale_factor * median_gap, 2 * self._config.heartbeat_seconds)
+
+    def _is_stale(self, now: float) -> bool:
+        return now - self._receipts[-1] > self.stale_limit()
 
     def _remaining(self, rate: float) -> float | None:
         if rate <= 0 or self._total is None or self._completed is None:
@@ -424,6 +438,10 @@ class ScopeForecast:
 
 
 _ENDED_STATES = (ForecastState.COMPLETE, ForecastState.FAILED)
+
+# The writer reports a counted scope at least every 1% of its total, so a parent of up
+# to 100 units writes every advance; a larger one may skip some.
+_EVERY_ADVANCE_WRITTEN = 100
 
 
 @dataclass(frozen=True)
@@ -597,21 +615,31 @@ class JobForecast:
             now = min(self._reported_at(child, now) for child in stale_children)
             self._frozen_at[name] = now
         elif not running:
-            # Between two children only the parent and the finished children speak for
-            # the job; once none of them has reported for two heartbeats, it is Stale.
-            reported = max(self._reported_at(scope, now) for scope in (name, *finished))
-            if now - reported > 2 * self._config.heartbeat_seconds:
+            # Between two children, the parent and every scope under it (in any state)
+            # speak for the job; when none has reported within the parent's limit, it is Stale.
+            reported = max(self._reported_at(scope, now) for scope in (name, *self._descendants(name)))
+            if now - reported > self._scopes[name].stale_limit():
                 state = ForecastState.STALE
                 now = self._frozen_at[name] = reported
         if not counted:
             return replace(parent, state=state, remaining_seconds=child_left), True
         scope = self._scopes[name]
         per_unit = scope.seconds_per_unit()
-        if per_unit is None:
+        if per_unit is None and (parent.total or 0.0) <= _EVERY_ADVANCE_WRITTEN:
             # No unit finished yet: this one has taken at least its time so far plus
             # what the running child has left.
             in_unit = scope.elapsed_at(now)
             per_unit = in_unit + child_left
+        elif per_unit is None:
+            # A larger parent need not write every advance, so its silence does not mean
+            # no unit has finished: time a unit by one child until the parent has a pace.
+            if running:
+                longest = max(running, key=lambda child: effective[child].remaining_seconds or 0.0)
+                in_unit = self._scopes[longest].elapsed_at(now)
+                per_unit = in_unit + child_left
+            else:
+                in_unit = 0.0
+                per_unit = sum(self._scopes[child].elapsed for child in finished) / len(finished)
         else:
             # Units left and the time since are both measured from the parent's latest record.
             in_unit = scope.elapsed_at(now) - scope.elapsed
@@ -619,8 +647,19 @@ class JobForecast:
         remaining = max(units_left * per_unit - in_unit, child_left)
         return replace(parent, state=state, remaining_seconds=remaining), False
 
+    def _descendants(self, name: str) -> list[str]:
+        found: list[str] = []
+        frontier = [name]
+        while frontier:
+            current = frontier.pop()
+            for child, scope in self._scopes.items():
+                if scope.parent == current and child != name and child not in found:
+                    found.append(child)
+                    frontier.append(child)
+        return found
+
     def _reported_at(self, name: str, now: float) -> float:
-        """Return when a scope's estimate was last refreshed (``now`` while it is Live)."""
+        """Return when a scope's estimate was last refreshed: its latest record, or its freeze."""
         frozen = getattr(self, "_frozen_at", {}).get(name)
         if frozen is not None:
             return frozen

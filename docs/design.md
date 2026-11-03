@@ -297,12 +297,15 @@ defaults.
   the running child's remaining time. Once a unit has finished, the parent's own
   records give the time per unit, however many children a unit holds (a training and a
   validation loop per epoch); before that, the running unit counts as the time it has
-  taken so far plus the running child's remaining time. A `phase()` or a parent with no
+  taken so far plus the running child's remaining time. A parent of more than 100 units
+  need not write every advance, so until it has a pace its unit is one child's
+  duration instead. A `phase()` or a parent with no
   total cannot know how many children are still to come, so it takes only the running
   child's estimate and the job estimate is marked partial (a lower bound). Such a
-  borrowed estimate is Stale when its running child is, or, between two children, when
-  neither the parent nor a finished child has reported for twice the heartbeat; it then
-  keeps the number it had when the last of them reported.
+  borrowed estimate is Stale when a running child it borrows from is, or, between two
+  children, when neither the parent nor any scope under it has reported within the
+  parent's own Stale limit. It then stops counting down at the moment its source last
+  reported.
 - A running scope's elapsed time counts on from its latest record, by the time
   received since it. A `phase()` writes only when it starts and ends, so this is what
   gives a running phase its elapsed time, which a plan uses to time the phases not yet
