@@ -30,8 +30,8 @@ def test_importing_pace_does_not_touch_the_root_logger() -> None:
 
 def test_records_are_routed_through_the_pace_logger(log: Logger, stream: FakeStream) -> None:
     capture_logging("INFO", target=log)
-    logging.getLogger("transformers.trainer").info("loaded %d shards", 3)
-    logging.getLogger("torch").warning("slow path")
+    logging.getLogger("somelib.trainer").info("loaded %d shards", 3)
+    logging.getLogger("tensorlib").warning("slow path")
     assert [line.split(" ", 2)[1:] for line in stream.lines()] == [
         ["INFO", "    loaded 3 shards"],
         ["WARNING", " slow path"],

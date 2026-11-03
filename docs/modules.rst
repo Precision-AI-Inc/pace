@@ -54,6 +54,26 @@ Remaining-time estimates for one scope and for a whole job.
    :undoc-members:
    :show-inheritance:
 
+precisionai.pace.lightning
+--------------------------
+
+PyTorch Lightning callback (extra: ``precisionai-pace[lightning]``).
+
+.. automodule:: precisionai.pace.lightning
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+precisionai.pace.transformers
+-----------------------------
+
+Hugging Face Transformers and TRL callback (extra: ``precisionai-pace[transformers]``).
+
+.. automodule:: precisionai.pace.transformers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 precisionai.pace.version
 ------------------------
 
