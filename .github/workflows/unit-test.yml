@@ -63,8 +63,7 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
       - name: Install dependencies
-        # accelerate is what transformers.Trainer needs; trl only backs the TRL test.
-        run: pip install -e ".[dev,all]" accelerate trl
+        run: pip install -e ".[dev,all]" trl  # trl only backs the TRL test
 
       - name: Run adapter tests
         run: >

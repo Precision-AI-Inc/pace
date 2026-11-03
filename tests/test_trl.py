@@ -1,3 +1,6 @@
+# Copyright 2026 Precision AI
+# SPDX-License-Identifier: Apache-2.0
+
 """The Transformers callback on a TRL trainer, which subclasses ``transformers.Trainer``."""
 
 from __future__ import annotations

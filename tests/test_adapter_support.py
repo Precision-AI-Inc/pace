@@ -1,3 +1,6 @@
+# Copyright 2026 Precision AI
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for what the framework adapters share, which need no framework installed."""
 
 from __future__ import annotations

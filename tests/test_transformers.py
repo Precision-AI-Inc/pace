@@ -1,3 +1,6 @@
+# Copyright 2026 Precision AI
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for the Transformers callback, driven by real tiny CPU runs of a model built from a config."""
 
 from __future__ import annotations

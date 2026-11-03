@@ -1,3 +1,6 @@
+# Copyright 2026 Precision AI
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for the Lightning callback, driven by real tiny CPU runs."""
 
 from __future__ import annotations
