@@ -213,7 +213,10 @@ def _validate_ids(record: Record) -> None:
 
 def _count_fields(record: Record) -> list[str]:
     fields = []
-    if record.event in (Event.START, Event.UPDATE, Event.END):
+    # A fail carries the counts it reached when it has them, so a reader still sees how far it got.
+    if record.event in (Event.START, Event.UPDATE, Event.END) or (
+        record.event is Event.FAIL and record.completed is not None
+    ):
         fields.append(f"c={format_number(record.completed or 0.0)}")
         fields.append(f"t={'?' if record.total is None else format_number(record.total)}")
     if record.unit is not None:

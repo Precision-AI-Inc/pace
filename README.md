@@ -10,7 +10,7 @@
 
 ---
 
-> **Pre-release.** The package is a scaffold today. The API below is the proposed design, under review in [docs/design.md](docs/design.md), and is not implemented yet.
+> **Pre-release.** The API may still change before 1.0. The design and the line format are specified in [docs/design.md](docs/design.md).
 
 Pace is a logger with progress reporting built in. Its output reads like any good
 logger in a terminal, and every progress line also carries a short, versioned trailer
@@ -27,15 +27,11 @@ that a scheduler can read to estimate when the job will finish.
 
 ```bash
 pip install precisionai-pace
-
-# With a framework adapter
-pip install "precisionai-pace[lightning]"
-pip install "precisionai-pace[transformers]"
 ```
 
 ---
 
-## Usage (proposed)
+## Usage
 
 ```python
 from precisionai.pace import logger, track, progress

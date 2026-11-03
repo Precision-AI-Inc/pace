@@ -27,12 +27,13 @@ from __future__ import annotations
 
 import contextlib
 import os
+import secrets
 import shutil
 import sys
 import threading
 import traceback
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Collection
 
 from precisionai.pace._env import LEVELS, Clock, Settings, level_name, parse_level
 from precisionai.pace._render import Charset, charset_for, encode_safely, fit, format_timestamp, log_line
@@ -88,6 +89,9 @@ class Logger:
         self.clock = clock or Clock()
         self.settings = Settings()
         self.lock = threading.RLock()
+        # Written on every start record, so a reader can tell a restarted process
+        # from the same start line read twice.
+        self.run_id = secrets.token_hex(4)
         self._scope_ids: set[str] = set()
         self._next_suffix: dict[str, int] = {}
         self._bar_width = 0
@@ -296,15 +300,37 @@ class Logger:
             A scope id of at most 64 characters, unique within this logger.
         """
         with self.lock:
-            candidate = base
-            number = self._next_suffix.get(base, 1)
-            while candidate in self._scope_ids:
-                number += 1
-                suffix = f"-{number}"
-                candidate = base[: 64 - len(suffix)] + suffix
+            candidate, number = self._free_scope(base, ())
             self._next_suffix[base] = number
             self._scope_ids.add(candidate)
             return candidate
+
+    def predict_scope(self, base: str, reserved: Collection[str] = ()) -> str:
+        """Return the id :meth:`claim_scope` would give ``base`` next, without claiming it.
+
+        Parameters
+        ----------
+        base : str
+            A valid scope id.
+        reserved : collection of str
+            Ids to treat as already taken, such as earlier entries of the same plan.
+
+        Returns
+        -------
+        str
+            The predicted scope id.
+        """
+        with self.lock:
+            return self._free_scope(base, reserved)[0]
+
+    def _free_scope(self, base: str, reserved: Collection[str]) -> tuple[str, int]:
+        candidate = base
+        number = self._next_suffix.get(base, 1)
+        while candidate in self._scope_ids or candidate in reserved:
+            number += 1
+            suffix = f"-{number}"
+            candidate = base[: 64 - len(suffix)] + suffix
+        return candidate, number
 
 
 logger = Logger()

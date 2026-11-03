@@ -273,6 +273,7 @@ class Scope:
             resumed=first and self.resumed,
             phases=phases,
             label=(self.description.strip() or None) if first else None,
+            run=self._out.run_id if first else None,
         )
 
     def _emit(
@@ -546,20 +547,25 @@ def plan(phases: Sequence[PlanEntry], *, scope: str | None = None, logger: Logge
     """
     out = logger or default_logger
     with contextlib.suppress(Exception), out.lock:
-        Scope(scope=scope or "plan", logger=out).declare(_weighted(phases))
+        Scope(scope=scope or "plan", logger=out).declare(_weighted(phases, out))
 
 
-def _entry(entry: PlanEntry) -> tuple[str, float | None]:
+def _entry(entry: PlanEntry, out: Logger, reserved: set[str]) -> tuple[str, float | None]:
     if isinstance(entry, Phase):
         return entry.id, entry.weight
-    if isinstance(entry, str):
-        return derive_scope_id(entry), None
-    name, weight = entry
-    return derive_scope_id(name), _total(weight)
+    name, weight = (entry, None) if isinstance(entry, str) else (entry[0], _total(entry[1]))
+    # Predict the id the phase will get, counting earlier entries of this plan as taken,
+    # so two phases with the same name are listed as "train" and "train-2" like their scopes.
+    return out.predict_scope(derive_scope_id(name), reserved), weight
 
 
-def _weighted(phases: Sequence[PlanEntry]) -> tuple[tuple[str, float], ...]:
-    entries: list[tuple[str, float | None]] = [_entry(entry) for entry in phases]
+def _weighted(phases: Sequence[PlanEntry], out: Logger) -> tuple[tuple[str, float], ...]:
+    entries: list[tuple[str, float | None]] = []
+    reserved: set[str] = set()
+    for phase_entry in phases:
+        name, weight = _entry(phase_entry, out, reserved)
+        reserved.add(name)
+        entries.append((name, weight))
     given = sum(weight for _, weight in entries if weight is not None)
     missing = sum(1 for _, weight in entries if weight is None)
     share = max(1.0 - given, 0.0) / missing if missing else 0.0

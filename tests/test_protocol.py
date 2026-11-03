@@ -41,8 +41,13 @@ def test_format_trailer_plan_has_no_counts() -> None:
     assert format_trailer(record) == "[pace:1 s=job k=plan e=0 q=1 ph=prep:0.05,train:0.95]"
 
 
-def test_format_trailer_fail_has_no_counts() -> None:
+def test_format_trailer_fail_carries_counts_it_reached() -> None:
     record = Record(scope="train", event=Event.FAIL, seq=9, elapsed=12.5, completed=10, total=20)
+    assert format_trailer(record) == "[pace:1 s=train k=fail c=10 t=20 e=12.5 q=9]"
+
+
+def test_format_trailer_fail_without_counts_has_none() -> None:
+    record = Record(scope="train", event=Event.FAIL, seq=9, elapsed=12.5)
     assert format_trailer(record) == "[pace:1 s=train k=fail e=12.5 q=9]"
 
 

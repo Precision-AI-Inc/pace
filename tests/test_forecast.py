@@ -772,3 +772,22 @@ def test_live_estimate_counts_down_between_records() -> None:
     assert later.state is ForecastState.LIVE
     assert later.remaining_seconds == pytest.approx(at_record - 10.0)
     assert fc.snapshot(run.now + 10_000.0).remaining_seconds == at_record
+
+
+def test_a_start_from_the_same_run_read_late_is_a_duplicate() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    first = run.start(run="aaaa1111")
+    run.ticks(6, 15.0, 2.0)
+    live = fc.snapshot(run.now)
+    fc.observe(first, run.now)
+    assert fc.snapshot(run.now) == live
+
+
+def test_a_start_from_a_new_run_is_a_restart() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.start(run="aaaa1111")
+    run.ticks(6, 15.0, 2.0)
+    run.restart(run="bbbb2222")
+    assert fc.snapshot(run.now).state is ForecastState.LEARNING

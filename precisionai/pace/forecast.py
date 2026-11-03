@@ -202,6 +202,7 @@ class ScopeForecast:
         self._elapsed = 0.0
         self._ended: Event | None = None
         self._reached_live = False
+        self._run: str | None = None
         self._begin_segment()
 
     @property
@@ -241,7 +242,7 @@ class ScopeForecast:
         """
         if record.scope != self.scope or record.event is Event.PLAN:
             return
-        if record.event is Event.START and self._max_seq > 1:
+        if record.event is Event.START and self._is_restart(record):
             self._begin_segment()
         elif record.seq <= self._max_seq:
             return
@@ -295,7 +296,16 @@ class ScopeForecast:
         self._ended = None
         self._elapsed = 0.0
 
+    def _is_restart(self, record: Record) -> bool:
+        # With run ids, a start from another run is a restart and one from the same run is
+        # the same line read twice. Without them, a start after q=1 is taken as a restart.
+        if record.run is not None and self._run is not None:
+            return record.run != self._run
+        return self._max_seq > 1
+
     def _take(self, record: Record) -> None:
+        if record.event is Event.START and record.run is not None:
+            self._run = record.run
         self._parent = record.parent or self._parent
         self._root = self._root or record.root
         self._unit = record.unit or self._unit

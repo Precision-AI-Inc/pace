@@ -74,8 +74,9 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
   Opt-in, so importing Pace never changes another library's logging on its own.
 - **Configuration**: keyword arguments, with environment-variable overrides so a
   scheduler can adjust behaviour without code changes: `PACE_LEVEL`, `PACE_STREAM`
-  (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`),
-  `PACE_MIN_INTERVAL`, `PACE_HEARTBEAT`.
+  (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`), `PACE_BAR` (`auto`/`always`/`never`),
+  `PACE_MIN_INTERVAL`, `PACE_HEARTBEAT`, `PACE_ALL_RANKS`. An explicit
+  `logger.configure(...)` value beats the environment variable, which beats the default.
 - **Distributed training**: rank is read from `RANK`, then `LOCAL_RANK`, then
   `SLURM_PROCID`. Only rank 0 emits progress by default, and the adapters report
   the global step, so there is one record per scope, not one per GPU.
@@ -110,6 +111,11 @@ container, a log file), Pace writes a new line only when all of these hold:
 - at least `PACE_MIN_INTERVAL` seconds since the scope's last line (*initial*: 15 s), and
 - at least 1% more of the total done, **or** `PACE_HEARTBEAT` seconds have passed
   since the last line (*initial*: 120 s).
+
+On a terminal (`PACE_BAR=auto` and a TTY), progress redraws one bar line in place,
+without a trailer, and only `end`, `fail` and `plan` print full lines with trailers.
+A job run under a pseudo-terminal whose output a scheduler still reads should set
+`PACE_BAR=never`, which writes normal trailer lines even on a TTY.
 
 `start`, `end` and `fail` records are always written immediately. The limit is set by
 time, never by step count, so a run with a million steps writes no more than one
@@ -159,11 +165,11 @@ so it never produces a line the parser rejects.
 | `k` | always | Event: `start`, `upd`, `end`, `fail`, `plan`. |
 | `q` | always | Sequence number within the scope, from 1. Used for de-duplication and ordering. |
 | `e` | always | Seconds since the scope started, from a monotonic clock. Rates use this, never wall-clock time. |
-| `c` | start, upd, end | Completed amount, a non-negative number. |
-| `t` | start, upd, end | Total, a positive number, or `?` when unknown. |
+| `c` | start, upd, end; fail when known | Completed amount, a non-negative number. |
+| `t` | start, upd, end; fail when known | Total, a positive number, or `?` when unknown. |
 | `u` | start | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...), at most 64 characters after decoding, no control characters. |
-| `p` | optional | Parent scope id. A nested scope is never added to its parent's remaining time. |
-| `root` | optional | `1` marks the scope that stands for the whole job. At most one per process. |
+| `p` | optional | Parent scope id. A nested scope is never added to its parent's remaining time. Written on every record of the scope, so a reader that starts mid-log still learns the hierarchy. |
+| `root` | optional | `1` marks the scope that stands for the whole job. At most one per process. Written on every record of the scope. |
 | `res` | optional | `1` on a `start` that resumes earlier work, so `c` begins above zero. |
 | `ph` | `plan` only | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
 | `n` | optional, `start` only | Short label, at most 64 characters after decoding, no control characters. |
@@ -307,3 +313,17 @@ Reviewed 2026-11-03.
    limit is time-based, so step count does not increase volume.
 4. **One package**: the parser, estimator, logger and adapters all ship in
    `precisionai-pace`; there is no separate repository for any of them.
+
+## Behaviour settled during implementation
+
+- `plan()` writes its record under a scope of its own (`plan`, then `plan-2`, ...),
+  listing the scope ids the phases will get, including the `-2` suffix for a repeated name.
+- `track()` cannot tell a `break` from an exception raised in the loop body: Python
+  delivers both to the generator as the same `GeneratorExit`. It therefore writes `end`
+  with the count reached for either; `fail` is written only when the iterable itself
+  raises. Use `progress()` when a crash in the loop body must be reported as `fail`.
+- A heartbeat line is written when progress is reported (`advance()`, `update()`), not on
+  a timer. A process that hangs writes nothing, and that silence is what marks it Stale.
+- Progress lines are never filtered by `PACE_LEVEL`, because a scheduler depends on them.
+- Text that looks like a trailer (`[pace:`) inside a log message or description is
+  rewritten to `[ pace:`, so user text cannot forge a record.

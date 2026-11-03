@@ -66,7 +66,18 @@ def test_progress_writes_start_update_end(log: Logger, clock: FakeClock, stream:
         run.advance(30)
     assert kinds(stream) == ["start", "upd", "end"]
     start, update, end = records(stream)
-    assert start == {"s": "train", "k": "start", "c": "0", "t": "100", "u": "step", "e": "0", "q": "1", "n": "Train"}
+    assert start == {
+        "s": "train",
+        "k": "start",
+        "c": "0",
+        "t": "100",
+        "u": "step",
+        "e": "0",
+        "q": "1",
+        "run": log.run_id,
+        "n": "Train",
+    }
+    assert "run" not in update
     assert update == {"s": "train", "k": "upd", "c": "30", "t": "100", "e": "20", "q": "2"}
     assert end["c"] == "30"
     assert end["q"] == "3"
@@ -91,12 +102,18 @@ def test_every_progress_line_ends_with_a_trailer_format_trailer_produced(
 
 
 def test_line_text_shows_percent_count_rate_and_estimate(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    # The estimator needs 60 s, 3 intervals and 1% of the work before it is Live.
     with progress(5000, "Train", "step", logger=log) as run:
-        clock.advance(100)
+        for done in (400, 800, 1200, 1600):
+            clock.advance(20)
+            run.update(done)
+        clock.advance(20)
         run.update(1840)
-    update = stream.lines()[1]
+    update = stream.lines()[5]
+    # Four intervals at 20 step/s, then 12: the weighted average gives 0.7 x 20 + 0.3 x 12 = 17.6,
+    # and 3160 steps left / 17.6 = 3m00s.
     assert update.startswith(
-        "2025-11-03T17:18:22Z PROGRESS Train  36.8%  1840/5000 step · 18.4 step/s · ~2m52s  [pace:1 "
+        "2025-11-03T17:18:22Z PROGRESS Train  36.8%  1840/5000 step · 17.6 step/s · ~3m00s  [pace:1 "
     )
 
 
@@ -459,6 +476,17 @@ def test_plan_names_match_the_phases_that_follow(log: Logger, stream: FakeStream
     assert fields(stream.lines()[0])["ph"].split(":")[0] == records(stream)[1]["s"] == "fine-tune"
 
 
+def test_plan_with_repeated_names_matches_the_phase_scopes(log: Logger, stream: FakeStream) -> None:
+    plan(["Train", ("Train", 0.5)], logger=log)
+    with phase("Train", logger=log):
+        pass
+    with phase("Train", logger=log):
+        pass
+    planned = [pair.split(":")[0] for pair in fields(stream.lines()[0])["ph"].split(",")]
+    started = [item["s"] for item in records(stream) if item["k"] == "start"]
+    assert planned == started == ["train", "train-2"]
+
+
 def test_plan_ids_are_unique_when_called_twice(log: Logger, stream: FakeStream) -> None:
     plan(["a"], logger=log)
     plan(["a"], logger=log)
@@ -600,7 +628,7 @@ def test_non_utf8_stream_gets_ascii_text_and_an_intact_trailer(log: Logger, cloc
     assert "·" not in text
     assert "…" not in text
     assert "| estimating..." in lines[0]
-    assert "| 1.67 step/s | ~30s" in lines[1]
+    assert "| estimating..." in lines[1]
     assert "Entraînement ?" in lines[0]
     for line in lines:
         assert TRAILER.search(line)
