@@ -5,13 +5,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import pytest
 
 from precisionai.pace import Event, Record, parse_line
 from precisionai.pace import lightning as pace_lightning
+from precisionai.pace.capture import capture_logging
 from precisionai.pace.core import Logger
 from precisionai.pace.lightning import PaceCallback
 from tests.conftest import FakeStream
@@ -227,3 +229,39 @@ def test_without_lightning_installed_the_callback_says_how_to_install_it(monkeyp
 )
 def test_the_batch_total_is_unknown_when_lightning_cannot_say(counts: Any, expected: float | None) -> None:
     assert pace_lightning._batches(counts) == expected
+
+
+@pytest.fixture
+def lightning_loggers_as_in_a_fresh_process() -> Iterator[None]:
+    """Give Lightning's loggers the console handler and no propagation they have when no root handler existed."""
+    names = ("lightning", "lightning.pytorch", "lightning.fabric")
+    loggers = [logging.getLogger(name) for name in names]
+    saved = [(list(each.handlers), each.propagate) for each in loggers]
+    root = logging.getLogger()
+    root_saved = list(root.handlers), root.level
+    for each in loggers:
+        each.handlers[:] = [logging.StreamHandler()]
+        each.propagate = False
+    yield
+    for each, (handlers, propagate) in zip(loggers, saved):
+        each.handlers[:] = handlers
+        each.propagate = propagate
+    root.handlers[:] = root_saved[0]
+    root.setLevel(root_saved[1])
+
+
+def test_capture_logging_takes_over_lightnings_own_log_lines(
+    quiet: Logger,
+    stream: FakeStream,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    lightning_loggers_as_in_a_fresh_process: None,
+) -> None:
+    capture_logging("INFO", target=quiet, take_over="lightning")
+    trainer(quiet, tmp_path, max_epochs=1).fit(TinyModel(), loader())
+    lines = [line for line in stream.lines() if "[pace:1" not in line]
+    assert any("Trainer.fit" in line or "GPU available" in line for line in lines)
+    assert len(lines) == len(set(lines))
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert "GPU available" not in captured.out

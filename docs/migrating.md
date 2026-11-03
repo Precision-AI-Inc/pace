@@ -166,7 +166,7 @@ logger.info("Loading model")    # your own lines
 ```
 
 Remove the `basicConfig` call. If it stays, every record is written twice. Details, the
-case of libraries that do not propagate (Transformers), and warnings are in
+case of libraries that print their own lines (Lightning, Transformers: `take_over=`), and warnings are in
 [Standard logging](logging.md#standard-logging-pytorch-and-transformers).
 
 ## Checklist

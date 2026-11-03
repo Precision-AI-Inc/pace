@@ -5,13 +5,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import pytest
 
 from precisionai.pace import Event, Record, parse_line
 from precisionai.pace import transformers as pace_transformers
+from precisionai.pace.capture import capture_logging
 from precisionai.pace.core import Logger
 from precisionai.pace.transformers import PaceCallback
 from tests.conftest import FakeStream
@@ -232,3 +234,30 @@ def test_an_evaluation_before_training_leaves_training_as_the_root(
     runner.train()
     found = records(stream)
     assert {r.scope for r in found if r.root} == {"train"}
+
+
+@pytest.fixture
+def transformers_logger_as_configured_by_transformers() -> Iterator[logging.Logger]:
+    """Give the ``transformers`` logger its own console handler and no propagation, as the library does."""
+    library = logging.getLogger("transformers")
+    saved = list(library.handlers), library.propagate
+    root = logging.getLogger()
+    root_saved = list(root.handlers), root.level
+    library.handlers[:] = [logging.StreamHandler()]
+    library.propagate = False
+    yield library
+    library.handlers[:], library.propagate = saved
+    root.handlers[:] = root_saved[0]
+    root.setLevel(root_saved[1])
+
+
+def test_capture_logging_takes_over_the_transformers_logger(
+    quiet: Logger,
+    stream: FakeStream,
+    capsys: pytest.CaptureFixture[str],
+    transformers_logger_as_configured_by_transformers: logging.Logger,
+) -> None:
+    capture_logging("INFO", target=quiet, take_over="transformers")
+    transformers.utils.logging.get_logger("transformers.trainer").warning("from transformers")
+    assert [line.split(" ", 2)[1:] for line in stream.lines()] == [["WARNING", " from transformers"]]
+    assert capsys.readouterr().err == ""

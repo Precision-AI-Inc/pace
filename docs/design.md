@@ -84,6 +84,10 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
 - **Standard `logging`**: `precisionai.pace.capture_logging()` routes the standard
   library's records (and so PyTorch's and Transformers') through the same output.
   Opt-in, so importing Pace never changes another library's logging on its own.
+  `take_over=` names libraries (`"lightning"`, `"transformers"`) whose own console handlers
+  are removed and whose loggers are made to propagate, so each line is written once, in Pace's
+  format. It acts on the named logger, its parents and the children that exist at the call,
+  keeps file and service handlers, and is permanent for the process.
 - **Configuration**: keyword arguments, with environment-variable overrides so a
   scheduler can adjust behaviour without code changes: `PACE_LEVEL`, `PACE_STREAM`
   (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`), `PACE_BAR` (`auto`/`always`/`never`),

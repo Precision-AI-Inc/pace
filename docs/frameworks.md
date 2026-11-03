@@ -112,11 +112,23 @@ except Exception:
   `PACE_ALL_RANKS` says; see [Distributed runs](logging.md#distributed-runs-and-ranks).
 - **Log lines.** The callbacks report progress. They do not change how the framework
   logs. To bring the framework's own log lines into the same format, call
-  `capture_logging()`. Transformers' logger does not pass its records on to the root
-  logger by default, so also call
-  `transformers.utils.logging.disable_default_handler()` and
-  `transformers.utils.logging.enable_propagation()`; see
-  [Standard logging](logging.md#standard-logging-pytorch-and-transformers).
+  `capture_logging()`. Both frameworks print through loggers of their own, with their own
+  console handlers: Lightning's lines would appear twice (`INFO: ...` and Pace's format),
+  and Transformers' logger does not pass its records on to the root logger at all. Name them
+  in `take_over`, after importing them:
+
+  ```python
+  import lightning.pytorch as pl
+  import transformers
+
+  from precisionai.pace import capture_logging
+
+  capture_logging("INFO", take_over=["lightning", "transformers"])
+  ```
+
+  Use `"pytorch_lightning"` for the older package name. See
+  [Libraries that print their own log lines](logging.md#standard-logging-pytorch-and-transformers).
+  The same section covers vLLM, which needs `VLLM_CONFIGURE_LOGGING=0` instead.
 - **The terminal bar.** The framework's own progress bar (Lightning's `RichProgressBar` or
   `TQDMProgressBar`, the Transformers `tqdm` bar) is separate. In a container two
   progress displays are noise; turn the framework's off

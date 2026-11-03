@@ -13,8 +13,9 @@ opt-in (importing Pace changes no other library's logging), and
 ``logging.captureWarnings(True)``, which sends ``warnings.warn`` messages to the same place.
 Records below the level (the ``debug`` call here) are not routed. If your program already
 called ``logging.basicConfig(...)``, remove that call when you adopt Pace: every record
-would otherwise be written twice. A library that sets ``propagate = False`` (Hugging Face
-Transformers does) needs its own handler switched off first; see ``docs/logging.md``.
+would otherwise be written twice. A library that prints its own lines or sets
+``propagate = False`` (Lightning and Hugging Face Transformers do) is named in
+``capture_logging(take_over=[...])`` after it is imported; see ``docs/logging.md``.
 
 Run: ``python examples/stdlib_logging.py``. Add ``PACE_MIN_INTERVAL=0`` to see every
 progress line.
