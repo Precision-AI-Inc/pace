@@ -39,7 +39,7 @@ class ForecastState(str, Enum):
 class ForecastConfig:
     """Thresholds and smoothing parameters of the estimator.
 
-    The first five are the *initial* thresholds of ``docs/design.md``; the rest
+    The first five are the default thresholds of ``docs/design.md``; the rest
     shape the robust rate.
 
     Parameters
