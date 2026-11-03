@@ -9,7 +9,7 @@ import pytest
 
 from precisionai.pace import _render as render
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import Event, Record
+from precisionai.pace.protocol import Event, Record, parse_line
 
 
 @pytest.mark.parametrize(
@@ -141,3 +141,9 @@ def test_progress_text_with_a_bar() -> None:
         record(Event.UPDATE), Forecast(ForecastState.LEARNING), "X", "u", render.ASCII, bar=True
     )
     assert text == "X  " + "#" * 10 + "-" * 10 + "  50.0%  50/100 u | estimating..."
+
+
+def test_neutralize_sees_through_escape_sequences() -> None:
+    forged = "done [pa\x1b[31mce:1 s=x k=end c=1 t=1 e=1 q=1]"
+    assert parse_line(render.neutralize(forged)) is None
+    assert "\x1b" not in render.neutralize(forged)

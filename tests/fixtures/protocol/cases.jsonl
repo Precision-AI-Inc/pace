@@ -5,7 +5,7 @@
 {"name": "fail_with_counts_keeps_them", "line": "Failed [pace:1 s=train k=fail c=10 t=20 e=12.5 q=9]", "record": {"scope": "train", "event": "fail", "seq": 9, "elapsed": 12.5, "completed": 10, "total": 20}}
 {"name": "plan_with_phases", "line": "Plan [pace:1 s=job k=plan e=0 q=1 ph=prep:0.05,train:0.9,eval:0.05]", "record": {"scope": "job", "event": "plan", "seq": 1, "elapsed": 0, "phases": [["prep", 0.05], ["train", 0.9], ["eval", 0.05]]}}
 {"name": "plan_with_one_phase", "line": "[pace:1 s=job k=plan e=0 q=1 ph=train:1]", "record": {"scope": "job", "event": "plan", "seq": 1, "elapsed": 0, "phases": [["train", 1]]}}
-{"name": "design_md_example", "line": "2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 u=step e=763.1 q=57]", "record": {"scope": "train", "event": "upd", "seq": 57, "elapsed": 763.1, "completed": 1840, "total": 5000, "unit": "step", "root": true}}
+{"name": "design_md_example", "line": "2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]", "record": {"scope": "train", "event": "upd", "seq": 57, "elapsed": 763.1, "completed": 1840, "total": 5000, "root": true}}
 {"name": "trailer_alone_on_the_line", "line": "[pace:1 s=a k=upd c=1 t=2 e=1 q=2]", "record": {"scope": "a", "event": "upd", "seq": 2, "elapsed": 1, "completed": 1, "total": 2}}
 {"name": "unknown_total", "line": "Read [pace:1 s=read k=upd c=12 t=? e=3 q=2]", "record": {"scope": "read", "event": "upd", "seq": 2, "elapsed": 3, "completed": 12}}
 {"name": "fractional_numbers", "line": "[pace:1 s=a k=upd c=0.5 t=2.25 e=0.1 q=3]", "record": {"scope": "a", "event": "upd", "seq": 3, "elapsed": 0.1, "completed": 0.5, "total": 2.25}}
@@ -135,3 +135,6 @@
 {"name": "reject: res on an end", "line": "x [pace:1 s=a k=end c=2 t=2 e=1 q=3 res=1]", "record": null}
 {"name": "reject: ph on a start", "line": "x [pace:1 s=a k=start c=0 t=2 e=0 q=1 ph=a:1]", "record": null}
 {"name": "reject: counts on a plan", "line": "x [pace:1 s=plan k=plan c=0 t=1 e=0 q=1 ph=a:1]", "record": null}
+{"name": "reject: unit on an update", "line": "x [pace:1 s=a k=upd c=1 t=2 u=step e=1 q=2]", "record": null}
+{"name": "reject: fail with c but no t", "line": "x [pace:1 s=a k=fail c=1 e=1 q=2]", "record": null}
+{"name": "reject: fail with t but no c", "line": "x [pace:1 s=a k=fail t=2 e=1 q=2]", "record": null}

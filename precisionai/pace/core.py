@@ -26,6 +26,7 @@ Progress lines are not filtered by level: a scheduler depends on them.
 from __future__ import annotations
 
 import contextlib
+import math
 import os
 import secrets
 import shutil
@@ -178,7 +179,10 @@ class Logger:
 
     @staticmethod
     def _check_seconds(name: str, value: float | None) -> float | None:
-        if value is not None and not value >= 0:
+        if value is None:
+            return None
+        number = value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        if number is None or not math.isfinite(number) or number < 0:
             raise ValueError(f"{name} must be a non-negative number of seconds, got {value!r}")
         return value
 

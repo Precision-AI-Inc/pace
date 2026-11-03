@@ -382,12 +382,14 @@ def _build_record(fields: dict[str, str]) -> Record:
 
 
 def _check_event_fields(event: Event, fields: dict[str, str]) -> None:
-    """Reject keys that belong to another event: run and n on start, ph on plan, no counts on plan."""
-    if event is not Event.START and ("run" in fields or "n" in fields or "res" in fields):
-        raise ValueError(f"run, n and res belong on start, not {event.value}")
+    """Reject keys that belong to another event: run, n, res and u on start, ph on plan."""
+    if event is not Event.START and any(key in fields for key in ("run", "n", "res", "u")):
+        raise ValueError(f"run, n, res and u belong on start, not {event.value}")
+    if event is Event.FAIL and ("c" in fields) != ("t" in fields):
+        raise ValueError("a fail carries both c and t, or neither")
     if event is not Event.PLAN and "ph" in fields:
         raise ValueError(f"ph belongs on plan, not {event.value}")
-    if event is Event.PLAN and any(key in fields for key in ("c", "t", "u")):
+    if event is Event.PLAN and any(key in fields for key in ("c", "t")):
         raise ValueError("a plan carries no counts")
 
 
