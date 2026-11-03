@@ -30,7 +30,7 @@ starting points to be tuned against real runs, not commitments.
 | Import | `precisionai.pace` |
 | Python | 3.8 and later |
 | Runtime dependencies | none in the core |
-| Extras (planned) | `[lightning]`, `[transformers]`, `[all]` |
+| Extras | `[lightning]`, `[transformers]` (includes `accelerate`), `[all]` |
 
 Everything lives in this one repository and package: the logger, the progress APIs,
 the line parser, the estimator and the framework adapters. The core imports only the standard library. It is installed into users' training
@@ -38,7 +38,7 @@ images and into other packages (such as data-transfer tooling), so it must never
 add to them. Framework adapters live in their own modules and import their framework
 only there; their extras inherit that framework's own Python minimum.
 
-## Public API (proposed)
+## Public API
 
 ```python
 from precisionai.pace import logger, track, progress, timed, phase
@@ -74,8 +74,9 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
   Opt-in, so importing Pace never changes another library's logging on its own.
 - **Configuration**: keyword arguments, with environment-variable overrides so a
   scheduler can adjust behaviour without code changes: `PACE_LEVEL`, `PACE_STREAM`
-  (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`),
-  `PACE_MIN_INTERVAL`, `PACE_HEARTBEAT`.
+  (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`), `PACE_BAR` (`auto`/`always`/`never`),
+  `PACE_MIN_INTERVAL`, `PACE_HEARTBEAT`, `PACE_ALL_RANKS`. An explicit
+  `logger.configure(...)` value beats the environment variable, which beats the default.
 - **Distributed training**: rank is read from `RANK`, then `LOCAL_RANK`, then
   `SLURM_PROCID`. Only rank 0 emits progress by default, and the adapters report
   the global step, so there is one record per scope, not one per GPU.
@@ -111,6 +112,11 @@ container, a log file), Pace writes a new line only when all of these hold:
 - at least 1% more of the total done, **or** `PACE_HEARTBEAT` seconds have passed
   since the last line (*initial*: 120 s).
 
+On a terminal (`PACE_BAR=auto` and a TTY), progress redraws one bar line in place,
+without a trailer, and only `end`, `fail` and `plan` print full lines with trailers.
+A job run under a pseudo-terminal whose output a scheduler still reads should set
+`PACE_BAR=never`, which writes normal trailer lines even on a TTY.
+
 `start`, `end` and `fail` records are always written immediately. The limit is set by
 time, never by step count, so a run with a million steps writes no more than one
 with a thousand. For example, a 10-hour run reaches each 1% about every 6 minutes,
@@ -124,7 +130,7 @@ One line serves both readers. The readable part comes first; a short trailer at 
 end carries the fields a consumer parses.
 
 ```text
-2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 u=step e=763.1 q=57]
+2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]
 2026-11-03T17:23:59Z INFO     Loading model Qwen2.5-7B
 ```
 
@@ -138,13 +144,18 @@ trailer  = "[pace:" major " " field *( " " field ) "]"   ; at the very end of th
 major    = 1*DIGIT                                       ; "1" for this version
 field    = key "=" value
 key      = 1*( %x61-7A / DIGIT )                          ; lower-case letters and digits
-value    = 1*( ALPHA / DIGIT / "." / "_" / "-" / ":" / "," / "%" HEXDIG HEXDIG )
+value    = "?" / 1*( ALPHA / DIGIT / "." / "_" / "-" / ":" / "," / "%" HEXDIG HEXDIG )
+                                                         ; "?" only as the value of t
 ```
 
 A consumer matches the trailer only at the end of the line, after removing ANSI
 escape sequences and trailing whitespace. Any character outside the value alphabet
 is percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, an unknown major
 version, a missing required field, or a value that fails to parse is ignored.
+A raw (still encoded) value may be at most 768 characters, enough for a 64-character
+label of 4-byte characters; `ph` may be up to 2815, enough for 32 phases with the longest ids and weights. The writer
+shortens labels and units to 64 characters and replaces control characters with spaces,
+so it never produces a line the parser rejects.
 
 ### Fields
 
@@ -154,14 +165,22 @@ version, a missing required field, or a value that fails to parse is ignored.
 | `k` | always | Event: `start`, `upd`, `end`, `fail`, `plan`. |
 | `q` | always | Sequence number within the scope, from 1. Used for de-duplication and ordering. |
 | `e` | always | Seconds since the scope started, from a monotonic clock. Rates use this, never wall-clock time. |
-| `c` | start, upd, end | Completed amount, a non-negative number. |
-| `t` | start, upd, end | Total, a positive number, or `?` when unknown. |
-| `u` | start | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...). |
-| `p` | optional | Parent scope id. A nested scope is never added to its parent's remaining time. |
-| `root` | optional | `1` marks the scope that stands for the whole job. At most one per process. |
+| `c` | start, upd, end; fail when known | Completed amount, a non-negative number. |
+| `t` | start, upd, end; fail when known | Total, a positive number, or `?` when unknown. |
+| `u` | start | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...), at most 64 characters after decoding, no control characters. |
+| `p` | optional | Parent scope id. A nested scope is never added to its parent's remaining time. Written on every record of the scope, so a reader that starts mid-log still learns the hierarchy. |
+| `root` | optional | `1` marks the scope that stands for the whole job. At most one per process. Written on every record of the scope. |
 | `res` | optional | `1` on a `start` that resumes earlier work, so `c` begins above zero. |
-| `ph` | `plan` only | Remaining phases and weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
-| `n` | optional, `start` only | Short label, at most 64 characters after decoding. |
+| `ph` | `plan` only | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
+| `n` | optional, `start` only | Short label, at most 64 characters after decoding, no control characters. |
+| `run` | optional, `start` only | Id of the process run, `[a-z0-9]{1,16}`, the same for every scope in one process. A `start` with the run id already seen for that scope is a duplicate (the line was read from both streams); a different run id is a restart. |
+
+Keys belong to particular events, and a reader rejects a record that carries one
+on the wrong event: `run`, `n`, `res` and `u` only on `start`, `ph` only on `plan`,
+and no `c` or `t` on `plan`. A writer keeps every line within 4096 bytes by
+shortening the readable text before the trailer, never the trailer. It never writes a
+number above 1e15, the parser's limit: a larger total is reported as unknown and a
+larger count is capped.
 
 Additions within version 1 are new optional keys; consumers ignore keys they do not
 know. Removing or redefining a key requires `pace:2`.
@@ -206,9 +225,36 @@ remaining_time = max(total - completed, 0) / robust_rate
 - **Learning → Live** (*initial*): at least 60 s observed **and** at least 3 update
   intervals **and** at least 1% of the total done.
 - **Stale** (*initial*): no record for `max(3 × median interval, 2 × heartbeat)`.
-- A `start` for a scope already seen begins a new segment; rates are never averaged
-  across a restart. With `res=1`, the remaining work starts from the resumed `c`.
+- A `start` for a scope from a new run (a different `run` id, or after `q=1` when there
+  is no run id) begins a new segment; rates are never averaged across a restart. The
+  segment's rate is measured from the `c` on its `start`, so a resumed scope that
+  starts at its restored count measures only the work left. `res=1` itself is
+  informational: it tells a reader the scope resumed, and changes no arithmetic.
 - A changed `t` replaces the total. If the rate history is still valid it is kept.
+- While Live, the remaining time counts down between records by the time since the
+  latest one. A Stale scope keeps its last estimate unchanged.
+- Known limitation: a pause that recurs (evaluation every N steps) is discounted from
+  the rate like a one-off pause, so the estimate is optimistic by the total of the
+  pauses still to come.
+
+### Rate smoothing and plans (implementation)
+`ForecastConfig` holds every threshold; the values here are the defaults.
+- An interval with no progress (`c` unchanged, a heartbeat) is not measured; the
+next interval with progress spans back to the last one that had it. Intervals
+with `Δe <= 0` are skipped.
+- The first intervals are averaged plainly (`1/n`); after that the weight of a
+new interval is 0.3.
+- An interval rate more than 3x above or below the median of the last 9 accepted
+rates is an outlier and is left out (a pause for evaluation or a checkpoint).
+Three outliers in a row on the same side are a real change in speed: the average
+restarts from them.
+- A plan's finished phases count 0, its active phase its own estimate, and each
+phase not yet started `weight x s`, where `s` is the (elapsed + remaining)
+seconds of the finished and active phases divided by their weights. If a phase
+in the plan has no usable estimate, or nothing has been measured to derive `s`,
+the plan is not used and the top-level scopes decide.
+- Completion without a root follows the rule under "Several scopes" below: only a
+finished plan proves the job is done.
 
 ### Several scopes
 
@@ -218,6 +264,20 @@ remaining_time = max(total - completed, 0) / robust_rate
   added on top of their parent.
 - Without a root or a complete plan, the estimate is labelled as covering the
   current phase only.
+- **Completion and failure.** With a root, the root alone decides: the job is complete
+  or failed when the root is. Without one, a failed top-level scope fails the job, but
+  the job is never called complete unless a plan lists every phase and all of them
+  have ended: between two unplanned phases every scope seen so far has ended, yet
+  more work may follow. A scheduler should treat process exit as the real end.
+- Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
+- A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
+  the other stream never overrides a newer one.
+- A running scope with no estimate of its own takes one from its children. A counted
+  parent (one unit per child, such as `Epochs` of 3) adds, to the running child's
+  remaining time, one child's duration for each unit still to come; between two
+  children it uses the average of the finished ones. A `phase()` or a parent with no
+  total cannot know how many children are still to come, so it takes only the running
+  child's estimate and the job estimate is marked partial (a lower bound).
 
 ## Framework adapters
 
@@ -240,8 +300,10 @@ remaining_time = max(total - completed, 0) / robust_rate
 ## Testing
 
 - Conformance fixtures live in `tests/fixtures/protocol/`: input lines with their
-  expected parse results, including malformed, oversized, ANSI-coloured, split and
-  duplicated cases. Consumers run the same fixtures against their integration.
+  expected parse results, including malformed, oversized and ANSI-coloured lines.
+  They cover parsing one line at a time; splitting byte chunks into lines and removing
+  duplicates are tested in Python only. The fixtures are not shipped in the package;
+  readers in other languages take them from the repository. Consumers run the same fixtures against their integration.
 - Every release is tested on Python 3.8 through 3.13.
 
 ## Decisions
@@ -256,3 +318,28 @@ Reviewed 2026-11-03.
    limit is time-based, so step count does not increase volume.
 4. **One package**: the parser, estimator, logger and adapters all ship in
    `precisionai-pace`; there is no separate repository for any of them.
+
+## Behaviour settled during implementation
+
+- The public API also includes `plan`, `capture_logging`, `parse_line`, `LineSplitter`,
+  `ScopeForecast` and `JobForecast`; `precisionai.pace.__all__` is the full list.
+- No record is written when the process is killed. A `SIGKILL` cannot be caught, and
+  the scheduler already knows when the process exits, so the consumer treats process
+  exit as the end. This is deliberate, not an omission.
+- Estimates are point estimates. `JobEstimate` carries a state, a source and `partial`,
+  but no range or confidence yet; those can be added later without changing the line
+  format.
+
+- `plan()` writes its record under a scope of its own (`plan`, or the `scope=` given).
+  Repeated calls under the same name share that scope, so their `q` orders them
+  and a late copy of an older plan never replaces a newer one. The record lists the
+  scope ids the phases will get, including the `-2` suffix for a repeated name.
+- `track()` cannot tell a `break` from an exception raised in the loop body: Python
+  delivers both to the generator as the same `GeneratorExit`. It therefore writes `end`
+  with the count reached for either; `fail` is written only when the iterable itself
+  raises. Use `progress()` when a crash in the loop body must be reported as `fail`.
+- A heartbeat line is written when progress is reported (`advance()`, `update()`), not on
+  a timer. A process that hangs writes nothing, and that silence is what marks it Stale.
+- Progress lines are never filtered by `PACE_LEVEL`, because a scheduler depends on them.
+- Text that looks like a trailer (`[pace:`) inside a log message or description is
+  rewritten to `[ pace:`, so user text cannot forge a record.
