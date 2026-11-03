@@ -215,6 +215,35 @@ remaining_time = max(total - completed, 0) / robust_rate
 - A `start` for a scope already seen begins a new segment; rates are never averaged
   across a restart. With `res=1`, the remaining work starts from the resumed `c`.
 - A changed `t` replaces the total. If the rate history is still valid it is kept.
+- While Live, the remaining time counts down between records by the time since the
+  latest one. A Stale scope keeps its last estimate unchanged.
+- Known limitation: a pause that recurs (evaluation every N steps) is discounted from
+  the rate like a one-off pause, so the estimate is optimistic by the total of the
+  pauses still to come.
+- While Live, the remaining time counts down between records by the time since the
+  latest one. A Stale scope keeps its last estimate unchanged.
+- Known limitation: a pause that recurs (evaluation every N steps) is discounted from
+  the rate like a one-off pause, so the estimate is optimistic by the total of the
+  pauses still to come.
+
+### Rate smoothing and plans (implementation)
+`ForecastConfig` holds every threshold; the values here are the defaults.
+- An interval with no progress (`c` unchanged, a heartbeat) is not measured; the
+next interval with progress spans back to the last one that had it. Intervals
+with `Δe <= 0` are skipped.
+- The first intervals are averaged plainly (`1/n`); after that the weight of a
+new interval is 0.3.
+- An interval rate more than 3x above or below the median of the last 9 accepted
+rates is an outlier and is left out (a pause for evaluation or a checkpoint).
+Three outliers in a row on the same side are a real change in speed: the average
+restarts from them.
+- A plan's finished phases count 0, its active phase its own estimate, and each
+phase not yet started `weight x s`, where `s` is the (elapsed + remaining)
+seconds of the finished and active phases divided by their weights. If a phase
+in the plan has no usable estimate, or nothing has been measured to derive `s`,
+the plan is not used and the top-level scopes decide.
+- Without a `root` scope or a plan, a job is Complete only when every top-level
+scope has ended; the logger-side process end is the reliable signal.
 
 ### Several scopes
 
@@ -224,6 +253,22 @@ remaining_time = max(total - completed, 0) / robust_rate
   added on top of their parent.
 - Without a root or a complete plan, the estimate is labelled as covering the
   current phase only.
+- **Completion and failure.** With a root, the root alone decides: the job is complete
+  or failed when the root is. Without one, a failed top-level scope fails the job, but
+  the job is never called complete unless a plan lists every phase and all of them
+  have ended: between two unplanned phases every scope seen so far has ended, yet
+  more work may follow. A scheduler should treat process exit as the real end.
+- Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
+- A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
+  the other stream never overrides a newer one.
+- **Completion and failure.** With a root, the root alone decides: the job is complete
+  or failed when the root is. Without one, a failed top-level scope fails the job, but
+  the job is never called complete unless a plan lists every phase and all of them
+  have ended: between two unplanned phases every scope seen so far has ended, yet
+  more work may follow. A scheduler should treat process exit as the real end.
+- Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
+- A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
+  the other stream never overrides a newer one.
 
 ## Framework adapters
 
