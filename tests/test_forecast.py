@@ -791,3 +791,29 @@ def test_a_start_from_a_new_run_is_a_restart() -> None:
     run.ticks(6, 15.0, 2.0)
     run.restart(run="bbbb2222")
     assert fc.snapshot(run.now).state is ForecastState.LEARNING
+
+
+def test_a_phase_borrows_the_estimate_of_the_loop_inside_it() -> None:
+    job = JobForecast()
+    job.observe(_plan(("prep", 0.1), ("train", 0.9)), 1000.0)
+    prep = Run(job, "prep", total=1.0)
+    prep.start()
+    prep.mark(100.0, 1.0)
+    prep.end()
+    phase = Run(job, "train", total=1.0, offset=1100.0)
+    phase.start()
+    loop = _live_scope(job, "batches", total=1000.0, offset=1100.0, parent="train")
+    est = job.snapshot(loop.now)
+    assert est.source == "plan"
+    assert est.state is ForecastState.LIVE
+    assert est.remaining_seconds == pytest.approx(410.0)
+
+
+def test_a_top_level_phase_without_a_plan_borrows_its_child_estimate() -> None:
+    job = JobForecast()
+    phase = Run(job, "train", total=1.0)
+    phase.start()
+    loop = _live_scope(job, "batches", total=1000.0, parent="train")
+    est = job.snapshot(loop.now)
+    assert est.source == "concurrent"
+    assert est.remaining_seconds == pytest.approx(410.0)
