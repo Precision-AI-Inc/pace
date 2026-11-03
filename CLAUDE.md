@@ -198,6 +198,12 @@ if not _LIGHTNING_AVAILABLE:
 
 ---
 
+## README is the PyPI page
+
+`README.md` is published as the PyPI project description, where relative paths do not resolve. Every link and image in it is an absolute `https://github.com/Precision-AI-Inc/pace/blob/main/...` or `https://raw.githubusercontent.com/Precision-AI-Inc/pace/main/...` URL (enforced by `tests/test_readme.py`). Those URLs only load for anonymous visitors once the repository is public.
+
+---
+
 ## Docs (Sphinx)
 
 ```

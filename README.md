@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Precision AI Logo" width="120"/>
+  <img src="https://raw.githubusercontent.com/Precision-AI-Inc/pace/main/docs/assets/logo.png" alt="Precision AI Logo" width="160"/>
 </p>
 
-# Pace
+# Precision AI Pace
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.md)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Precision-AI-Inc/pace/blob/main/LICENSE.md)
 [![PyPI](https://img.shields.io/pypi/v/precisionai-pace.svg?include_prereleases)](https://pypi.org/project/precisionai-pace/)
 [![Python](https://img.shields.io/pypi/pyversions/precisionai-pace.svg?include_prereleases)](https://pypi.org/project/precisionai-pace/)
 
 ---
 
-> **Pre-release.** The API may still change before 1.0. The design and the line format are specified in [docs/design.md](docs/design.md).
+> **Pre-release.** The API may still change before 1.0. The design and the line format are specified in [docs/design.md](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md).
 
 Pace is a logger with progress reporting built in. Its output reads like any good
 logger in a terminal, and every progress line also carries a short, versioned trailer
@@ -55,7 +55,7 @@ In a container, a progress line looks like this:
 ```
 
 The part before `[pace:1 ...]` is for people. The bracketed trailer is a stable,
-versioned format described in [docs/design.md](docs/design.md).
+versioned format described in [docs/design.md](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md).
 
 ---
 
@@ -84,7 +84,7 @@ docs/               # Sphinx (HTML + LaTeX/PDF), including design.md
 tests/              # mirrors the package structure
 ```
 
-See [CLAUDE.md](CLAUDE.md) for the coding standard.
+See [CLAUDE.md](https://github.com/Precision-AI-Inc/pace/blob/main/CLAUDE.md) for the coding standard.
 
 ---
 
@@ -111,17 +111,17 @@ publishing, and creates a GitHub Release. The version comes from the git tag via
 
 ## Security
 
-To report a security vulnerability, see [SECURITY.md](SECURITY.md). Do not open a public issue.
+To report a security vulnerability, see [SECURITY.md](https://github.com/Precision-AI-Inc/pace/blob/main/SECURITY.md). Do not open a public issue.
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and PR guidelines, and
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
+See [CONTRIBUTING.md](https://github.com/Precision-AI-Inc/pace/blob/main/CONTRIBUTING.md) for setup and PR guidelines, and
+[CODE_OF_CONDUCT.md](https://github.com/Precision-AI-Inc/pace/blob/main/CODE_OF_CONDUCT.md) for community expectations.
 
 ---
 
 ## License
 
-[Apache 2.0](LICENSE.md) © Precision AI
+[Apache 2.0](https://github.com/Precision-AI-Inc/pace/blob/main/LICENSE.md) © Precision AI
