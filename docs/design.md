@@ -1,7 +1,14 @@
-# Design
+# Pace specification
 
-Status: **reviewed**, see [Decisions](#decisions). Thresholds marked *initial* are
-starting points to be tuned against real runs, not commitments.
+This document specifies Pace (`precisionai-pace`): the logger and progress API, the
+line format that carries progress records, and the rules that turn those records into a
+completion estimate. The `[pace:1 ...]` trailer format is a public contract versioned by
+its major number: within a major version the format only gains optional keys, and any
+other change needs a new major version.
+
+The thresholds in this document are defaults that may be tuned in later releases;
+override the output ones with `PACE_MIN_INTERVAL` and `PACE_HEARTBEAT` (or
+`logger.configure(...)`) and the estimator ones with `ForecastConfig`.
 
 ## Goals
 
@@ -68,7 +75,12 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
 ```
 
 - **Levels**: `debug`, `info`, `success`, `warning`, `error`, `critical`, plus
-  `progress` records, which only the progress APIs emit.
+  `progress` records, which only the progress APIs emit. `PACE_LEVEL` filters log
+  records; progress records are never filtered by it, because a scheduler depends on
+  them.
+- **Full list**: besides the names above, the public API includes `plan`,
+  `capture_logging`, `parse_line`, `LineSplitter`, `ScopeForecast` and `JobForecast`;
+  `precisionai.pace.__all__` is the complete list.
 - **Standard `logging`**: `precisionai.pace.capture_logging()` routes the standard
   library's records (and so PyTorch's and Transformers') through the same output.
   Opt-in, so importing Pace never changes another library's logging on its own.
@@ -80,6 +92,16 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
 - **Distributed training**: rank is read from `RANK`, then `LOCAL_RANK`, then
   `SLURM_PROCID`. Only rank 0 emits progress by default, and the adapters report
   the global step, so there is one record per scope, not one per GPU.
+
+### Progress scopes
+
+- `track()` cannot tell a `break` from an exception raised in the loop body: Python
+  delivers both to the generator as the same `GeneratorExit`. It therefore writes `end`
+  with the count reached for either; `fail` is written only when the iterable itself
+  raises. Use `progress()` when a crash in the loop body must be reported as `fail`.
+- A heartbeat line is written when progress is reported (`advance()`, `update()`), not
+  on a timer. A process that hangs writes nothing, and that silence is what marks it
+  Stale.
 
 ### Output stream
 
@@ -108,9 +130,9 @@ terminal, which would otherwise hold progress back for minutes in a container.
 In a terminal, a progress bar redraws in place. When output is not a terminal (a
 container, a log file), Pace writes a new line only when all of these hold:
 
-- at least `PACE_MIN_INTERVAL` seconds since the scope's last line (*initial*: 15 s), and
+- at least `PACE_MIN_INTERVAL` seconds since the scope's last line (default 15 s), and
 - at least 1% more of the total done, **or** `PACE_HEARTBEAT` seconds have passed
-  since the last line (*initial*: 120 s).
+  since the last line (default 120 s). With an unknown total, only the heartbeat applies.
 
 On a terminal (`PACE_BAR=auto` and a TTY), progress redraws one bar line in place,
 without a trailer, and only `end`, `fail` and `plan` print full lines with trailers.
@@ -122,7 +144,7 @@ time, never by step count, so a run with a million steps writes no more than one
 with a thousand. For example, a 10-hour run reaches each 1% about every 6 minutes,
 so it writes about 100 progress lines plus a heartbeat every 2 minutes in between:
 roughly 300 lines, or 30 an hour. The heartbeat is what lets a consumer tell a slow
-job from a stalled one. The values will be tuned against real runs.
+job from a stalled one.
 
 ## Line format, version 1
 
@@ -182,15 +204,17 @@ shortening the readable text before the trailer, never the trailer. It never wri
 number above 1e15, the parser's limit: a larger total is reported as unknown and a
 larger count is capped.
 
+Text that looks like a trailer (`[pace:`) inside a log message or description is
+rewritten to `[ pace:`, so user text cannot forge a record.
+
 Additions within version 1 are new optional keys; consumers ignore keys they do not
 know. Removing or redefining a key requires `pace:2`.
 
-### Why the timestamp is UTC
+### Timestamp
 
-The leading timestamp is ISO-8601 UTC so that a line means the same thing in any
-container, whatever its timezone. Rates come from `e=`, never from the timestamp.
-Converting times for display (for example to Alberta time or Cairo time) is the
-consumer's job.
+The leading timestamp is ISO-8601 UTC, so a line means the same thing in any container
+whatever its timezone. Rates come from `e=`, never from the timestamp. Converting times
+for display is the consumer's job.
 
 ## Forecasting rules
 
@@ -222,9 +246,9 @@ remaining_time = max(total - completed, 0) / robust_rate
   interval is the work done between two consecutive records divided by the change
   in `e`. Intervals far outside the recent median are discounted (stalls, retries,
   evaluation pauses), but a sustained slowdown is not hidden.
-- **Learning → Live** (*initial*): at least 60 s observed **and** at least 3 update
+- **Learning → Live** (default): at least 60 s observed **and** at least 3 update
   intervals **and** at least 1% of the total done.
-- **Stale** (*initial*): no record for `max(3 × median interval, 2 × heartbeat)`.
+- **Stale** (default): no record for `max(3 × median interval, 2 × heartbeat)`.
 - A `start` for a scope from a new run (a different `run` id, or after `q=1` when there
   is no run id) begins a new segment; rates are never averaged across a restart. The
   segment's rate is measured from the `c` on its `start`, so a resumed scope that
@@ -237,24 +261,20 @@ remaining_time = max(total - completed, 0) / robust_rate
   the rate like a one-off pause, so the estimate is optimistic by the total of the
   pauses still to come.
 
-### Rate smoothing and plans (implementation)
-`ForecastConfig` holds every threshold; the values here are the defaults.
-- An interval with no progress (`c` unchanged, a heartbeat) is not measured; the
-next interval with progress spans back to the last one that had it. Intervals
-with `Δe <= 0` are skipped.
-- The first intervals are averaged plainly (`1/n`); after that the weight of a
-new interval is 0.3.
-- An interval rate more than 3x above or below the median of the last 9 accepted
-rates is an outlier and is left out (a pause for evaluation or a checkpoint).
-Three outliers in a row on the same side are a real change in speed: the average
-restarts from them.
-- A plan's finished phases count 0, its active phase its own estimate, and each
-phase not yet started `weight x s`, where `s` is the (elapsed + remaining)
-seconds of the finished and active phases divided by their weights. If a phase
-in the plan has no usable estimate, or nothing has been measured to derive `s`,
-the plan is not used and the top-level scopes decide.
-- Completion without a root follows the rule under "Several scopes" below: only a
-finished plan proves the job is done.
+### Rate smoothing
+
+`ForecastConfig` holds every threshold of the estimator; the values here are the
+defaults.
+
+- An interval with no progress (`c` unchanged, a heartbeat) is not measured; the next
+  interval with progress spans back to the last one that had it. Intervals with
+  `Δe <= 0` are skipped.
+- The first intervals are averaged plainly (`1/n`); after that the weight of a new
+  interval is 0.3.
+- An interval rate more than 3x above or below the median of the last 9 accepted rates
+  is an outlier and is left out (a pause for evaluation or a checkpoint). Outlier
+  tests start once 3 rates have been accepted. Three outliers in a row on the same
+  side are a real change in speed: the average restarts from them.
 
 ### Several scopes
 
@@ -267,17 +287,32 @@ finished plan proves the job is done.
 - **Completion and failure.** With a root, the root alone decides: the job is complete
   or failed when the root is. Without one, a failed top-level scope fails the job, but
   the job is never called complete unless a plan lists every phase and all of them
-  have ended: between two unplanned phases every scope seen so far has ended, yet
-  more work may follow. A scheduler should treat process exit as the real end.
+  (and every top-level scope) have ended: between two unplanned phases every scope
+  seen so far has ended, yet more work may follow. A scheduler should treat process
+  exit as the real end.
 - Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
-- A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
-  the other stream never overrides a newer one.
 - A running scope with no estimate of its own takes one from its children. A counted
   parent (one unit per child, such as `Epochs` of 3) adds, to the running child's
   remaining time, one child's duration for each unit still to come; between two
   children it uses the average of the finished ones. A `phase()` or a parent with no
   total cannot know how many children are still to come, so it takes only the running
   child's estimate and the job estimate is marked partial (a lower bound).
+
+### Plans
+
+- `plan()` writes its record under a scope of its own (`plan`, or the `scope=` given).
+  Repeated calls under the same name share that scope, so their `q` orders them. The
+  record lists the scope ids the phases will get, including the `-2` suffix for a
+  repeated name.
+- A plan replaces an earlier plan of the same scope only if its `q` is higher, so a
+  plan read late from the other stream never overrides a newer one.
+- A plan's finished phases count 0, its active phase its own estimate, and each phase
+  not yet started `weight x s`, where `s` is the (elapsed + remaining) seconds of the
+  finished and active phases divided by their weights. If a phase in the plan has no
+  usable estimate, or nothing has been measured to derive `s`, the plan is not used
+  and the top-level scopes decide.
+- Without a root, only a finished plan proves the job is done (see Completion and
+  failure above).
 
 ## Framework adapters
 
@@ -306,40 +341,10 @@ finished plan proves the job is done.
   readers in other languages take them from the repository. Consumers run the same fixtures against their integration.
 - Every release is tested on Python 3.8 through 3.13.
 
-## Decisions
+## Not in this version
 
-Reviewed 2026-11-03.
-
-1. **Trailer syntax**: `[pace:1 ...]` at the end of the line, plain ASCII. The
-   readable part falls back to ASCII on non-UTF-8 streams and never crashes on
-   encoding (see [Characters](#characters)).
-2. **Default stream**: stdout. Progress is normal output, not a diagnostic.
-3. **Thresholds**: the *initial* values stand, to be tuned against real runs. The
-   limit is time-based, so step count does not increase volume.
-4. **One package**: the parser, estimator, logger and adapters all ship in
-   `precisionai-pace`; there is no separate repository for any of them.
-
-## Behaviour settled during implementation
-
-- The public API also includes `plan`, `capture_logging`, `parse_line`, `LineSplitter`,
-  `ScopeForecast` and `JobForecast`; `precisionai.pace.__all__` is the full list.
 - No record is written when the process is killed. A `SIGKILL` cannot be caught, and
   the scheduler already knows when the process exits, so the consumer treats process
   exit as the end. This is deliberate, not an omission.
 - Estimates are point estimates. `JobEstimate` carries a state, a source and `partial`,
-  but no range or confidence yet; those can be added later without changing the line
-  format.
-
-- `plan()` writes its record under a scope of its own (`plan`, or the `scope=` given).
-  Repeated calls under the same name share that scope, so their `q` orders them
-  and a late copy of an older plan never replaces a newer one. The record lists the
-  scope ids the phases will get, including the `-2` suffix for a repeated name.
-- `track()` cannot tell a `break` from an exception raised in the loop body: Python
-  delivers both to the generator as the same `GeneratorExit`. It therefore writes `end`
-  with the count reached for either; `fail` is written only when the iterable itself
-  raises. Use `progress()` when a crash in the loop body must be reported as `fail`.
-- A heartbeat line is written when progress is reported (`advance()`, `update()`), not on
-  a timer. A process that hangs writes nothing, and that silence is what marks it Stale.
-- Progress lines are never filtered by `PACE_LEVEL`, because a scheduler depends on them.
-- Text that looks like a trailer (`[pace:`) inside a log message or description is
-  rewritten to `[ pace:`, so user text cannot forge a record.
+  but no range or confidence. Adding one would not change the line format.

@@ -122,4 +122,4 @@ Partly. An interval much slower or faster than the recent median (a checkpoint, 
 evaluation run) is discounted so one pause does not move the estimate. A sustained
 change of speed is followed. A pause that recurs, such as evaluation every N steps, is
 discounted every time, so the estimate is optimistic by the total of the pauses still to
-come. This is a known limitation, noted in [Design](design.md#estimate).
+come. This is a known limitation, noted in the [specification](design.md#estimate).

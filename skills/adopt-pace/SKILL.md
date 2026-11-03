@@ -157,7 +157,7 @@ You must run something. In order of preference: the real job with a tiny config 
 a few steps of the real script (`--max-steps 20`); the instrumented section alone.
 
 1. Install Pace into the environment you run in: `pip install precisionai-pace` (with the
-   extra). If it cannot be installed (no network, not yet published), say so and stop at
+   extra). If it cannot be installed (for example no network, or no access to the package index), say so and stop at
    the part you cannot run: do not claim verification.
 2. Run the job with output captured. Outside a terminal Pace writes a line at most every
    15 s, so make a short run print its updates:
@@ -235,5 +235,6 @@ pointer only.
   yourself.
 - Pace's estimate is only as good as the total. Do not invent a total to make a loop
   estimable: an honest "unknown" beats a wrong number.
-- If Pace is not yet published to the package index the repo installs from, the
-  dependency edit is still right; tell the user the install will fail until it is.
+- If Pace is not available from the package index the repo installs from (a private
+  mirror, for example), the dependency edit is still right; tell the user the install
+  will fail until it is.

@@ -101,7 +101,7 @@ Things to notice:
 
 - The text before `[pace:1 ...]` is for people. The bracketed trailer is the
   stable, versioned part a program reads. Its format is in
-  [Design: line format](design.md#line-format-version-1).
+  [Specification: line format](design.md#line-format-version-1).
 - A line is written at most every 15 seconds per scope, and only when the work
   moved at least 1% or two minutes passed. A ten-hour run writes a few hundred
   lines, not one per step. `start`, `end` and `fail` are always written at once.
