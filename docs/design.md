@@ -138,7 +138,8 @@ trailer  = "[pace:" major " " field *( " " field ) "]"   ; at the very end of th
 major    = 1*DIGIT                                       ; "1" for this version
 field    = key "=" value
 key      = 1*( %x61-7A / DIGIT )                          ; lower-case letters and digits
-value    = 1*( ALPHA / DIGIT / "." / "_" / "-" / ":" / "," / "%" HEXDIG HEXDIG )
+value    = "?" / 1*( ALPHA / DIGIT / "." / "_" / "-" / ":" / "," / "%" HEXDIG HEXDIG )
+                                                         ; "?" only as the value of t
 ```
 
 A consumer matches the trailer only at the end of the line, after removing ANSI
@@ -160,7 +161,7 @@ version, a missing required field, or a value that fails to parse is ignored.
 | `p` | optional | Parent scope id. A nested scope is never added to its parent's remaining time. |
 | `root` | optional | `1` marks the scope that stands for the whole job. At most one per process. |
 | `res` | optional | `1` on a `start` that resumes earlier work, so `c` begins above zero. |
-| `ph` | `plan` only | Remaining phases and weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
+| `ph` | `plan` only | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
 | `n` | optional, `start` only | Short label, at most 64 characters after decoding. |
 
 Additions within version 1 are new optional keys; consumers ignore keys they do not
