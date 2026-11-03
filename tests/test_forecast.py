@@ -886,3 +886,72 @@ def test_a_phase_with_several_children_is_only_a_lower_bound() -> None:
     assert est.source == "plan"
     assert est.partial
     assert est.remaining_seconds == pytest.approx(410.0)
+
+
+def test_elapsed_counts_on_from_the_latest_record_until_the_scope_ends() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc, total=1.0)
+    run.start()
+    assert fc.elapsed_at(run.now + 40.0) == pytest.approx(40.0)
+    run.t = 50.0
+    run.end()
+    assert fc.elapsed_at(run.now + 40.0) == pytest.approx(50.0)
+
+
+def test_seconds_per_unit_counts_only_this_segments_units() -> None:
+    fc = ScopeForecast("epochs")
+    run = Run(fc, "epochs", total=10.0)
+    run.start(completed=7.0, resumed=True)
+    assert fc.seconds_per_unit() is None
+    run.mark(100.0, 9.0)
+    assert fc.seconds_per_unit() == pytest.approx(50.0)
+
+
+def test_a_plan_times_unstarted_phases_from_a_running_phase_with_a_loop_inside() -> None:
+    # Train is a phase around one loop; evaluate (weight 0.1) has not started. The
+    # phase's own records say e=0, so its elapsed time has to come from the clock.
+    job = JobForecast()
+    job.observe(_plan(("train", 0.9), ("evaluate", 0.1)), 1000.0)
+    phase = Run(job, "train", total=1.0)
+    phase.start()
+    loop = Run(job, "batches", total=1000.0, parent="train")
+    loop.start()
+    loop.ticks(30, 15.0, 2.0)  # 450 s in, 900 done, 50 s left
+    est = job.snapshot(loop.now)
+    assert est.source == "plan"
+    assert est.remaining_seconds == pytest.approx(50.0 + 0.1 * 500.0 / 0.9)
+
+
+def test_a_counted_parent_times_units_that_hold_several_children() -> None:
+    # Each epoch is a 500 s training loop and a 100 s validation loop.
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    train = _epoch(job, 0, 1000.0, "epochs")
+    train.t = 500.0
+    train.end()
+    val = Run(job, "val-0", total=100.0, offset=1500.0, parent="epochs")
+    val.start()
+    val.t = 100.0
+    val.end()
+    epochs.mark(600.0, 1.0)
+    second = _epoch(job, 1, 1600.0, "epochs")
+    est = job.snapshot(second.now)
+    # 90 s into the second epoch: 510 s of it left, then one more epoch of 600 s.
+    assert est.source == "root"
+    assert not est.partial
+    assert est.remaining_seconds == pytest.approx(510.0 + 600.0)
+
+
+def test_a_counted_parent_ignores_a_short_finished_child_once_it_has_a_pace() -> None:
+    # A one-off step child (saving, say) that took no time must not make the units
+    # still to come look free.
+    job = JobForecast()
+    root = Run(job, "job", total=40.0, root=True)
+    root.start()
+    root.mark(100.0, 10.0)
+    save = Run(job, "save", total=1.0, offset=1100.0, parent="job")
+    save.start()
+    save.end()
+    est = job.snapshot(1100.0)
+    assert est.remaining_seconds == pytest.approx(30 * 10.0)

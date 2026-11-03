@@ -292,11 +292,18 @@ defaults.
   exit as the real end.
 - Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
 - A running scope with no estimate of its own takes one from its children. A counted
-  parent (one unit per child, such as `Epochs` of 3) adds, to the running child's
-  remaining time, one child's duration for each unit still to come; between two
-  children it uses the average of the finished ones. A `phase()` or a parent with no
+  parent (such as `Epochs` of 3) estimates the time one unit takes times the units
+  still to come, less the time already spent in the running unit, and never less than
+  the running child's remaining time. Once a unit has finished, the parent's own
+  records give the time per unit, however many children a unit holds (a training and a
+  validation loop per epoch); before that, the running unit counts as the time it has
+  taken so far plus the running child's remaining time. A `phase()` or a parent with no
   total cannot know how many children are still to come, so it takes only the running
   child's estimate and the job estimate is marked partial (a lower bound).
+- A running scope's elapsed time counts on from its latest record, by the time
+  received since it. A `phase()` writes only when it starts and ends, so this is what
+  gives a running phase its elapsed time, which a plan uses to time the phases not yet
+  started.
 
 ### Plans
 

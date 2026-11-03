@@ -225,6 +225,48 @@ class ScopeForecast:
         """Whether this scope has ever been Live, in any segment."""
         return self._reached_live
 
+    def elapsed_at(self, now: float) -> float:
+        """Return the seconds since the current segment started, as of ``now``.
+
+        A running scope's elapsed time counts on from its latest record by the time
+        received since it, so a ``phase()``, which writes only when it starts and ends,
+        has the right elapsed time while the work inside it runs. An ended scope keeps
+        the elapsed time of its last record, and so does a Stale one, which also keeps
+        the estimate of its last record.
+
+        Parameters
+        ----------
+        now : float
+            Current time on the clock used for ``received_at``.
+
+        Returns
+        -------
+        float
+            Seconds since the segment started.
+        """
+        if self._ended is not None or not self._receipts or (self._live and self._is_stale(now)):
+            return self._elapsed
+        return self._elapsed + max(now - self._receipts[-1], 0.0)
+
+    def seconds_per_unit(self) -> float | None:
+        """Return the mean seconds per unit over the current segment's records.
+
+        Measured from the segment's first record with a count to its latest, so a resumed
+        scope counts only the units done in this run.
+
+        Returns
+        -------
+        float or None
+            Seconds per unit, or ``None`` before the segment has made any progress.
+        """
+        if self._completed is None:
+            return None
+        units = self._completed - self._baseline_completed
+        seconds = self._elapsed - self._baseline_elapsed
+        if units <= 0 or seconds <= 0:
+            return None
+        return seconds / units
+
     def observe(self, record: Record, received_at: float) -> None:
         """Take one record into account.
 
@@ -394,7 +436,8 @@ class JobEstimate:
         ``"user"`` (the expected runtime the user supplied). ``None`` without an estimate.
     partial : bool
         Whether the estimate covers only the phases known so far (no root scope and no
-        complete plan).
+        complete plan), or rests on a running ``phase()`` timed only by the loop running
+        inside it, after which more loops may follow.
     scopes : dict of str to Forecast
         Every scope's own forecast. A fresh dict per snapshot; because of it a
         :class:`JobEstimate` is not hashable.
@@ -485,40 +528,43 @@ class JobForecast:
         forecasts = {name: scope.snapshot(now) for name, scope in self._scopes.items()}
         ended = self._ended_state(forecasts)
         if ended is None:
-            forecasts = self._with_child_estimates(forecasts)
+            forecasts = self._with_child_estimates(forecasts, now)
         if ended is not None:
             remaining = 0.0 if ended is ForecastState.COMPLETE else None
             return JobEstimate(ended, remaining_seconds=remaining, scopes=forecasts)
-        estimate = self._pick(forecasts) or self._without_estimate(now, forecasts)
+        estimate = self._pick(forecasts, now) or self._without_estimate(now, forecasts)
         if estimate.source in ("root", "plan") and self._rests_on_partial():
             estimate = replace(estimate, partial=True)
         return replace(estimate, scopes=forecasts)
 
-    def _with_child_estimates(self, forecasts: Mapping[str, Forecast]) -> dict[str, Forecast]:
+    def _with_child_estimates(self, forecasts: Mapping[str, Forecast], now: float) -> dict[str, Forecast]:
         """Give a running scope with no estimate of its own one built from its children.
 
-        A ``phase()`` counts as one unit of work, and a parent such as ``Epochs`` (one unit
-        per child) reports too rarely to have a rate of its own early on; the scopes inside
-        them do. A counted parent's estimate is the running child's remaining time plus,
-        for each unit still to come, the duration of one child. A parent with no count of
-        its own (a phase, or no total) cannot know how many children are still to come, so
-        its estimate is only the running child's and is marked partial.
+        A ``phase()`` counts as one unit of work, and a parent such as ``Epochs`` reports
+        too rarely to have a rate of its own early on; the scopes inside them do. A counted
+        parent's estimate is the time one unit takes times the units still to come, less
+        the time already spent in the running unit, and never less than the running
+        child's remaining time. Once a unit has finished, the parent's own records time a
+        unit, however many children it holds; before that, the running unit counts as the
+        time it has taken so far plus the running child's remaining time. A parent with no
+        count of its own (a phase, or no total) cannot know how many children are still to
+        come, so its estimate is only the running child's and is marked partial.
         """
         effective = dict(forecasts)
         self._partial_scopes: set[str] = set()
         # One pass per level of nesting: repeat until no scope gains an estimate.
         for _ in range(len(effective)):
-            if not self._borrow_once(effective):
+            if not self._borrow_once(effective, now):
                 break
         return effective
 
-    def _borrow_once(self, effective: dict[str, Forecast]) -> bool:
+    def _borrow_once(self, effective: dict[str, Forecast], now: float) -> bool:
         changed = False
         for name, forecast in list(effective.items()):
             if forecast.state in _ENDED_STATES or self._has_estimate(forecast):
                 continue
             children = [child for child, scope in self._scopes.items() if scope.parent == name]
-            borrowed = self._from_children(forecast, children, effective)
+            borrowed = self._from_children(name, children, effective, now)
             if borrowed is not None:
                 effective[name] = borrowed[0]
                 if borrowed[1]:
@@ -527,31 +573,33 @@ class JobForecast:
         return changed
 
     def _from_children(
-        self, parent: Forecast, children: list[str], effective: Mapping[str, Forecast]
+        self, name: str, children: list[str], effective: Mapping[str, Forecast], now: float
     ) -> tuple[Forecast, bool] | None:
         """Return the parent's estimate from its children and whether it is partial, if any."""
+        parent = effective[name]
         running = [child for child in children if self._has_estimate(effective[child])]
         finished = [child for child in children if effective[child].state is ForecastState.COMPLETE]
         counted = parent.total is not None and parent.total > 1 and parent.completed is not None
-        if running:
-            longest = max(running, key=lambda child: effective[child].remaining_seconds or 0.0)
-            now = effective[longest]
-            remaining = now.remaining_seconds or 0.0
-            per_unit = self._scopes[longest].elapsed + remaining
-            stale = any(effective[child].state is ForecastState.STALE for child in running)
-        elif counted and finished:
-            # Between two children: the next has not reported yet, so use the finished ones.
-            remaining = 0.0
-            per_unit = sum(self._scopes[child].elapsed for child in finished) / len(finished)
-            stale = False
-        else:
+        if not running and not (counted and finished):
             return None
-        partial = not counted
-        if counted:
-            units_after = max((parent.total or 0.0) - (parent.completed or 0.0) - (1 if running else 0), 0.0)
-            remaining += units_after * per_unit
+        child_left = max((effective[child].remaining_seconds or 0.0 for child in running), default=0.0)
+        stale = any(effective[child].state is ForecastState.STALE for child in running)
         state = ForecastState.STALE if stale else ForecastState.LIVE
-        return replace(parent, state=state, remaining_seconds=remaining), partial
+        if not counted:
+            return replace(parent, state=state, remaining_seconds=child_left), True
+        scope = self._scopes[name]
+        per_unit = scope.seconds_per_unit()
+        if per_unit is None:
+            # No unit finished yet: this one has taken at least its time so far plus
+            # what the running child has left.
+            in_unit = scope.elapsed_at(now)
+            per_unit = in_unit + child_left
+        else:
+            # Units left and the time since are both measured from the parent's latest record.
+            in_unit = scope.elapsed_at(now) - scope.elapsed
+        units_left = max((parent.total or 0.0) - (parent.completed or 0.0), 0.0)
+        remaining = max(units_left * per_unit - in_unit, child_left)
+        return replace(parent, state=state, remaining_seconds=remaining), False
 
     def _rests_on_partial(self) -> bool:
         partial = getattr(self, "_partial_scopes", set())
@@ -585,11 +633,11 @@ class JobForecast:
             return ForecastState.COMPLETE
         return None
 
-    def _pick(self, forecasts: Mapping[str, Forecast]) -> JobEstimate | None:
+    def _pick(self, forecasts: Mapping[str, Forecast], now: float) -> JobEstimate | None:
         root = self._root()
         if root is not None:
             return self._from_root(forecasts[root])
-        return self._from_plan(forecasts) or self._from_concurrent(forecasts)
+        return self._from_plan(forecasts, now) or self._from_concurrent(forecasts)
 
     @staticmethod
     def _has_estimate(forecast: Forecast) -> bool:
@@ -600,7 +648,7 @@ class JobForecast:
             return None
         return JobEstimate(forecast.state, forecast.remaining_seconds, source="root")
 
-    def _from_plan(self, forecasts: Mapping[str, Forecast]) -> JobEstimate | None:
+    def _from_plan(self, forecasts: Mapping[str, Forecast], now: float) -> JobEstimate | None:
         if not self._plan:
             return None
         tally = _PlanTally()
@@ -608,7 +656,7 @@ class JobForecast:
             forecast = forecasts.get(name)
             if forecast is None:
                 tally.unstarted_weight += weight
-            elif not self._tally_phase(tally, weight, forecast, self._scopes[name].elapsed):
+            elif not self._tally_phase(tally, weight, forecast, self._scopes[name].elapsed_at(now)):
                 return None
         if tally.unstarted_weight > 0:
             if tally.known_weight <= 0 or tally.known_seconds <= 0:

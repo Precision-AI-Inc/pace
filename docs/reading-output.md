@@ -213,7 +213,7 @@ reader needs to know when it received a line to tell a stalled job from a slow o
 | `state` | A `ForecastState`, below. |
 | `remaining_seconds` | Seconds until the job finishes, or `None` when there is no estimate. |
 | `source` | Where the number comes from: `"root"`, `"plan"`, `"concurrent"`, `"user"`, or `None`. |
-| `partial` | `True` when the number covers only the scopes seen so far (no root and no complete plan). |
+| `partial` | `True` when the number covers only the scopes seen so far (no root and no complete plan), or rests on a running `phase()` timed only by the loop inside it. |
 | `scopes` | A dict of each scope's own `Forecast` (`state`, `remaining_seconds`, `rate`, `completed`, `total`, `unit`). |
 
 The states:
@@ -250,9 +250,10 @@ How the number is chosen, in order:
    added on top of their parent.
 
 A plan is only usable when every running phase has an estimate. A running scope with
-no estimate of its own takes one from its children: a counted parent (one unit per
-child) adds the children still to come, while a `phase()` takes only the running
-child's estimate and the job estimate is then marked `partial=True`
+no estimate of its own takes one from its children: a counted parent times its units
+(from its own records once one has finished, so a unit may hold several children, such
+as a training and a validation loop) and adds the units still to come, while a `phase()`
+takes only the running child's estimate and the job estimate is then marked `partial=True`
 (see [Phases and a plan](progress.md#phases-and-a-plan)).
 
 Always show `partial=True` estimates as a lower bound, for example "at least 10 min
