@@ -220,10 +220,17 @@ def _count_fields(record: Record) -> list[str]:
         record.event is Event.FAIL and record.completed is not None
     ):
         fields.append(f"c={format_number(record.completed or 0.0)}")
-        fields.append(f"t={'?' if record.total is None else format_number(record.total)}")
+        fields.append(f"t={_format_total(record.total)}")
     if record.unit is not None and record.event is Event.START:
         fields.append(f"u={encode_value(_printable(record.unit, MAX_UNIT_CHARS))}")
     return fields
+
+
+def _format_total(total: float | None) -> str:
+    # A total too small to show at six decimal places would read as t=0, which no reader
+    # accepts (a total must be positive), so it is written as unknown instead.
+    text = "?" if total is None else format_number(total)
+    return "?" if text == "0" else text
 
 
 def _tail_fields(record: Record) -> list[str]:

@@ -146,3 +146,9 @@ def test_format_number_rejects_values_the_parser_would_reject() -> None:
 )
 def test_format_trailer_leaves_out_keys_the_event_may_not_carry(record: Record) -> None:
     assert parse_line(format_trailer(record)) is not None
+
+
+def test_a_total_too_small_to_write_is_written_as_unknown() -> None:
+    record = Record(scope="a", event=Event.UPDATE, seq=2, elapsed=1.0, completed=0, total=1e-7)
+    assert "t=?" in format_trailer(record)
+    assert parse_line(format_trailer(record)) is not None
