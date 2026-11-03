@@ -16,7 +16,7 @@ rank guard around messages that should appear once (``run_rank`` shows both kind
 To run without GPUs, this script starts itself twice as a child process with ``RANK=0`` and
 ``RANK=1``, the way a launcher would, and prints each child's output with a ``[rank N]``
 prefix. In a real job the launcher does this and you write only ``run_rank``. The rank is
-read when a scope is created, so a launcher sets it before the script starts. Setting
+read each time a line is written, so a launcher sets it before the script starts. Setting
 ``PACE_ALL_RANKS=1`` writes progress from every rank, which is only for debugging: scope ids
 are not qualified by rank.
 
