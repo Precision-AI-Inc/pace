@@ -31,6 +31,7 @@ What every pattern relies on:
 9. [Hugging Face Transformers and TRL](#9-hugging-face-transformers-and-trl)
 10. [Standard `logging`](#10-standard-logging)
 11. [Dependency declarations](#11-dependency-declarations)
+12. [A library call that takes a `tqdm` class (vLLM)](#12-a-library-call-that-takes-a-tqdm-class-vllm)
 
 ## 1. Plain loop, with tqdm
 
@@ -381,3 +382,31 @@ pinning style as its neighbours. The extras go in the same brackets.
 A repo that pins exact versions gets an exact pin: look up the version with
 `pip index versions precisionai-pace`. Note that a Dockerfile installing from a private or
 `--no-index` mirror needs Pace available there; flag it when the install fails.
+
+## 12. A library call that takes a `tqdm` class (vLLM)
+
+`LLM.generate(prompts, params)` and `LLM.chat(...)` run every prompt inside one call, so
+nothing written around the call reports progress until it returns. Both accept a `tqdm`
+class in `use_tqdm`; give them Pace's:
+
+```python
+from precisionai.pace.tqdm import PaceTqdm
+
+outputs = llm.generate(prompts, params, use_tqdm=PaceTqdm)
+```
+
+- No dependency is added: `PaceTqdm` is part of `precisionai-pace` and does not import `tqdm`.
+- vLLM opens two bars per call: `Rendering prompts` (it ends first), then
+  `Processed prompts`, the one that matters. Neither is a root by default. When one
+  `generate` or `chat` call is the whole job, mark the second as the root:
+
+  ```python
+  class Generation(PaceTqdm):
+      def __init__(self, *args, **kwargs):
+          super().__init__(*args, root=kwargs.get("desc") == "Processed prompts", **kwargs)
+  ```
+
+  Never mark both: the first root decides, and its end would complete the job.
+- Each call to `generate` opens new scopes (`processed-prompts`, `processed-prompts-2`, ...). A
+  job that calls it in a loop over batches should wrap the loop in one `progress(..., root=True)`
+  instead and leave the bars as plain scopes.

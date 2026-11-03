@@ -32,6 +32,7 @@ precisionai/pace/
   protocol.py      # Record, the [pace:1 ...] trailer, parse_line, LineSplitter
   forecast.py      # ScopeForecast, JobForecast
   lightning.py, transformers.py, _adapters.py   # framework callbacks (extras only)
+  tqdm.py          # PaceTqdm: stands in for the tqdm class where a library takes one (stdlib only)
   version.py       # installed package version
   __init__.py      # re-exports only — no logic
 docs/              # Sphinx (HTML + LaTeX/PDF); design.md is the specification

@@ -123,6 +123,63 @@ except Exception:
   (`enable_progress_bar=False` for the Lightning `Trainer`, `disable_tqdm=True` in
   `TrainingArguments`) and let Pace write the lines a scheduler reads.
 
+## Libraries that take a `tqdm` class (vLLM)
+
+Some libraries run a whole job inside one call and let you choose the progress-bar
+class they use. vLLM's `LLM.generate(..., use_tqdm=...)` and `LLM.chat(..., use_tqdm=...)`
+are the common case: you pass every prompt at once, and until the call returns there is
+nothing to report from your own code. Pass Pace's stand-in for the class instead of
+`True`:
+
+```python
+from vllm import LLM, SamplingParams
+
+from precisionai.pace.tqdm import PaceTqdm
+
+llm = LLM(model="Qwen/Qwen2.5-0.5B-Instruct")
+outputs = llm.generate(prompts, SamplingParams(max_tokens=128), use_tqdm=PaceTqdm)
+```
+
+`PaceTqdm` draws nothing. It opens a Pace scope with the total and description the library
+gives it, counts what the library counts, and ends the scope when the library closes it. It
+does not import `tqdm`, so nothing is added to your install. It supports what such a
+library calls (`update`, `n`, `total`, `refresh`, `close`, `reset`, `format_dict`, `postfix`,
+`set_description`, `set_postfix`, the `with` statement and iterating an iterable); any other
+`tqdm` method is accepted and ignored, so Pace never makes the library's call fail.
+`tqdm` arguments that only change how a bar looks (`leave`, `file`, `ncols`, ...) are ignored,
+and `disable=True` turns reporting off. A bar's postfix text, such as vLLM's tokens per
+second, is not written.
+
+What a scheduler sees:
+
+- vLLM opens two bars per call: `Rendering prompts` (as the prompts are tokenised) and then
+  `Processed prompts`, which is the generation itself. They become the scopes
+  `rendering-prompts` and `processed-prompts`; a second call to `generate` makes
+  `processed-prompts-2`, and so on. A scope opened inside `phase()` or `progress()` names it as
+  its parent.
+- Neither is a root by default. Without a root the estimate covers the current phase only and
+  is marked partial; see [Choosing a root scope](progress.md#choosing-a-root-scope). When one
+  `generate` call is the whole job, make the second bar the root. Mark one only: the
+  first root a reader sees decides, and its end completes the job.
+
+```python
+class Generation(PaceTqdm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, root=kwargs.get("desc") == "Processed prompts", **kwargs)
+
+
+outputs = llm.generate(prompts, params, use_tqdm=Generation)
+```
+
+- To set other options, use `functools.partial(PaceTqdm, scope="generate", logger=my_logger)`.
+- Closing a bar before its total was reached (an abandoned loop, a library that stops early)
+  writes `end` with the count reached, as `track()` does.
+
+The tests replay the calls vLLM 0.32 makes on the class (`format_dict["elapsed"]`, assigning
+`postfix`, `update(n)`, `refresh()` and `close()`). A library that needs more of `tqdm`
+(class-level locks, `tqdm.pandas()`) is not covered. Hugging Face `datasets.map` uses its own
+bar class internally and takes none from you.
+
 ## Without a callback
 
 Any other training loop, or a framework without an adapter, uses the same functions

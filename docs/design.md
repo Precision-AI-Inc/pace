@@ -335,8 +335,15 @@ defaults.
   a child scope. Restores resume state from the checkpoint's global step.
 - **Transformers / TRL**: a `TrainerCallback` reporting `state.global_step` against
   `state.max_steps`, rank 0 only.
-- **tqdm**: a migration guide rather than a shim. `track()` takes the same core
-  arguments (`total`, `desc` as `description`, `unit`).
+- **tqdm**: a migration guide for code you own (`track()` takes the same core
+  arguments: `total`, `desc` as `description`, `unit`), and `PaceTqdm`, a class that stands in
+  for `tqdm` where a library takes the bar class from its caller (vLLM's `use_tqdm=`). It
+  subclasses nothing and imports nothing: it implements the calls such libraries make
+  (`update`, `n`, `total`, `refresh`, `close`, `format_dict`, ...) on one Pace scope that starts
+  when the object is created and ends when it is closed, and ignores everything about how a bar
+  looks. Subclassing the real `tqdm` was rejected: its constructor draws, starts a monitor
+  thread and writes a newline on `close`, and its disabled mode skips the attributes callers
+  read, so silencing it takes more code than the stand-in and ties Pace to `tqdm` internals.
 
 ## Security
 

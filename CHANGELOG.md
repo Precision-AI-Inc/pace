@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `precisionai.pace.tqdm.PaceTqdm`, a stand-in for the `tqdm` class that reports to Pace instead of drawing a bar. Pass it where a library takes a progress-bar class, such as `LLM.generate(prompts, params, use_tqdm=PaceTqdm)` in vLLM, so a job that runs entirely inside one call still reports progress. It needs no `tqdm` install.
+
 ## [0.0.1] - 2026-11-03
 
 ### Added
