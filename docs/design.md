@@ -1,7 +1,7 @@
 # Design
 
-Status: **draft for review**, before any logger code is written. Thresholds marked
-*initial* are starting points to be tuned against real runs, not commitments.
+Status: **reviewed**, see [Decisions](#decisions). Thresholds marked *initial* are
+starting points to be tuned against real runs, not commitments.
 
 ## Goals
 
@@ -32,7 +32,8 @@ Status: **draft for review**, before any logger code is written. Thresholds mark
 | Runtime dependencies | none in the core |
 | Extras (planned) | `[lightning]`, `[transformers]`, `[all]` |
 
-The core imports only the standard library. It is installed into users' training
+Everything lives in this one repository and package: the logger, the progress APIs,
+the line parser, the estimator and the framework adapters. The core imports only the standard library. It is installed into users' training
 images and into other packages (such as data-transfer tooling), so it must never
 add to them. Framework adapters live in their own modules and import their framework
 only there; their extras inherit that framework's own Python minimum.
@@ -73,7 +74,7 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
   Opt-in, so importing Pace never changes another library's logging on its own.
 - **Configuration**: keyword arguments, with environment-variable overrides so a
   scheduler can adjust behaviour without code changes: `PACE_LEVEL`, `PACE_STREAM`
-  (`stderr` default, or `stdout`), `PACE_COLOR` (`auto`/`always`/`never`),
+  (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`),
   `PACE_MIN_INTERVAL`, `PACE_HEARTBEAT`.
 - **Distributed training**: rank is read from `RANK`, then `LOCAL_RANK`, then
   `SLURM_PROCID`. Only rank 0 emits progress by default, and the adapters report
@@ -81,10 +82,25 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
 
 ### Output stream
 
-Records go to **stderr** by default, the same convention as Loguru, `tqdm` and the
-standard library, so a program's own stdout stays clean. A consumer reads both
-streams and removes duplicates using the per-scope sequence number (`q=`), so a
-user who mirrors output to both streams is not double-counted.
+Records go to **stdout** by default. Progress and status are the job's normal
+output, not diagnostics, and stdout is where people look for them. A program whose
+stdout is data piped to another program can set `PACE_STREAM=stderr`. A consumer
+reads both streams and removes duplicates using the per-scope sequence number
+(`q=`), so a user who mirrors output to both streams is not double-counted.
+
+Every line is flushed as it is written. Python block-buffers stdout when it is not a
+terminal, which would otherwise hold progress back for minutes in a container.
+
+### Characters
+
+- The trailer is plain ASCII, so it reads the same on every platform and terminal.
+- The readable part uses Unicode (`·`, bar glyphs) only when the stream's encoding
+  is UTF-8, and plain ASCII otherwise (for example a Windows console on a legacy
+  code page).
+- Writing never raises because of encoding: an unencodable character is replaced,
+  never allowed to crash the program.
+- Colour is used only on a terminal, never inside the trailer, and is turned off by
+  `NO_COLOR` or `PACE_COLOR=never`.
 
 ### Emission rate
 
@@ -95,9 +111,12 @@ container, a log file), Pace writes a new line only when all of these hold:
 - at least 1% more of the total done, **or** `PACE_HEARTBEAT` seconds have passed
   since the last line (*initial*: 120 s).
 
-`start`, `end` and `fail` records are always written immediately, and every line is
-flushed as it is written. A long job therefore writes a few lines a minute per
-scope. The heartbeat is what lets a consumer tell a slow job from a stalled one.
+`start`, `end` and `fail` records are always written immediately. The limit is set by
+time, never by step count, so a run with a million steps writes no more than one
+with a thousand. For example, a 10-hour run reaches each 1% about every 6 minutes,
+so it writes about 100 progress lines plus a heartbeat every 2 minutes in between:
+roughly 300 lines, or 30 an hour. The heartbeat is what lets a consumer tell a slow
+job from a stalled one. The values will be tuned against real runs.
 
 ## Line format, version 1
 
@@ -225,10 +244,15 @@ remaining_time = max(total - completed, 0) / robust_rate
   duplicated cases. Consumers run the same fixtures against their integration.
 - Every release is tested on Python 3.8 through 3.13.
 
-## Open for review
+## Decisions
 
-1. The trailer syntax: `[pace:1 ...]` at the end of the line.
-2. stderr as the default stream.
-3. The *initial* thresholds: 15 s minimum interval, 120 s heartbeat, the
-   Learning → Live rule, and the Stale rule.
-4. Shipping the estimator in the package as well as the parser.
+Reviewed 2026-11-03.
+
+1. **Trailer syntax**: `[pace:1 ...]` at the end of the line, plain ASCII. The
+   readable part falls back to ASCII on non-UTF-8 streams and never crashes on
+   encoding (see [Characters](#characters)).
+2. **Default stream**: stdout. Progress is normal output, not a diagnostic.
+3. **Thresholds**: the *initial* values stand, to be tuned against real runs. The
+   limit is time-based, so step count does not increase volume.
+4. **One package**: the parser, estimator, logger and adapters all ship in
+   `precisionai-pace`; there is no separate repository for any of them.
