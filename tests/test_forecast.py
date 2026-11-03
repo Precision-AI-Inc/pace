@@ -955,3 +955,30 @@ def test_a_counted_parent_ignores_a_short_finished_child_once_it_has_a_pace() ->
     save.end()
     est = job.snapshot(1100.0)
     assert est.remaining_seconds == pytest.approx(30 * 10.0)
+
+
+def test_a_stale_borrowed_estimate_stays_put() -> None:
+    # The loop inside a phase stops reporting: the plan's estimate goes Stale and keeps
+    # the number it had, however long the reader keeps asking.
+    job = JobForecast()
+    job.observe(_plan(("train", 0.9), ("evaluate", 0.1)), 1000.0)
+    Run(job, "train", total=1.0).start()
+    loop = Run(job, "batches", total=1000.0, parent="train")
+    loop.start()
+    loop.ticks(30, 15.0, 2.0)
+    first = job.snapshot(loop.now + 1000.0)
+    later = job.snapshot(loop.now + 5000.0)
+    assert first.state is ForecastState.STALE
+    assert later.remaining_seconds == pytest.approx(first.remaining_seconds)
+    assert later.remaining_seconds == pytest.approx(50.0 + 0.1 * 500.0 / 0.9)
+
+
+def test_a_counted_parent_with_a_stale_child_stays_put() -> None:
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    first = _epoch(job, 0, 1000.0, "epochs")
+    stale = job.snapshot(first.now + 1000.0)
+    assert stale.state is ForecastState.STALE
+    assert stale.remaining_seconds == pytest.approx(410.0 + 2 * 500.0)
+    assert job.snapshot(first.now + 5000.0).remaining_seconds == pytest.approx(stale.remaining_seconds)

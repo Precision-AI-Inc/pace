@@ -225,6 +225,11 @@ class ScopeForecast:
         """Whether this scope has ever been Live, in any segment."""
         return self._reached_live
 
+    @property
+    def last_received(self) -> float | None:
+        """When the latest record of the current segment was received, if any."""
+        return self._receipts[-1] if self._receipts else None
+
     def elapsed_at(self, now: float) -> float:
         """Return the seconds since the current segment started, as of ``now``.
 
@@ -552,6 +557,9 @@ class JobForecast:
         """
         effective = dict(forecasts)
         self._partial_scopes: set[str] = set()
+        # For a borrowed estimate that went Stale: the time its source last reported.
+        # Its clock stops there, as a Stale scope's own estimate does.
+        self._frozen_at: dict[str, float] = {}
         # One pass per level of nesting: repeat until no scope gains an estimate.
         for _ in range(len(effective)):
             if not self._borrow_once(effective, now):
@@ -583,8 +591,11 @@ class JobForecast:
         if not running and not (counted and finished):
             return None
         child_left = max((effective[child].remaining_seconds or 0.0 for child in running), default=0.0)
-        stale = any(effective[child].state is ForecastState.STALE for child in running)
-        state = ForecastState.STALE if stale else ForecastState.LIVE
+        stale_children = [child for child in running if effective[child].state is ForecastState.STALE]
+        state = ForecastState.STALE if stale_children else ForecastState.LIVE
+        if stale_children:
+            now = min(self._reported_at(child, now) for child in stale_children)
+            self._frozen_at[name] = now
         if not counted:
             return replace(parent, state=state, remaining_seconds=child_left), True
         scope = self._scopes[name]
@@ -600,6 +611,14 @@ class JobForecast:
         units_left = max((parent.total or 0.0) - (parent.completed or 0.0), 0.0)
         remaining = max(units_left * per_unit - in_unit, child_left)
         return replace(parent, state=state, remaining_seconds=remaining), False
+
+    def _reported_at(self, name: str, now: float) -> float:
+        """Return when a scope's estimate was last refreshed (``now`` while it is Live)."""
+        frozen = getattr(self, "_frozen_at", {}).get(name)
+        if frozen is not None:
+            return frozen
+        received = self._scopes[name].last_received
+        return received if received is not None else now
 
     def _rests_on_partial(self) -> bool:
         partial = getattr(self, "_partial_scopes", set())
@@ -656,7 +675,7 @@ class JobForecast:
             forecast = forecasts.get(name)
             if forecast is None:
                 tally.unstarted_weight += weight
-            elif not self._tally_phase(tally, weight, forecast, self._scopes[name].elapsed_at(now)):
+            elif not self._tally_phase(tally, weight, forecast, self._elapsed_for_plan(name, now)):
                 return None
         if tally.unstarted_weight > 0:
             if tally.known_weight <= 0 or tally.known_seconds <= 0:
@@ -664,6 +683,10 @@ class JobForecast:
             tally.remaining += tally.unstarted_weight * tally.known_seconds / tally.known_weight
         state = ForecastState.STALE if tally.stale else ForecastState.LIVE
         return JobEstimate(state, tally.remaining, source="plan")
+
+    def _elapsed_for_plan(self, name: str, now: float) -> float:
+        frozen = getattr(self, "_frozen_at", {}).get(name)
+        return self._scopes[name].elapsed_at(now if frozen is None else frozen)
 
     def _tally_phase(self, tally: _PlanTally, weight: float, forecast: Forecast, elapsed: float) -> bool:
         if forecast.state is ForecastState.COMPLETE:
