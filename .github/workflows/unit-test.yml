@@ -40,3 +40,36 @@ jobs:
 
       - name: Coverage summary
         run: python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
+
+  # The core matrix above installs only ".[dev]", so there the adapter tests skip and
+  # pyproject.toml leaves the adapter modules out of the coverage count. This job installs
+  # the frameworks (CPU torch, so no CUDA wheels), runs the adapter tests against real tiny
+  # training runs and holds the adapter modules to the same 90% floor on their own.
+  adapters:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install CPU-only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,all]" trl  # trl only backs the TRL test
+
+      - name: Run adapter tests
+        run: >
+          python -m pytest tests/test_adapter_support.py tests/test_lightning.py tests/test_transformers.py tests/test_trl.py
+          -q --tb=short --no-header -o addopts=""
+          --cov --cov-config=.coveragerc-adapters --cov-report=term-missing --cov-report=xml:coverage-adapters.xml
+
+      - name: Coverage summary
+        run: python -m coverage report --rcfile=.coveragerc-adapters --format=markdown >> $GITHUB_STEP_SUMMARY

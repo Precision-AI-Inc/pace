@@ -1,0 +1,20 @@
+# Coverage for the framework adapters only, used by the `adapters` job in
+# .github/workflows/unit-test.yml. The core matrix runs without Lightning or
+# Transformers installed, so pyproject.toml leaves these two modules out of its
+# coverage run and this file measures them where the frameworks are present.
+[run]
+include =
+    */precisionai/pace/lightning.py
+    */precisionai/pace/transformers.py
+branch = true
+relative_files = true
+
+[report]
+fail_under = 90
+show_missing = true
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise ImportError
+    except ImportError
+    if TYPE_CHECKING:
