@@ -211,6 +211,25 @@ remaining_time = max(total - completed, 0) / robust_rate
   across a restart. With `res=1`, the remaining work starts from the resumed `c`.
 - A changed `t` replaces the total. If the rate history is still valid it is kept.
 
+### Rate smoothing and plans (implementation)
+`ForecastConfig` holds every threshold; the values here are the defaults.
+- An interval with no progress (`c` unchanged, a heartbeat) is not measured; the
+next interval with progress spans back to the last one that had it. Intervals
+with `Δe <= 0` are skipped.
+- The first intervals are averaged plainly (`1/n`); after that the weight of a
+new interval is 0.3.
+- An interval rate more than 3x above or below the median of the last 9 accepted
+rates is an outlier and is left out (a pause for evaluation or a checkpoint).
+Three outliers in a row on the same side are a real change in speed: the average
+restarts from them.
+- A plan's finished phases count 0, its active phase its own estimate, and each
+phase not yet started `weight x s`, where `s` is the (elapsed + remaining)
+seconds of the finished and active phases divided by their weights. If a phase
+in the plan has no usable estimate, or nothing has been measured to derive `s`,
+the plan is not used and the top-level scopes decide.
+- Without a `root` scope or a plan, a job is Complete only when every top-level
+scope has ended; the logger-side process end is the reliable signal.
+
 ### Several scopes
 
 - A `root=1` scope is the job's estimate when present.
