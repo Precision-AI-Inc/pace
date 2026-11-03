@@ -272,9 +272,12 @@ finished plan proves the job is done.
 - Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
 - A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
   the other stream never overrides a newer one.
-- A running scope with no estimate of its own, such as a `phase()` (one unit of work),
-  takes the longest estimate among its children, so `with phase("train"): track(...)`
-  gives the job an estimate for the whole of training.
+- A running scope with no estimate of its own takes one from its children. A counted
+  parent (one unit per child, such as `Epochs` of 3) adds, to the running child's
+  remaining time, one child's duration for each unit still to come; between two
+  children it uses the average of the finished ones. A `phase()` or a parent with no
+  total cannot know how many children are still to come, so it takes only the running
+  child's estimate and the job estimate is marked partial (a lower bound).
 
 ## Framework adapters
 

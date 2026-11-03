@@ -250,8 +250,9 @@ How the number is chosen, in order:
    added on top of their parent.
 
 A plan is only usable when every running phase has an estimate. A running scope with
-no estimate of its own, such as a `phase()` that only counts 0 of 1, takes the longest
-estimate among its children, so a phase wrapping a counted loop still has one
+no estimate of its own takes one from its children: a counted parent (one unit per
+child) adds the children still to come, while a `phase()` takes only the running
+child's estimate and the job estimate is then marked `partial=True`
 (see [Phases and a plan](progress.md#phases-and-a-plan)).
 
 Always show `partial=True` estimates as a lower bound, for example "at least 10 min

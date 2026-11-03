@@ -193,9 +193,11 @@ Rules that make this work:
 - **The running stage needs a count somewhere.** A `phase(...)` is a scope with total 1
   that only reports 0 of 1 at the start and 1 of 1 at the end, so it has no rate of its
   own. When the long stage is `with phase("Train"): for ... in track(...)`, the reader
-  uses the estimate of the loop inside the phase. Putting the count on the stage the
-  plan names (`track(..., description="Train")`, as above) works too. A phase with no
-  counted scope inside it has no estimate until it ends.
+  uses the estimate of the loop inside the phase. If the phase holds several loops
+  one after another (one per epoch), that estimate covers only the running loop and
+  is reported as a lower bound; count the whole stage in one scope instead, for
+  example one `progress()` over epochs × batches. A phase with no counted scope
+  inside it has no estimate until it ends.
 - Weights are relative. Entries without a weight share what the others leave of 1.0 equally.
   Pass `Phase` objects (`prep = phase("Preprocess", weight=0.05)`, then
   `plan([prep, ("Train", 0.9)])`) if you prefer the weight next to the stage.

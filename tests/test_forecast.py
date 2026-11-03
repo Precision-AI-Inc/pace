@@ -841,3 +841,48 @@ def test_a_restart_forgets_the_previous_run_hierarchy() -> None:
     fresh.start(run="bbbb2222")
     assert fc.parent is None
     assert not fc.root
+
+
+def _epoch(job: JobForecast, index: int, offset: float, parent: str) -> Run:
+    run = Run(job, f"train-{index}", total=1000.0, offset=offset, parent=parent)
+    run.start()
+    run.ticks(6, 15.0, 2.0)
+    return run
+
+
+def test_a_counted_parent_adds_the_children_still_to_come() -> None:
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    first = _epoch(job, 0, 1000.0, "epochs")
+    est = job.snapshot(first.now)
+    # 410 s left in this epoch, then two more epochs of 90 + 410 = 500 s each.
+    assert est.source == "root"
+    assert not est.partial
+    assert est.remaining_seconds == pytest.approx(410.0 + 2 * 500.0)
+
+
+def test_between_children_a_counted_parent_uses_the_finished_ones() -> None:
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    first = _epoch(job, 0, 1000.0, "epochs")
+    first.t = 500.0
+    first.end()
+    epochs.t = 500.0
+    epochs.mark(500.0, 1.0)
+    est = job.snapshot(first.now)
+    assert est.state is ForecastState.LIVE
+    assert est.remaining_seconds == pytest.approx(2 * 500.0)
+
+
+def test_a_phase_with_several_children_is_only_a_lower_bound() -> None:
+    job = JobForecast()
+    job.observe(_plan(("train", 1.0)), 1000.0)
+    phase = Run(job, "train", total=1.0)
+    phase.start()
+    loop = _epoch(job, 0, 1000.0, "train")
+    est = job.snapshot(loop.now)
+    assert est.source == "plan"
+    assert est.partial
+    assert est.remaining_seconds == pytest.approx(410.0)
