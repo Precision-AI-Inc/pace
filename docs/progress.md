@@ -243,6 +243,11 @@ with progress(total=3, description="Epochs", unit="epoch", root=True) as epochs:
 A nested scope is never added on top of its parent's remaining time: the parent's
 own estimate already includes the time the children take.
 
+Until `Epochs` has an estimate of its own (it needs three updates spanning a minute), the reader builds one
+from the children. After the first epoch it uses the time the finished epochs took,
+however many loops each holds; during the first, the time so far plus what the running
+loop has left.
+
 Nesting follows the Python context. It works across function calls, but a scope
 opened in a new thread (or an `asyncio` task created before the parent opened) does
 not see its parent. If you need it, run the thread's body inside a copied context
@@ -313,7 +318,8 @@ The number is the same. What changes is what a scheduler may conclude from it:
 
 - **`partial=True`** means "this covers only the scopes seen so far". Work that has
   not started (an evaluation stage, an export) is not in the number, and the
-  scheduler should treat it as a lower bound.
+  scheduler should treat it as a lower bound. It is also set while a `phase()` is timed
+  by the loop running inside it, since more loops may follow in the same phase.
 - **Completion.** With a root, the job is complete when the root ends and failed
   when the root fails. Without one, a job is never called complete unless a plan lists every
   stage and they have all ended, because between two unplanned stages every scope seen

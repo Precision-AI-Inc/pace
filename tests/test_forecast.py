@@ -886,3 +886,170 @@ def test_a_phase_with_several_children_is_only_a_lower_bound() -> None:
     assert est.source == "plan"
     assert est.partial
     assert est.remaining_seconds == pytest.approx(410.0)
+
+
+def test_elapsed_counts_on_from_the_latest_record_until_the_scope_ends() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc, total=1.0)
+    run.start()
+    assert fc.elapsed_at(run.now + 40.0) == pytest.approx(40.0)
+    run.t = 50.0
+    run.end()
+    assert fc.elapsed_at(run.now + 40.0) == pytest.approx(50.0)
+
+
+def test_seconds_per_unit_counts_only_this_segments_units() -> None:
+    fc = ScopeForecast("epochs")
+    run = Run(fc, "epochs", total=10.0)
+    run.start(completed=7.0, resumed=True)
+    assert fc.seconds_per_unit() is None
+    run.mark(100.0, 9.0)
+    assert fc.seconds_per_unit() == pytest.approx(50.0)
+
+
+def test_a_plan_times_unstarted_phases_from_a_running_phase_with_a_loop_inside() -> None:
+    # Train is a phase around one loop; evaluate (weight 0.1) has not started. The
+    # phase's own records say e=0, so its elapsed time has to come from the clock.
+    job = JobForecast()
+    job.observe(_plan(("train", 0.9), ("evaluate", 0.1)), 1000.0)
+    phase = Run(job, "train", total=1.0)
+    phase.start()
+    loop = Run(job, "batches", total=1000.0, parent="train")
+    loop.start()
+    loop.ticks(30, 15.0, 2.0)  # 450 s in, 900 done, 50 s left
+    est = job.snapshot(loop.now)
+    assert est.source == "plan"
+    assert est.remaining_seconds == pytest.approx(50.0 + 0.1 * 500.0 / 0.9)
+
+
+def test_a_counted_parent_times_units_that_hold_several_children() -> None:
+    # Each epoch is a 500 s training loop and a 100 s validation loop.
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    train = _epoch(job, 0, 1000.0, "epochs")
+    train.t = 500.0
+    train.end()
+    val = Run(job, "val-0", total=100.0, offset=1500.0, parent="epochs")
+    val.start()
+    val.t = 100.0
+    val.end()
+    epochs.mark(600.0, 1.0)
+    second = _epoch(job, 1, 1600.0, "epochs")
+    est = job.snapshot(second.now)
+    # 90 s into the second epoch: 510 s of it left, then one more epoch of 600 s.
+    assert est.source == "root"
+    assert not est.partial
+    assert est.remaining_seconds == pytest.approx(510.0 + 600.0)
+
+
+def test_a_counted_parent_ignores_a_short_finished_child_once_it_has_a_pace() -> None:
+    # A one-off step child (saving, say) that took no time must not make the units
+    # still to come look free.
+    job = JobForecast()
+    root = Run(job, "job", total=40.0, root=True)
+    root.start()
+    root.mark(100.0, 10.0)
+    save = Run(job, "save", total=1.0, offset=1100.0, parent="job")
+    save.start()
+    save.end()
+    est = job.snapshot(1100.0)
+    assert est.remaining_seconds == pytest.approx(30 * 10.0)
+
+
+def test_a_stale_borrowed_estimate_stays_put() -> None:
+    # The loop inside a phase stops reporting: the plan's estimate goes Stale and keeps
+    # the number it had, however long the reader keeps asking.
+    job = JobForecast()
+    job.observe(_plan(("train", 0.9), ("evaluate", 0.1)), 1000.0)
+    Run(job, "train", total=1.0).start()
+    loop = Run(job, "batches", total=1000.0, parent="train")
+    loop.start()
+    loop.ticks(30, 15.0, 2.0)
+    first = job.snapshot(loop.now + 1000.0)
+    later = job.snapshot(loop.now + 5000.0)
+    assert first.state is ForecastState.STALE
+    assert later.remaining_seconds == pytest.approx(first.remaining_seconds)
+    assert later.remaining_seconds == pytest.approx(50.0 + 0.1 * 500.0 / 0.9)
+
+
+def test_a_counted_parent_with_a_stale_child_stays_put() -> None:
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    first = _epoch(job, 0, 1000.0, "epochs")
+    stale = job.snapshot(first.now + 1000.0)
+    assert stale.state is ForecastState.STALE
+    assert stale.remaining_seconds == pytest.approx(410.0 + 2 * 500.0)
+    assert job.snapshot(first.now + 5000.0).remaining_seconds == pytest.approx(stale.remaining_seconds)
+
+
+def test_between_children_a_silent_job_goes_stale_instead_of_counting_to_zero() -> None:
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    first = _epoch(job, 0, 1000.0, "epochs")
+    first.t = 500.0
+    first.end()
+    epochs.mark(500.0, 1.0)
+    # Within the parent's Stale limit (3 x its 500 s gap) the gap counts down; after it
+    # the estimate holds.
+    assert job.snapshot(1600.0).state is ForecastState.LIVE
+    assert job.snapshot(1600.0).remaining_seconds == pytest.approx(900.0)
+    stale = job.snapshot(1500.0 + 1501.0)
+    assert stale.state is ForecastState.STALE
+    assert stale.remaining_seconds == pytest.approx(1000.0)
+    assert job.snapshot(1500.0 + 10_000.0).remaining_seconds == pytest.approx(1000.0)
+
+
+def test_a_child_without_an_estimate_still_keeps_the_job_from_going_stale() -> None:
+    # Validation has no total, so it never has an estimate, but its lines show the job
+    # is alive between two training loops.
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    train = _epoch(job, 0, 1000.0, "epochs")
+    train.t = 300.0
+    train.end()
+    val = Run(job, "val-0", offset=1300.0, parent="epochs")
+    val.total = None
+    val.start()
+    val.ticks(3, 100.0, 1.0)
+    assert job.snapshot(val.now + 60.0).state is ForecastState.LIVE
+
+
+def test_between_children_the_parents_own_stale_limit_applies() -> None:
+    # Epochs report every 600 s, so a 300 s gap with no scope (a checkpoint save) is normal.
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    first = _epoch(job, 0, 1000.0, "epochs")
+    first.t = 300.0
+    first.end()
+    epochs.mark(600.0, 1.0)
+    second = _epoch(job, 1, 1600.0, "epochs")
+    second.t = 300.0
+    second.end()
+    assert job.snapshot(1900.0 + 241.0).state is ForecastState.LIVE
+    assert job.snapshot(1900.0 + 1801.0).state is ForecastState.STALE
+
+
+def test_a_large_parent_that_skipped_an_advance_is_timed_by_its_child() -> None:
+    # 200 epochs: the parent writes an advance only every 1% (2 epochs) or heartbeat, so
+    # its silence since the start does not mean the first epoch is still running.
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=200.0, root=True)
+    epochs.start()
+    second = _epoch(job, 1, 1500.0, "epochs")
+    est = job.snapshot(second.now)
+    assert est.remaining_seconds == pytest.approx(410.0 + 199 * 500.0)
+
+
+def test_seconds_per_unit_restarts_when_the_count_goes_backwards() -> None:
+    fc = ScopeForecast("epochs")
+    run = Run(fc, "epochs", total=10.0)
+    run.start()
+    run.mark(300.0, 3.0)
+    run.mark(301.0, 1.0)
+    run.mark(401.0, 2.0)
+    assert fc.seconds_per_unit() == pytest.approx(100.0)
