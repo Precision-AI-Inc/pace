@@ -85,8 +85,9 @@ Differences that bite:
 
 - **Positional arguments differ.** `tqdm(iterable, desc, total, ...)` takes `desc`
   second and `total` third. `track(iterable, description, unit, total)` takes
-  `unit` third. Use keywords. `track(it, "Train", 3000)` sets the unit to `3000`, and
-  a scope with a unit that is not a string writes no lines at all, with no error.
+  `unit` third. Use keywords. `track(it, "Train", 3000)` passes `3000` as the unit and
+  raises `TypeError: unit must be a string such as 'step', got 3000; pass the total as
+  total=...`.
 - **The keyword is `description`, not `desc`.** `track(it, desc="Train")` raises
   `TypeError`, as does any other `tqdm` argument not in the table.
 - **A bar is for people; a progress line is for a program.** Outside a terminal there

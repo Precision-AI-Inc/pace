@@ -249,8 +249,9 @@ How the number is chosen, in order:
    (`source="concurrent"`, `partial=True`). Nested scopes, those with a `parent`, are never
    added on top of their parent.
 
-A plan is only usable when every phase in it has an estimate. If the running phase is
-a `phase()` that only counts 0 of 1, the plan gives no estimate until that phase ends
+A plan is only usable when every running phase has an estimate. A running scope with
+no estimate of its own, such as a `phase()` that only counts 0 of 1, takes the longest
+estimate among its children, so a phase wrapping a counted loop still has one
 (see [Phases and a plan](progress.md#phases-and-a-plan)).
 
 Always show `partial=True` estimates as a lower bound, for example "at least 10 min

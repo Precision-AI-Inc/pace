@@ -779,3 +779,9 @@ def test_every_forecast_state_has_a_display(
     handle = progress(10, "States", "step", logger=log)
     handle.start()
     assert shown in stream.lines()[0]
+
+
+def test_a_number_passed_as_the_unit_is_an_error(log: Logger) -> None:
+    # tqdm(iterable, desc, total) ordering moved over to track() unchanged.
+    with pytest.raises(TypeError, match="pass the total as total="):
+        track(range(3), "Train", 3000, logger=log)  # type: ignore[arg-type]

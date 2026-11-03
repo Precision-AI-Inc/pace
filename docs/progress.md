@@ -190,13 +190,12 @@ Rules that make this work:
   `scope="train-steps"` to the loop, the plan must list `train-steps`.
   Two entries with the same name become `train` and `train-2`, like the scopes
   they will match.
-- **The running stage needs a scope with a count.** A `phase(...)` is a scope with total 1
-  that only reports 0 of 1 at the start and 1 of 1 at the end. It cannot say how far
-  through it is. If the long stage is `with phase("Train"): for ... in track(...)`, the
-  nested loop's estimate is not used for the plan, and the reader has no estimate
-  until the phase ends. Put the count on the stage the plan names:
-  `track(..., description="Train")` or `progress(..., scope="train")`, as above. Use
-  `phase` for stages that are short, or that you want only to group scopes under.
+- **The running stage needs a count somewhere.** A `phase(...)` is a scope with total 1
+  that only reports 0 of 1 at the start and 1 of 1 at the end, so it has no rate of its
+  own. When the long stage is `with phase("Train"): for ... in track(...)`, the reader
+  uses the estimate of the loop inside the phase. Putting the count on the stage the
+  plan names (`track(..., description="Train")`, as above) works too. A phase with no
+  counted scope inside it has no estimate until it ends.
 - Weights are relative. Entries without a weight share what the others leave of 1.0 equally.
   Pass `Phase` objects (`prep = phase("Preprocess", weight=0.05)`, then
   `plan([prep, ("Train", 0.9)])`) if you prefer the weight next to the stage.

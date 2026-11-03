@@ -124,6 +124,11 @@ class Scope:
         resumed: bool = False,
         logger: Logger | None = None,
     ) -> None:
+        # tqdm takes (iterable, desc, total) and track takes (iterable, description, unit),
+        # so a migrated call can pass the total as the unit. Every record of such a scope
+        # would then be dropped silently; fail loudly at the call instead.
+        if not isinstance(unit, str):
+            raise TypeError(f"unit must be a string such as 'step', got {unit!r}; pass the total as total=...")
         self._out = logger or default_logger
         base = derive_scope_id(description) if scope is None else validate_scope_id(scope)
         self.id = self._out.claim_scope(base)

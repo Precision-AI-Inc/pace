@@ -218,8 +218,11 @@ remaining_time = max(total - completed, 0) / robust_rate
 - **Learning → Live** (*initial*): at least 60 s observed **and** at least 3 update
   intervals **and** at least 1% of the total done.
 - **Stale** (*initial*): no record for `max(3 × median interval, 2 × heartbeat)`.
-- A `start` for a scope already seen begins a new segment; rates are never averaged
-  across a restart. With `res=1`, the remaining work starts from the resumed `c`.
+- A `start` for a scope from a new run (a different `run` id, or after `q=1` when there
+  is no run id) begins a new segment; rates are never averaged across a restart. The
+  segment's rate is measured from the `c` on its `start`, so a resumed scope that
+  starts at its restored count measures only the work left. `res=1` itself is
+  informational: it tells a reader the scope resumed, and changes no arithmetic.
 - A changed `t` replaces the total. If the rate history is still valid it is kept.
 - While Live, the remaining time counts down between records by the time since the
   latest one. A Stale scope keeps its last estimate unchanged.
@@ -287,8 +290,10 @@ finished plan proves the job is done.
 ## Testing
 
 - Conformance fixtures live in `tests/fixtures/protocol/`: input lines with their
-  expected parse results, including malformed, oversized, ANSI-coloured, split and
-  duplicated cases. Consumers run the same fixtures against their integration.
+  expected parse results, including malformed, oversized and ANSI-coloured lines.
+  They cover parsing one line at a time; splitting byte chunks into lines and removing
+  duplicates are tested in Python only. The fixtures are not shipped in the package;
+  readers in other languages take them from the repository. Consumers run the same fixtures against their integration.
 - Every release is tested on Python 3.8 through 3.13.
 
 ## Decisions
