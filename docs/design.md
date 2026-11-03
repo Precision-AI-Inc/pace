@@ -226,11 +226,6 @@ remaining_time = max(total - completed, 0) / robust_rate
 - Known limitation: a pause that recurs (evaluation every N steps) is discounted from
   the rate like a one-off pause, so the estimate is optimistic by the total of the
   pauses still to come.
-- While Live, the remaining time counts down between records by the time since the
-  latest one. A Stale scope keeps its last estimate unchanged.
-- Known limitation: a pause that recurs (evaluation every N steps) is discounted from
-  the rate like a one-off pause, so the estimate is optimistic by the total of the
-  pauses still to come.
 
 ### Rate smoothing and plans (implementation)
 `ForecastConfig` holds every threshold; the values here are the defaults.
@@ -248,8 +243,8 @@ phase not yet started `weight x s`, where `s` is the (elapsed + remaining)
 seconds of the finished and active phases divided by their weights. If a phase
 in the plan has no usable estimate, or nothing has been measured to derive `s`,
 the plan is not used and the top-level scopes decide.
-- Without a `root` scope or a plan, a job is Complete only when every top-level
-scope has ended; the logger-side process end is the reliable signal.
+- Completion without a root follows the rule under "Several scopes" below: only a
+finished plan proves the job is done.
 
 ### Several scopes
 
@@ -267,14 +262,9 @@ scope has ended; the logger-side process end is the reliable signal.
 - Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
 - A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
   the other stream never overrides a newer one.
-- **Completion and failure.** With a root, the root alone decides: the job is complete
-  or failed when the root is. Without one, a failed top-level scope fails the job, but
-  the job is never called complete unless a plan lists every phase and all of them
-  have ended: between two unplanned phases every scope seen so far has ended, yet
-  more work may follow. A scheduler should treat process exit as the real end.
-- Concurrent scopes: if any contributing scope is Stale, the combined estimate is Stale.
-- A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from
-  the other stream never overrides a newer one.
+- A running scope with no estimate of its own, such as a `phase()` (one unit of work),
+  takes the longest estimate among its children, so `with phase("train"): track(...)`
+  gives the job an estimate for the whole of training.
 
 ## Framework adapters
 

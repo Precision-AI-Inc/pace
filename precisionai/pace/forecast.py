@@ -373,6 +373,9 @@ class ScopeForecast:
         return remaining if math.isfinite(remaining) else None
 
 
+_ENDED_STATES = (ForecastState.COMPLETE, ForecastState.FAILED)
+
+
 @dataclass(frozen=True)
 class JobEstimate:
     """A point-in-time estimate for one job (one process run).
@@ -478,11 +481,39 @@ class JobForecast:
         """
         forecasts = {name: scope.snapshot(now) for name, scope in self._scopes.items()}
         ended = self._ended_state(forecasts)
+        if ended is None:
+            forecasts = self._with_child_estimates(forecasts)
         if ended is not None:
             remaining = 0.0 if ended is ForecastState.COMPLETE else None
             return JobEstimate(ended, remaining_seconds=remaining, scopes=forecasts)
         estimate = self._pick(forecasts) or self._without_estimate(now, forecasts)
         return replace(estimate, scopes=forecasts)
+
+    def _with_child_estimates(self, forecasts: Mapping[str, Forecast]) -> dict[str, Forecast]:
+        """Give a running scope with no estimate of its own the longest estimate among its children.
+
+        A ``phase()`` counts as one unit of work, so it has no rate while it runs; the
+        ``track()`` or ``progress()`` inside it does. Without this, a plan or a job whose
+        top level is a phase would have no estimate for the whole of that phase.
+        """
+        effective = dict(forecasts)
+        for name, forecast in forecasts.items():
+            if forecast.state in _ENDED_STATES or self._has_estimate(forecast):
+                continue
+            children = [
+                forecasts[child]
+                for child, scope in self._scopes.items()
+                if scope.parent == name and self._has_estimate(forecasts[child])
+            ]
+            if children:
+                longest = max(children, key=lambda child: child.remaining_seconds or 0.0)
+                stale = any(child.state is ForecastState.STALE for child in children)
+                effective[name] = replace(
+                    forecast,
+                    state=ForecastState.STALE if stale else ForecastState.LIVE,
+                    remaining_seconds=longest.remaining_seconds,
+                )
+        return effective
 
     def _top_level(self) -> list[str]:
         return [name for name, scope in self._scopes.items() if scope.parent is None or scope.root]
