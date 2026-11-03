@@ -299,7 +299,10 @@ defaults.
   validation loop per epoch); before that, the running unit counts as the time it has
   taken so far plus the running child's remaining time. A `phase()` or a parent with no
   total cannot know how many children are still to come, so it takes only the running
-  child's estimate and the job estimate is marked partial (a lower bound).
+  child's estimate and the job estimate is marked partial (a lower bound). Such a
+  borrowed estimate is Stale when its running child is, or, between two children, when
+  neither the parent nor a finished child has reported for twice the heartbeat; it then
+  keeps the number it had when the last of them reported.
 - A running scope's elapsed time counts on from its latest record, by the time
   received since it. A `phase()` writes only when it starts and ends, so this is what
   gives a running phase its elapsed time, which a plan uses to time the phases not yet

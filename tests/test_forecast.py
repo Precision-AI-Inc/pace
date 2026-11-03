@@ -982,3 +982,20 @@ def test_a_counted_parent_with_a_stale_child_stays_put() -> None:
     assert stale.state is ForecastState.STALE
     assert stale.remaining_seconds == pytest.approx(410.0 + 2 * 500.0)
     assert job.snapshot(first.now + 5000.0).remaining_seconds == pytest.approx(stale.remaining_seconds)
+
+
+def test_between_children_a_silent_job_goes_stale_instead_of_counting_to_zero() -> None:
+    job = JobForecast()
+    epochs = Run(job, "epochs", total=3.0, root=True)
+    epochs.start()
+    first = _epoch(job, 0, 1000.0, "epochs")
+    first.t = 500.0
+    first.end()
+    epochs.mark(500.0, 1.0)
+    # Within two heartbeats the gap counts down; after them the estimate holds.
+    assert job.snapshot(1600.0).state is ForecastState.LIVE
+    assert job.snapshot(1600.0).remaining_seconds == pytest.approx(900.0)
+    stale = job.snapshot(1500.0 + 241.0)
+    assert stale.state is ForecastState.STALE
+    assert stale.remaining_seconds == pytest.approx(1000.0)
+    assert job.snapshot(1500.0 + 10_000.0).remaining_seconds == pytest.approx(1000.0)

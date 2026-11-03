@@ -596,6 +596,13 @@ class JobForecast:
         if stale_children:
             now = min(self._reported_at(child, now) for child in stale_children)
             self._frozen_at[name] = now
+        elif not running:
+            # Between two children only the parent and the finished children speak for
+            # the job; once none of them has reported for two heartbeats, it is Stale.
+            reported = max(self._reported_at(scope, now) for scope in (name, *finished))
+            if now - reported > 2 * self._config.heartbeat_seconds:
+                state = ForecastState.STALE
+                now = self._frozen_at[name] = reported
         if not counted:
             return replace(parent, state=state, remaining_seconds=child_left), True
         scope = self._scopes[name]
