@@ -146,6 +146,10 @@ A consumer matches the trailer only at the end of the line, after removing ANSI
 escape sequences and trailing whitespace. Any character outside the value alphabet
 is percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, an unknown major
 version, a missing required field, or a value that fails to parse is ignored.
+A raw (still encoded) value may be at most 768 characters, enough for a 64-character
+label of 4-byte characters; `ph` may be up to 2560, enough for 32 phases. The writer
+shortens labels and units to 64 characters and replaces control characters with spaces,
+so it never produces a line the parser rejects.
 
 ### Fields
 
@@ -157,12 +161,13 @@ version, a missing required field, or a value that fails to parse is ignored.
 | `e` | always | Seconds since the scope started, from a monotonic clock. Rates use this, never wall-clock time. |
 | `c` | start, upd, end | Completed amount, a non-negative number. |
 | `t` | start, upd, end | Total, a positive number, or `?` when unknown. |
-| `u` | start | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...). |
+| `u` | start | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...), at most 64 characters after decoding, no control characters. |
 | `p` | optional | Parent scope id. A nested scope is never added to its parent's remaining time. |
 | `root` | optional | `1` marks the scope that stands for the whole job. At most one per process. |
 | `res` | optional | `1` on a `start` that resumes earlier work, so `c` begins above zero. |
 | `ph` | `plan` only | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
-| `n` | optional, `start` only | Short label, at most 64 characters after decoding. |
+| `n` | optional, `start` only | Short label, at most 64 characters after decoding, no control characters. |
+| `run` | optional, `start` only | Id of the process run, `[a-z0-9]{1,16}`, the same for every scope in one process. A `start` with the run id already seen for that scope is a duplicate (the line was read from both streams); a different run id is a restart. |
 
 Additions within version 1 are new optional keys; consumers ignore keys they do not
 know. Removing or redefining a key requires `pace:2`.

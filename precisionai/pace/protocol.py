@@ -26,8 +26,16 @@ VERSION = 1
 
 MAX_LINE_BYTES = 4096
 MAX_FIELDS = 32
-MAX_VALUE_CHARS = 256
+# Raw (still percent-encoded) length. 768 holds a 64-character label or unit of
+# 4-byte characters, each written as 12 escape characters.
+MAX_VALUE_CHARS = 768
 MAX_LABEL_CHARS = 64
+MAX_UNIT_CHARS = 64
+MAX_PHASES = 32
+# A full plan: 32 phases of a 64-character scope id plus a weight.
+MAX_PHASES_CHARS = 2560
+
+RUN_PATTERN = re.compile(r"[a-z0-9]{1,16}")
 
 SCOPE_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
@@ -75,6 +83,9 @@ class Record:
         On ``plan``, the remaining phases (as scope ids) and their weights, in order.
     label : str or None
         Short human label, on ``start`` only.
+    run : str or None
+        Id of the process run that wrote the record, on ``start`` only. Tells a
+        restarted scope apart from the same ``start`` line read twice.
     """
 
     scope: str
@@ -89,6 +100,7 @@ class Record:
     resumed: bool = False
     phases: tuple[tuple[str, float], ...] = ()
     label: str | None = None
+    run: str | None = None
 
 
 def encode_value(value: str) -> str:
@@ -190,6 +202,10 @@ def _validate_ids(record: Record) -> None:
         raise ValueError(f"invalid parent scope id {record.parent!r}")
     if record.seq < 1:
         raise ValueError(f"seq must be at least 1, got {record.seq}")
+    if record.run is not None and not RUN_PATTERN.fullmatch(record.run):
+        raise ValueError(f"invalid run id {record.run!r}")
+    if len(record.phases) > MAX_PHASES:
+        raise ValueError(f"at most {MAX_PHASES} phases, got {len(record.phases)}")
     for name, _ in record.phases:
         if not SCOPE_PATTERN.fullmatch(name):
             raise ValueError(f"invalid phase scope id {name!r}")
@@ -201,7 +217,7 @@ def _count_fields(record: Record) -> list[str]:
         fields.append(f"c={format_number(record.completed or 0.0)}")
         fields.append(f"t={'?' if record.total is None else format_number(record.total)}")
     if record.unit is not None:
-        fields.append(f"u={encode_value(record.unit)}")
+        fields.append(f"u={encode_value(_printable(record.unit, MAX_UNIT_CHARS))}")
     return fields
 
 
@@ -209,17 +225,27 @@ def _tail_fields(record: Record) -> list[str]:
     fields = []
     if record.resumed:
         fields.append("res=1")
+    if record.run is not None:
+        fields.append(f"run={record.run}")
     if record.phases:
         fields.append("ph=" + ",".join(f"{name}:{format_number(weight)}" for name, weight in record.phases))
     if record.label is not None:
-        fields.append(f"n={encode_value(record.label[:MAX_LABEL_CHARS])}")
+        fields.append(f"n={encode_value(_printable(record.label, MAX_LABEL_CHARS))}")
     return fields
+
+
+def _printable(text: str, limit: int) -> str:
+    cleaned = "".join(" " if _is_control(char) else char for char in text[:limit])
+    return cleaned if cleaned.strip() else "-"
+
+
+def _is_control(char: str) -> bool:
+    code = ord(char)
+    return code < 0x20 or 0x7F <= code <= 0x9F
 
 
 MAX_NUMBER = 1e15
 MAX_SEQ = 10**12
-MAX_UNIT_CHARS = 64
-MAX_PHASES = 32
 
 _T = TypeVar("_T")
 
@@ -281,7 +307,8 @@ def parse_line(line: str) -> Record | None:
     """
     if not isinstance(line, str) or len(line) > MAX_LINE_BYTES:
         return None
-    if len(line.encode("utf-8", errors="surrogatepass")) > MAX_LINE_BYTES:
+    # U+FFFD stands for one undecodable source byte (see LineSplitter), so count it as one.
+    if len(line.encode("utf-8", errors="surrogatepass")) - 2 * line.count("�") > MAX_LINE_BYTES:
         return None
     tokens = _trailer_tokens(line)
     if tokens is None:
@@ -322,7 +349,8 @@ def _parse_fields(tokens: list[str]) -> dict[str, str]:
 def _valid_value(key: str, value: str) -> bool:
     if value == "?":
         return key == "t"
-    return len(value) <= MAX_VALUE_CHARS and _VALUE_PATTERN.fullmatch(value) is not None
+    limit = MAX_PHASES_CHARS if key == "ph" else MAX_VALUE_CHARS
+    return len(value) <= limit and _VALUE_PATTERN.fullmatch(value) is not None
 
 
 def _build_record(fields: dict[str, str]) -> Record:
@@ -345,6 +373,7 @@ def _build_record(fields: dict[str, str]) -> Record:
         resumed=_parse_flag(fields, "res"),
         phases=_optional(fields, "ph", _parse_phases) or (),
         label=_optional(fields, "n", _parse_label),
+        run=_optional(fields, "run", _parse_run),
     )
 
 
@@ -397,6 +426,7 @@ def _parse_unit(value: str) -> str:
     unit = decode_value(value)
     if len(unit) > MAX_UNIT_CHARS:
         raise ValueError("unit too long")
+    _reject_control(unit)
     return unit
 
 
@@ -404,7 +434,19 @@ def _parse_label(value: str) -> str:
     label = decode_value(value)
     if len(label) > MAX_LABEL_CHARS:
         raise ValueError("label too long")
+    _reject_control(label)
     return label
+
+
+def _parse_run(value: str) -> str:
+    if not RUN_PATTERN.fullmatch(value):
+        raise ValueError(f"invalid run id {value!r}")
+    return value
+
+
+def _reject_control(text: str) -> None:
+    if any(_is_control(char) for char in text):
+        raise ValueError("control character in decoded value")
 
 
 def _parse_phases(value: str) -> tuple[tuple[str, float], ...]:
@@ -454,7 +496,7 @@ class LineSplitter:
             end = chunk.find(b"\n", start)
             if end < 0:
                 break
-            self._complete(chunk[start:end], lines)
+            self._complete(chunk, start, end, lines)
             start = end + 1
         self._keep(chunk[start:])
         return lines
@@ -478,16 +520,24 @@ class LineSplitter:
         self.reset()
         return lines
 
-    def _complete(self, piece: bytes, lines: list[str]) -> None:
+    def _complete(self, chunk: bytes, start: int, end: int, lines: list[str]) -> None:
         if self._skipping:
             self._skipping = False
             return
-        data = bytes(self._tail) + piece
+        # Decide on the size before copying, so one huge line in a huge chunk is never materialised.
+        if len(self._tail) + (end - start) > MAX_LINE_BYTES + 1:
+            self._tail.clear()
+            return
+        data = bytes(self._tail) + chunk[start:end]
         self._tail.clear()
         self._emit(data, lines)
 
     def _keep(self, rest: bytes) -> None:
         if self._skipping:
+            return
+        if len(self._tail) + len(rest) > MAX_LINE_BYTES + 1:
+            self._tail.clear()
+            self._skipping = True
             return
         self._tail += rest
         # One byte of slack: a line of exactly MAX_LINE_BYTES waits here with its "\r".

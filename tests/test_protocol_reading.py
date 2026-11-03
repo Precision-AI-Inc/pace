@@ -423,3 +423,17 @@ def test_splitter_feeds_parse_line() -> None:
     lines += splitter.flush()
     records = [parse_line(line) for line in lines]
     assert [record.seq for record in records if record is not None] == [2, 3]
+
+
+def test_parse_line_counts_replacement_characters_as_one_byte() -> None:
+    trailer = "[pace:1 s=a k=upd c=1 t=2 e=1 q=2]"
+    # 3000 undecodable source bytes become 3000 U+FFFD characters (9000 UTF-8 bytes).
+    line = "�" * 3000 + " " + trailer
+    assert parse_line(line) is not None
+
+
+def test_line_splitter_drops_huge_line_in_one_chunk_without_buffering() -> None:
+    splitter = LineSplitter()
+    chunk = b"a" * 10_000_000 + b"\nok\n" + b"b" * 10_000_000
+    assert splitter.feed(chunk) == ["ok"]
+    assert splitter.feed(b"tail\nnext\n") == ["next"]

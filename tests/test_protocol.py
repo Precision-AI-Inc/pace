@@ -90,3 +90,35 @@ def test_format_number(value: float, expected: str) -> None:
 def test_format_number_rejects_invalid(value: float) -> None:
     with pytest.raises(ValueError, match="finite and non-negative"):
         format_number(value)
+
+
+def test_format_trailer_writes_run_id_on_start() -> None:
+    record = Record(scope="a", event=Event.START, seq=1, elapsed=0.0, completed=0, total=1, run="a1b2c3d4")
+    assert format_trailer(record) == "[pace:1 s=a k=start c=0 t=1 e=0 q=1 run=a1b2c3d4]"
+
+
+def test_format_trailer_rejects_invalid_run_id() -> None:
+    record = Record(scope="a", event=Event.START, seq=1, elapsed=0.0, completed=0, total=1, run="Not-Valid")
+    with pytest.raises(ValueError, match="invalid run id"):
+        format_trailer(record)
+
+
+def test_format_trailer_rejects_too_many_phases() -> None:
+    phases = tuple((f"p{i}", 1.0) for i in range(33))
+    record = Record(scope="job", event=Event.PLAN, seq=1, elapsed=0.0, phases=phases)
+    with pytest.raises(ValueError, match="at most 32 phases"):
+        format_trailer(record)
+
+
+def test_format_trailer_truncates_unit_and_replaces_control_characters() -> None:
+    record = Record(
+        scope="a", event=Event.START, seq=1, elapsed=0.0, completed=0, total=1, unit="u" * 80, label="two\nlines"
+    )
+    trailer = format_trailer(record)
+    assert "u=" + "u" * 64 + " " in trailer
+    assert "n=two%20lines]" in trailer
+
+
+def test_format_trailer_label_of_only_control_characters_becomes_dash() -> None:
+    record = Record(scope="a", event=Event.START, seq=1, elapsed=0.0, completed=0, total=1, label="\x1b\x07")
+    assert format_trailer(record).endswith("n=-]")
