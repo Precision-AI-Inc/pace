@@ -298,8 +298,9 @@ defaults.
   records give the time per unit, however many children a unit holds (a training and a
   validation loop per epoch); before that, the running unit counts as the time it has
   taken so far plus the running child's remaining time. A parent of more than 100 units
-  need not write every advance, so until it has a pace its unit is one child's
-  duration instead. A `phase()` or a parent with no
+  gets no estimate from its children until it has a pace of its own: it need not write
+  every advance, and its units are often steps rather than children, so a child's
+  duration says nothing about a unit's. A `phase()` or a parent with no
   total cannot know how many children are still to come, so it takes only the running
   child's estimate and the job estimate is marked partial (a lower bound). Such a
   borrowed estimate is Stale when a running child it borrows from is, or, between two
