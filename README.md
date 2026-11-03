@@ -76,6 +76,7 @@ should use `parse_line`, `LineSplitter` and `JobForecast` (see
 | [Getting started](https://github.com/Precision-AI-Inc/pace/blob/main/docs/getting-started.md) | Install, first log lines, first progress loop, terminal vs container output. |
 | [Logging](https://github.com/Precision-AI-Inc/pace/blob/main/docs/logging.md) | Levels, `exception`, `configure` and precedence, `capture_logging`, colour, encodings, ranks. |
 | [Progress](https://github.com/Precision-AI-Inc/pace/blob/main/docs/progress.md) | `track`, `progress`, `timed`, `phase`, `plan`, nesting, resuming, root scope, emission rates, the terminal bar. |
+| [Examples](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md) | One runnable script per style of logging and progress: loops, epochs, resuming, phases, ranks, reading the output. |
 | [Framework integrations](https://github.com/Precision-AI-Inc/pace/blob/main/docs/frameworks.md) | The PyTorch Lightning and Hugging Face Transformers callbacks. |
 | [Migrating](https://github.com/Precision-AI-Inc/pace/blob/main/docs/migrating.md) | From `print`, `tqdm`, Loguru and `logging`. |
 | [Configuration](https://github.com/Precision-AI-Inc/pace/blob/main/docs/configuration.md) | Every `PACE_*` variable and its `configure` equivalent. |

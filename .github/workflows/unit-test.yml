@@ -71,5 +71,16 @@ jobs:
           -q --tb=short --no-header -o addopts=""
           --cov --cov-config=.coveragerc-adapters --cov-report=term-missing --cov-report=xml:coverage-adapters.xml
 
+      - name: Run the framework examples
+        # The core job runs the other examples (tests/test_examples.py); these two need the frameworks.
+        env:
+          PACE_MIN_INTERVAL: "0"
+          PACE_BAR: never
+        run: |
+          python examples/lightning_example.py > lightning.log
+          python examples/transformers_example.py > transformers.log
+          python skills/adopt-pace/verify.py --strict lightning.log
+          python skills/adopt-pace/verify.py --strict transformers.log
+
       - name: Coverage summary
         run: python -m coverage report --rcfile=.coveragerc-adapters --format=markdown >> $GITHUB_STEP_SUMMARY

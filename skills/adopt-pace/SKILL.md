@@ -81,6 +81,21 @@ Do not edit anything yet.
 | Concurrent requests or workers | one `progress(..., root=True)` advanced where results are collected (pattern 5) |
 | No known total | find one (count first, file size, manifest); only then leave it `None` and report it as a gap (pattern 6) |
 
+**Read the matching example before you edit.** Each situation above has a small runnable
+script in the Pace repository, written the way this skill asks for it. Copy its shape
+rather than inventing one ([all of them](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md)):
+
+| Situation | Example in `examples/` |
+|---|---|
+| One main loop | `track_loop.py` (`track`), `manual_progress.py` (`progress`, concurrent results) |
+| Epochs times batches | `epochs_and_batches.py` (one root over every step), `nested_scopes.py` (child scopes) |
+| Preprocess, train, evaluate | `phases_and_plan.py` (`plan` and `phase`) |
+| Resuming from a checkpoint | `resume.py` (`completed=`, `resumed=True`) |
+| No known total | `unknown_total.py` (`set_total` when it appears) |
+| One-off steps | `timed_steps.py` (`@timed`) |
+| Standard `logging`, ranks | `stdlib_logging.py`, `distributed.py` |
+| Lightning, Hugging Face | `lightning_example.py`, `transformers_example.py` |
+
 **Choosing the root.** Ask: "when this scope ends, is the job really done?" If more than a
 few percent of the runtime comes after the loop (final evaluation, export, upload), the
 loop alone is not the root: use a plan, or a root over a common unit. Never mark two roots.
