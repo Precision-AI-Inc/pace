@@ -473,6 +473,27 @@ class JobEstimate:
 
 
 @dataclass(slots=True)
+class _Borrowed:
+    """What one snapshot's borrowing from children decided, passed down so ``JobForecast`` keeps no per-snapshot state.
+
+    Attributes
+    ----------
+    forecasts : dict of str to Forecast
+        Every scope's forecast, a parent without an estimate of its own given one built from its children.
+    partial : set of str
+        Scopes whose borrowed estimate covers only the child running now, because they cannot know how
+        many children are still to come.
+    frozen_at : dict of str to float
+        For a borrowed estimate that went Stale: the time its source last reported. Its clock stops
+        there, as a Stale scope's own estimate does.
+    """
+
+    forecasts: dict[str, Forecast]
+    partial: set[str] = field(default_factory=set)
+    frozen_at: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class _PlanTally:
     """Running totals while walking a plan."""
 
@@ -549,17 +570,16 @@ class JobForecast:
         """
         forecasts = {name: scope.snapshot(now) for name, scope in self._scopes.items()}
         ended = self._ended_state(forecasts)
-        if ended is None:
-            forecasts = self._with_child_estimates(forecasts, now)
         if ended is not None:
             remaining = 0.0 if ended is ForecastState.COMPLETE else None
             return JobEstimate(ended, remaining_seconds=remaining, scopes=forecasts)
-        estimate = self._pick(forecasts, now) or self._without_estimate(now, forecasts)
-        if estimate.source in ("root", "plan") and self._rests_on_partial():
+        borrowed = self._with_child_estimates(forecasts, now)
+        estimate = self._pick(borrowed, now) or self._without_estimate(now, borrowed.forecasts)
+        if estimate.source in ("root", "plan") and self._rests_on_partial(borrowed):
             estimate = replace(estimate, partial=True)
-        return replace(estimate, scopes=forecasts)
+        return replace(estimate, scopes=borrowed.forecasts)
 
-    def _with_child_estimates(self, forecasts: Mapping[str, Forecast], now: float) -> dict[str, Forecast]:
+    def _with_child_estimates(self, forecasts: Mapping[str, Forecast], now: float) -> _Borrowed:
         """Give a running scope with no estimate of its own one built from its children.
 
         A ``phase()`` counts as one unit of work, and a parent such as ``Epochs`` reports
@@ -572,35 +592,32 @@ class JobForecast:
         count of its own (a phase, or no total) cannot know how many children are still to
         come, so its estimate is only the running child's and is marked partial.
         """
-        effective = dict(forecasts)
-        self._partial_scopes: set[str] = set()
-        # For a borrowed estimate that went Stale: the time its source last reported.
-        # Its clock stops there, as a Stale scope's own estimate does.
-        self._frozen_at: dict[str, float] = {}
+        borrowed = _Borrowed(dict(forecasts))
         # One pass per level of nesting: repeat until no scope gains an estimate.
-        for _ in range(len(effective)):
-            if not self._borrow_once(effective, now):
+        for _ in range(len(borrowed.forecasts)):
+            if not self._borrow_once(borrowed, now):
                 break
-        return effective
+        return borrowed
 
-    def _borrow_once(self, effective: dict[str, Forecast], now: float) -> bool:
+    def _borrow_once(self, borrowed: _Borrowed, now: float) -> bool:
         changed = False
-        for name, forecast in list(effective.items()):
+        for name, forecast in list(borrowed.forecasts.items()):
             if forecast.state in _ENDED_STATES or self._has_estimate(forecast):
                 continue
             children = [child for child, scope in self._scopes.items() if scope.parent == name]
-            borrowed = self._from_children(name, children, effective, now)
-            if borrowed is not None:
-                effective[name] = borrowed[0]
-                if borrowed[1]:
-                    self._partial_scopes.add(name)
+            from_children = self._from_children(name, children, borrowed, now)
+            if from_children is not None:
+                borrowed.forecasts[name] = from_children[0]
+                if from_children[1]:
+                    borrowed.partial.add(name)
                 changed = True
         return changed
 
     def _from_children(
-        self, name: str, children: list[str], effective: Mapping[str, Forecast], now: float
+        self, name: str, children: list[str], borrowed: _Borrowed, now: float
     ) -> tuple[Forecast, bool] | None:
         """Return the parent's estimate from its children and whether it is partial, if any."""
+        effective = borrowed.forecasts
         parent = effective[name]
         running = [child for child in children if self._has_estimate(effective[child])]
         finished = [child for child in children if effective[child].state is ForecastState.COMPLETE]
@@ -611,15 +628,15 @@ class JobForecast:
         stale_children = [child for child in running if effective[child].state is ForecastState.STALE]
         state = ForecastState.STALE if stale_children else ForecastState.LIVE
         if stale_children:
-            now = min(self._reported_at(child, now) for child in stale_children)
-            self._frozen_at[name] = now
+            now = min(self._reported_at(child, borrowed, now) for child in stale_children)
+            borrowed.frozen_at[name] = now
         elif not running:
             # Between two children, the parent and every scope under it (in any state)
             # speak for the job; when none has reported within the parent's limit, it is Stale.
-            reported = max(self._reported_at(scope, now) for scope in (name, *self._descendants(name)))
+            reported = max(self._reported_at(scope, borrowed, now) for scope in (name, *self._descendants(name)))
             if now - reported > self._scopes[name].stale_limit():
                 state = ForecastState.STALE
-                now = self._frozen_at[name] = reported
+                now = borrowed.frozen_at[name] = reported
         if not counted:
             return replace(parent, state=state, remaining_seconds=child_left), True
         scope = self._scopes[name]
@@ -652,20 +669,19 @@ class JobForecast:
                     frontier.append(child)
         return found
 
-    def _reported_at(self, name: str, now: float) -> float:
+    def _reported_at(self, name: str, borrowed: _Borrowed, now: float) -> float:
         """Return when a scope's estimate was last refreshed: its latest record, or its freeze."""
-        frozen = getattr(self, "_frozen_at", {}).get(name)
+        frozen = borrowed.frozen_at.get(name)
         if frozen is not None:
             return frozen
         received = self._scopes[name].last_received
         return received if received is not None else now
 
-    def _rests_on_partial(self) -> bool:
-        partial = getattr(self, "_partial_scopes", set())
+    def _rests_on_partial(self, borrowed: _Borrowed) -> bool:
         root = self._root()
         if root is not None:
-            return root in partial
-        return any(name in partial for name, _ in self._plan)
+            return root in borrowed.partial
+        return any(name in borrowed.partial for name, _ in self._plan)
 
     def _top_level(self) -> list[str]:
         return [name for name, scope in self._scopes.items() if scope.parent is None or scope.root]
@@ -692,11 +708,11 @@ class JobForecast:
             return ForecastState.COMPLETE
         return None
 
-    def _pick(self, forecasts: Mapping[str, Forecast], now: float) -> JobEstimate | None:
+    def _pick(self, borrowed: _Borrowed, now: float) -> JobEstimate | None:
         root = self._root()
         if root is not None:
-            return self._from_root(forecasts[root])
-        return self._from_plan(forecasts, now) or self._from_concurrent(forecasts)
+            return self._from_root(borrowed.forecasts[root])
+        return self._from_plan(borrowed, now) or self._from_concurrent(borrowed.forecasts)
 
     @staticmethod
     def _has_estimate(forecast: Forecast) -> bool:
@@ -707,15 +723,15 @@ class JobForecast:
             return None
         return JobEstimate(forecast.state, forecast.remaining_seconds, source="root")
 
-    def _from_plan(self, forecasts: Mapping[str, Forecast], now: float) -> JobEstimate | None:
+    def _from_plan(self, borrowed: _Borrowed, now: float) -> JobEstimate | None:
         if not self._plan:
             return None
         tally = _PlanTally()
         for name, weight in self._plan:
-            forecast = forecasts.get(name)
+            forecast = borrowed.forecasts.get(name)
             if forecast is None:
                 tally.unstarted_weight += weight
-            elif not self._tally_phase(tally, weight, forecast, self._elapsed_for_plan(name, now)):
+            elif not self._tally_phase(tally, weight, forecast, self._elapsed_for_plan(name, borrowed, now)):
                 return None
         if tally.unstarted_weight > 0:
             if tally.known_weight <= 0 or tally.known_seconds <= 0:
@@ -724,8 +740,8 @@ class JobForecast:
         state = ForecastState.STALE if tally.stale else ForecastState.LIVE
         return JobEstimate(state, tally.remaining, source="plan")
 
-    def _elapsed_for_plan(self, name: str, now: float) -> float:
-        frozen = getattr(self, "_frozen_at", {}).get(name)
+    def _elapsed_for_plan(self, name: str, borrowed: _Borrowed, now: float) -> float:
+        frozen = borrowed.frozen_at.get(name)
         return self._scopes[name].elapsed_at(now if frozen is None else frozen)
 
     def _tally_phase(self, tally: _PlanTally, weight: float, forecast: Forecast, elapsed: float) -> bool:
