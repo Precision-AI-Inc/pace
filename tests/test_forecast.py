@@ -1198,3 +1198,31 @@ def test_observe_says_whether_a_record_was_taken() -> None:
     )
     assert fc.observe(Record(scope="train", event=Event.PLAN, seq=1, phases=(("a", 1.0),), run=RUN_A), 0.0) is False
     assert JobForecast().observe(Record(scope="plan", event=Event.PLAN, seq=1, run=RUN_A), 0.0) is False
+
+
+def test_a_new_run_read_from_a_fail_without_counts_keeps_nothing_of_the_run_before() -> None:
+    fc, run = _live_run(run_id=RUN_A, parent="job", root=True)
+    fc.observe(Record(scope="train", event=Event.FAIL, elapsed=5.0, run=RUN_B), run.now + 60.0)
+    forecast = fc.snapshot(run.now + 60.0)
+    assert forecast.state is ForecastState.FAILED
+    assert (forecast.completed, forecast.total, forecast.unit, forecast.rate) == (None, None, None, None)
+    assert fc.parent is None
+    assert fc.root is False
+
+
+def test_a_new_run_read_from_an_update_does_not_keep_the_unit_before() -> None:
+    fc, run = _live_run(run_id=RUN_A)
+    update = Record(scope="train", event=Event.UPDATE, seq=4, elapsed=30.0, completed=8.0, total=50.0, run=RUN_B)
+    fc.observe(update, run.now + 60.0)
+    forecast = fc.snapshot(run.now + 60.0)
+    assert (forecast.completed, forecast.total, forecast.unit) == (8.0, 50.0, None)
+    assert forecast.state is ForecastState.LEARNING
+
+
+def test_a_job_keeps_nothing_of_a_scope_run_before_its_restart() -> None:
+    job = JobForecast()
+    _live_root(job)
+    job.observe(Record(scope="job", event=Event.FAIL, elapsed=1.0, run=RUN_B), 5000.0)
+    estimate = job.snapshot(5000.0)
+    assert estimate.state is ForecastState.FAILED
+    assert estimate.scopes["job"].completed is None

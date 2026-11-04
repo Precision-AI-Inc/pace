@@ -222,13 +222,6 @@ class ScopeForecast:
     def __init__(self, scope: str, *, config: ForecastConfig = DEFAULT_CONFIG) -> None:
         self.scope = scope
         self._config = config
-        self._unit: str | None = None
-        self._completed: float | None = None
-        self._total: float | None = None
-        self._parent: str | None = None
-        self._root = False
-        self._elapsed = 0.0
-        self._ended: Event | None = None
         self._reached_live = False
         self._runs = _Runs()
         self._begin_segment()
@@ -382,10 +375,14 @@ class ScopeForecast:
         self._pace_origin = (0.0, 0.0)
         self._previous: tuple[float, float] | None = None
         self._live = False
-        self._ended = None
+        self._ended: Event | None = None
         self._elapsed = 0.0
-        # A restarted process may place the scope differently; its records say where.
-        self._parent = None
+        # A restarted run may be read from any record, not only its start, so nothing of the
+        # run before carries over: not its counts, its unit, or where the scope sits.
+        self._completed: float | None = None
+        self._total: float | None = None
+        self._unit: str | None = None
+        self._parent: str | None = None
         self._root = False
 
     def _is_restart(self, record: Record) -> bool:
