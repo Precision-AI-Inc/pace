@@ -62,7 +62,10 @@ class PaceCallback(TrainerCallback):  # type: ignore[misc,valid-type]
     resumed from a checkpoint writes ``res=1`` and starts at the restored step. An
     evaluation pass is a child scope of the training scope that starts with its first
     batch and ends in ``on_evaluate`` (or ``on_predict``); its total is the length of the
-    evaluation dataloader when it has one. The ``Trainer`` has no hook for an exception in
+    evaluation dataloader when it has one. The ``Trainer`` reports a batch only after it
+    has run and has no hook before the first, so the scope starts with one batch already
+    counted: its rate and its "done in" time cover the batches after the first, and leave
+    out the first one's duration. The ``Trainer`` has no hook for an exception in
     training, so a crashed run writes no ``fail`` record: the scheduler sees the stream
     go quiet and the process exit. Call :meth:`fail` from your own error handling to
     write it.
@@ -100,12 +103,17 @@ class PaceCallback(TrainerCallback):  # type: ignore[misc,valid-type]
         self._scopes.end()
 
     def on_prediction_step(self, args: Any, state: Any, control: Any, **kwargs: Any) -> None:
-        """Count an evaluation or prediction batch, opening the pass's scope on the first."""
+        """Count an evaluation or prediction batch, opening the pass's scope on the first.
+
+        The ``Trainer`` calls this after each batch, and has no hook before the first, so
+        the scope opens with that batch already done and its clock starts after it.
+        """
         if not state.is_world_process_zero:
             return
         if self._scopes.child is None:
-            self._open(kwargs.get("eval_dataloader"))
-        self._scopes.advance_child()
+            self._open(kwargs.get("eval_dataloader"), completed=1)
+        else:
+            self._scopes.advance_child()
 
     def on_evaluate(self, args: Any, state: Any, control: Any, **kwargs: Any) -> None:
         """End the evaluation scope, writing it first when the pass had no batches."""
@@ -115,8 +123,8 @@ class PaceCallback(TrainerCallback):  # type: ignore[misc,valid-type]
         """End the prediction scope, writing it first when the pass had no batches."""
         self._close(state)
 
-    def _open(self, dataloader: Any) -> None:
-        self._scopes.begin_child("Evaluation", _length(dataloader), "batch")
+    def _open(self, dataloader: Any, completed: float = 0.0) -> None:
+        self._scopes.begin_child("Evaluation", _length(dataloader), "batch", completed=completed)
 
     def _close(self, state: Any) -> None:
         if state.is_world_process_zero:

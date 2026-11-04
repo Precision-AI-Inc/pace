@@ -99,6 +99,15 @@ Differences that bite:
 - **A `with` block reports failure.** If an exception leaves a `progress` block the scope
   is written as `fail`. `tqdm` has no such record.
 
+**When a library takes the `tqdm` class.** Code you do not own may accept a `tqdm` class
+(vLLM's `use_tqdm=`). There is no loop of yours to replace, so pass
+`precisionai.pace.tqdm.PaceTqdm`, which reports what the library counts to Pace and draws
+nothing; see [Libraries that take a `tqdm` class](frameworks.md#libraries-that-take-a-tqdm-class-vllm).
+It also works as a drop-in for your own `tqdm(...)` calls
+(`from precisionai.pace.tqdm import PaceTqdm as tqdm`) when you want to migrate without
+touching them, with the positional order `tqdm` uses; `track` and `progress` remain the
+recommended form.
+
 If your code leaves the `tqdm` bar on while running in a container, remove it. Two
 progress displays on stdout are noise, and `tqdm`'s carriage-return redraws fill a log file.
 
@@ -157,7 +166,7 @@ logger.info("Loading model")    # your own lines
 ```
 
 Remove the `basicConfig` call. If it stays, every record is written twice. Details, the
-case of libraries that do not propagate (Transformers), and warnings are in
+case of libraries that print their own lines (Lightning, Transformers: `take_over=`), and warnings are in
 [Standard logging](logging.md#standard-logging-pytorch-and-transformers).
 
 ## Checklist

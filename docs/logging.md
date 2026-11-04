@@ -215,21 +215,57 @@ INFO:x:hello
 
 Remove the `basicConfig` call, or remove its handler, when you adopt Pace.
 
-**Libraries that do not propagate.** Hugging Face Transformers attaches its own
-stderr handler to its `transformers` logger and sets `propagate = False`, so the root
-handler never sees its records (checked with Transformers 5.22.1). Switch its own
-handler off and let it propagate:
+**Libraries that print their own log lines.** Some libraries attach a console handler to
+their own logger, and some also set `propagate = False`. Their records then either appear
+twice (once in their format, once in Pace's) or never reach the root handler at all. Hugging
+Face Transformers does the second (checked with 5.22.1). Lightning does the first for its
+`lightning` logger, and both for `lightning.pytorch` and `lightning.fabric` when no root handler
+existed when it was imported (checked with 2.6.6). Without any change:
 
-```python
-from transformers.utils import logging as hf_logging
-
-hf_logging.disable_default_handler()
-hf_logging.enable_propagation()
-hf_logging.set_verbosity_info()
+```text
+INFO: GPU available: False, used: False
+2026-11-03T23:34:29Z INFO     GPU available: False, used: False
 ```
 
+Name such a library in `take_over` and Pace switches its own output off and lets its records
+through to the root:
+
+```python
+import lightning.pytorch as pl
+import transformers
+
+from precisionai.pace import capture_logging
+
+capture_logging("INFO", take_over=["lightning", "transformers"])
+```
+
+```text
+2026-11-03T23:35:00Z INFO     GPU available: False, used: False
+```
+
+For each name it clears the console handlers (a `StreamHandler` that is not a
+`FileHandler`) from that logger, from its parents (`lightning` for `lightning.pytorch`, which
+would otherwise swallow the record on its way up) and from every logger beneath it that exists
+at the time, and sets `propagate = True` on all of them. Handlers that write to a file or a
+service are left alone. A bare string is one name; an empty name raises `ValueError` and
+changes nothing.
+
+- **Call it after importing the library.** Most libraries create their loggers and handlers
+  at import, so a `capture_logging(take_over=...)` placed before the `import` finds nothing to
+  take over. Calling it again later is safe and picks up loggers created since.
+- The names are the logger names, which are the package names: `lightning` (or
+  `pytorch_lightning` for the older package), `transformers`, `accelerate`.
+- It is permanent for the process. Removed handlers are not put back.
+- The library's own level still applies: a library that logs at `INFO` shows its `INFO`
+  lines only if `capture_logging(level=...)` is `INFO` or lower.
+- **vLLM is different.** Its engine runs in a separate `EngineCore` process that configures
+  its own logging, so clearing the main process's `vllm` logger does not cover it. Use vLLM's
+  own switch instead: set `VLLM_CONFIGURE_LOGGING=0` in the environment before vLLM is
+  imported. vLLM then installs no handler, and its main-process records propagate to the root,
+  where `capture_logging()` sees them.
+
 Check any other library whose lines still appear in the old format; it is the same
-cause. PyTorch and Lightning have not been tested for this.
+cause, and `logging.getLogger("name").handlers` and `.propagate` show it.
 
 **Python warnings.** `warnings.warn` goes to stderr, not to `logging`. Add
 `logging.captureWarnings(True)` and they reach Pace as `WARNING` lines:

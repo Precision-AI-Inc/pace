@@ -79,6 +79,7 @@ Do not edit anything yet.
 | Phases in sequence, each with a count (preprocess, train, evaluate) | `plan([...])` plus one counted scope per phase whose `scope=` matches the plan name; no root (pattern 4a) |
 | One unit moves through every stage | one `progress(..., root=True)` over that unit (4b) |
 | Concurrent requests or workers | one `progress(..., root=True)` advanced where results are collected (pattern 5) |
+| One library call that runs the whole job and takes a `tqdm` class (vLLM `LLM.generate(..., use_tqdm=...)`) | pass `PaceTqdm` from `precisionai.pace.tqdm` as that argument (pattern 12) |
 | No known total | find one (count first, file size, manifest); only then leave it `None` and report it as a gap (pattern 6) |
 
 **Read the matching example before you edit.** Each situation above has a small runnable

@@ -74,6 +74,17 @@ Hugging Face Transformers and TRL callback (extra: ``precisionai-pace[transforme
    :undoc-members:
    :show-inheritance:
 
+precisionai.pace.tqdm
+---------------------
+
+A stand-in for the ``tqdm`` class, for libraries that take a progress-bar class
+(no ``tqdm`` install needed).
+
+.. automodule:: precisionai.pace.tqdm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 precisionai.pace.version
 ------------------------
 

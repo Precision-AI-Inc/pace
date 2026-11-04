@@ -84,6 +84,10 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
 - **Standard `logging`**: `precisionai.pace.capture_logging()` routes the standard
   library's records (and so PyTorch's and Transformers') through the same output.
   Opt-in, so importing Pace never changes another library's logging on its own.
+  `take_over=` names libraries (`"lightning"`, `"transformers"`) whose own console handlers
+  are removed and whose loggers are made to propagate, so each line is written once, in Pace's
+  format. It acts on the named logger, its parents and the children that exist at the call,
+  keeps file and service handlers, and is permanent for the process.
 - **Configuration**: keyword arguments, with environment-variable overrides so a
   scheduler can adjust behaviour without code changes: `PACE_LEVEL`, `PACE_STREAM`
   (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`), `PACE_BAR` (`auto`/`always`/`never`),
@@ -335,8 +339,15 @@ defaults.
   a child scope. Restores resume state from the checkpoint's global step.
 - **Transformers / TRL**: a `TrainerCallback` reporting `state.global_step` against
   `state.max_steps`, rank 0 only.
-- **tqdm**: a migration guide rather than a shim. `track()` takes the same core
-  arguments (`total`, `desc` as `description`, `unit`).
+- **tqdm**: a migration guide for code you own (`track()` takes the same core
+  arguments: `total`, `desc` as `description`, `unit`), and `PaceTqdm`, a class that stands in
+  for `tqdm` where a library takes the bar class from its caller (vLLM's `use_tqdm=`). It
+  subclasses nothing and imports nothing: it implements the calls such libraries make
+  (`update`, `n`, `total`, `refresh`, `close`, `format_dict`, ...) on one Pace scope that starts
+  when the object is created and ends when it is closed, and ignores everything about how a bar
+  looks. Subclassing the real `tqdm` was rejected: its constructor draws, starts a monitor
+  thread and writes a newline on `close`, and its disabled mode skips the attributes callers
+  read, so silencing it takes more code than the stand-in and ties Pace to `tqdm` internals.
 
 ## Security
 
