@@ -175,7 +175,7 @@ class Scope:
             if delay > 0:
                 # A one-off step may end before a line is due; then its start and end are one line.
                 self._pending = True
-                self._out.defer(self, delay, self._write_pending_start)
+                self._out.hold(self, now + delay, self._write_pending_start)
             else:
                 self._emit(Event.START, now)
 
@@ -250,6 +250,7 @@ class Scope:
             self.start()
         if self._state != "open":
             return
+        self._out.write_held()
         now = self._out.clock.monotonic()
         # The rank check reads the environment, so it comes after the cheap time gate.
         if now < self._next_check or not self._out.settings.progress_enabled():
@@ -296,7 +297,7 @@ class Scope:
         with contextlib.suppress(Exception), self._out.lock:
             if self._pending:
                 self._pending = False
-                self._out.cancel(self)
+                self._out.release(self)
                 self._emit(Event.START, self._out.clock.monotonic())
 
     def _settle_pending(self, event: Event) -> Event:
@@ -308,7 +309,7 @@ class Scope:
             return event
         if event is Event.END and self.completed == 1 and self.total == 1:
             self._pending = False
-            self._out.cancel(self)
+            self._out.release(self)
             return Event.STEP
         self._write_pending_start()
         return event
@@ -344,6 +345,7 @@ class Scope:
         target = target or self._out.target()
         if target is None:
             return
+        self._out.write_held()
         event = self._settle_pending(event)
         record = self._record(event, now, phases)
         self._last_out = now

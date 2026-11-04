@@ -4,6 +4,7 @@
 """Tests for progress scopes: events, emission rate, nesting, ids, ranks and the terminal bar."""
 
 import io
+import os
 import re
 import threading
 import time
@@ -56,6 +57,15 @@ def records(stream: FakeStream) -> list[dict[str, str]]:
 
 def kinds(stream: FakeStream) -> list[str]:
     return [item["k"] for item in records(stream)]
+
+
+def records_in(stream: FakeStream) -> list[dict[str, str]]:
+    return [fields(line) for line in stream.lines() if TRAILER.search(line)]
+
+
+def kinds_of(stream: FakeStream) -> list[str]:
+    """Return each line's event, or its level for a log line."""
+    return [fields(line)["k"] if TRAILER.search(line) else line.split()[1] for line in stream.lines()]
 
 
 @pytest.fixture(autouse=True)
@@ -443,70 +453,76 @@ def test_a_child_line_writes_the_pending_start_of_its_phase_first(
     ]
 
 
-def test_a_step_still_running_when_its_line_is_due_writes_its_start_then(
+def test_a_step_still_running_when_its_line_is_due_writes_its_start_at_the_next_write(
     log: Logger, clock: FakeClock, stream: FakeStream
 ) -> None:
     download = Phase("Download", unit="call", logger=log)
     download.start()
-    assert stream.lines() == []
-    clock.advance(16)
-    # The logger's timer runs this once PACE_MIN_INTERVAL has passed in real time.
-    log.run_due(time.monotonic() + 20)
+    clock.advance(10)
+    log.info("not yet due")
+    assert kinds_of(stream) == ["INFO"]
+    clock.advance(6)
+    log.info("now due")
     clock.advance(4)
     download.completed = 1
     download.end()
-    assert [(item["k"], item.get("e")) for item in records(stream)] == [("start", "16"), ("end", "20")]
+    assert kinds_of(stream) == ["INFO", "start", "INFO", "end"]
+    assert [(item["k"], item.get("e")) for item in records_in(stream)] == [("start", "16"), ("end", "20")]
 
 
-def test_the_logger_timer_writes_a_pending_start_on_its_own(clock: FakeClock) -> None:
-    written = threading.Event()
-
-    class Signal(FakeStream):
-        def write(self, text: str) -> int:
-            written.set()
-            return super().write(text)
-
-    stream = Signal()
-    log = Logger(clock=clock.clock())
-    log.configure(stream=stream, min_interval=0.01)
+def test_another_scope_progress_check_writes_a_due_start(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
     download = Phase("Download", logger=log)
     download.start()
-    assert written.wait(timeout=10)
+    loop = Scope("Other", 1000, logger=log)
+    loop.start()
+    clock.advance(16)
+    loop.advance()
+    assert [(item["s"], item["k"]) for item in records(stream)] == [("other", "start"), ("download", "start")]
     download.end()
-    assert kinds(stream) == ["start", "end"]
 
 
-def test_the_logger_timer_ends_when_nothing_is_deferred_and_restarts_on_demand() -> None:
-    log = Logger()
-    log.configure(stream=FakeStream())
-    log.defer("a", 0.0, lambda: None)
-    first = log._timer
-    assert first is not None
-    first.join(timeout=10)
-    assert not first.is_alive()
-    assert log._timer is None
-    ran = threading.Event()
-    log.defer("b", 0.0, ran.set)
-    assert ran.wait(timeout=10)
-    assert log._timer is not first
-    log.cancel("b")
-
-
-def test_a_cancelled_action_lets_the_timer_end() -> None:
-    log = Logger()
-    log.defer("a", 3600.0, lambda: None)
-    thread = log._timer
-    assert thread is not None
-    log.cancel("a")
-    thread.join(timeout=10)
-    assert not thread.is_alive()
-
-
-def test_a_step_cancelled_before_its_timer_writes_nothing_twice(log: Logger, stream: FakeStream) -> None:
+def test_a_step_written_as_one_line_leaves_nothing_held(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
     with phase("Quick", logger=log):
         pass
-    assert log.run_due(time.monotonic() + 100) is None
-    assert kinds(stream) == ["step"]
+    clock.advance(100)
+    log.info("later")
+    assert kinds_of(stream) == ["step", "INFO"]
+
+
+def test_a_forked_child_does_not_write_its_parent_held_back_line(log: Logger, clock: FakeClock) -> None:
+    download = Phase("Download", logger=log)
+    download.start()
+    log._held[download] = (0.0, download._write_pending_start, -1)  # held by another process
+    log.write_held()
+    assert log._held == {}
+    assert not log.settings.resolve("stream").lines()
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="needs os.fork")
+def test_fork_inside_a_phase_does_not_hang() -> None:
+    log = Logger()
+    log.configure(stream=io.StringIO())
+    with phase("Spawn", logger=log):
+        pid = os.fork()
+        if pid == 0:  # pragma: no cover - the child
+            code = 1
+            try:
+                with phase("Child", logger=log):
+                    log.info("child")
+                code = 0
+            finally:
+                os._exit(code)
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            done, status = os.waitpid(pid, os.WNOHANG)
+            if done:
+                break
+            time.sleep(0.05)
+        else:
+            os.kill(pid, 9)
+            os.waitpid(pid, 0)
+            pytest.fail("the child hung")
+    assert os.waitstatus_to_exitcode(status) == 0
 
 
 def test_a_terminal_writes_a_phase_as_before(clock: FakeClock) -> None:

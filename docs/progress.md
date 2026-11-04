@@ -145,10 +145,12 @@ def tokenize(): ...
 2026-11-03T17:08:16Z STEP     Load model  done in 0s  [pace:2 load-model step e=0.1 n=Load%20model r=a22feb8b]
 ```
 
-A longer call has its start line written once the interval has passed, while it is still
-running, and an end line when it returns, so a ten-minute download shows up while it runs.
-A `phase()` behaves the same way, and a scope opened inside either has its parent's start
-line written first. On a terminal, or with `PACE_MIN_INTERVAL=0`, every call writes a start
+A longer call has its start line written with the next line Pace writes once the interval
+has passed (any progress or log line), and an end line when it returns. Pace starts no
+threads, so a long call during which nothing else reports, such as a lone ten-minute
+download, shows nothing until it ends; give it a `progress()` of its own (bytes, files)
+to make it visible while it runs. A `phase()` behaves the same way, and a scope opened
+inside either has its parent's start line written first. On a terminal, or with `PACE_MIN_INTERVAL=0`, every call writes a start
 and an end line.
 
 With no description the function's name is used. If the function raises, the scope

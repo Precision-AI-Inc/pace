@@ -244,7 +244,8 @@ words they do not know. Removing or redefining one requires `pace:3`.
 ### Duplicates and restarts
 
 A reader that captures both streams, or a job that mirrors its output to both, sees
-every line twice, in any interleaving. The run id on every record makes that safe:
+every line twice. The run id on every record makes that safe, provided each stream is
+read in the order it was written (one stream may be read well behind the other):
 
 - Within one run, a scope's records are ordered: the `start`, then the updates by `q`,
   then the `end`, `fail` or `step`. A record that does not come after the latest one
@@ -255,6 +256,10 @@ every line twice, in any interleaving. The run id on every record makes that saf
   process restarted. It need not be a `start`, so a reader that missed the restarted
   run's `start` still notices.
 - A record from a run that a restart replaced is a late copy, and is ignored.
+- A record without a run id (`pace:1`) for a scope whose current run writes one on
+  every record is a stray, and is ignored.
+- Known limitation: a reader that first sees a later run and only then lines of an
+  earlier run it never saw takes the earlier run for a restart and follows it.
 - A `plan` replaces an earlier plan of the same scope only if its `q` is higher, or it
   comes from a newer run.
 
@@ -266,10 +271,12 @@ scope holds back its `start`:
 
 - If it ends before the interval has passed, it writes one `step` line, labelled `STEP`,
   with its parent, elapsed time, label and run id.
-- If it is still running when the interval has passed, a timer writes its `start` then
-  (with `e` the time held back), and its `end` follows as usual, so a long step such as
-  a download is visible while it runs. The timer is one daemon thread per logger, running
-  only while a step is held back.
+- If it is still running when the interval has passed, its `start` is written with the
+  next line the logger writes (any scope's line, a log line) or the next progress check
+  of any scope (with `e` the time held back), and its `end` follows as usual. Pace starts
+  no threads, so this needs other activity: a long step with nothing else reporting, such
+  as a lone download, shows nothing until it ends. Report its bytes with `progress()` to
+  make it visible while it runs. A forked child never writes its parent's held-back line.
 - Before any line of a scope nested in it, its `start` is written first, so a reader
   always meets a parent before its children and the text indents under it.
 - If it fails, it writes its `start` and then `fail`, so a failure is never folded away.
