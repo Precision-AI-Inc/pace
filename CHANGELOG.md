@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `adopt-pace` skill is split so an agent loads less: `SKILL.md` is short and holds the workflow and an index, and each situation has its own small file under `patterns/`, read only when the repository needs it (`patterns.md` is gone). A new `patterns/model-server.md` covers jobs that start a model server, such as Ollama, and send it requests.
 - Requires Python 3.11 or later; 0.0.1 still covers 3.8–3.10 and writes the same `pace:1` lines.
 
 ### Fixed

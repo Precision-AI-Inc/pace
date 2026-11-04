@@ -30,9 +30,9 @@ Then open Claude Code in that repository and ask:
 
 > add Pace to this repo
 
-Claude Code reads `SKILL.md`, shows its plan and asks before editing. `patterns.md`
-(snippets for each situation) and `verify.py` (the output checker) sit beside it and are
-read or run as needed; copy all three files.
+Claude Code reads `SKILL.md`, shows its plan and asks before editing. The `patterns/`
+folder (one small file of snippets per situation, read only when the repository needs it)
+and `verify.py` (the output checker) sit beside it; copy the whole folder.
 
 ### Check a run yourself
 
