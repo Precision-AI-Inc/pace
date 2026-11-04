@@ -5,8 +5,8 @@
 
 Situation: a multi-GPU job started by ``torchrun``, Accelerate or SLURM runs the same script
 on every rank. A scheduler needs one set of progress records per job, not one per GPU.
-Pace reads the rank from the first of ``RANK``, ``LOCAL_RANK`` and ``SLURM_PROCID`` that
-holds an integer. Rank 0 writes progress; on every other rank ``track``, ``progress``,
+Pace reads the rank from the first of ``RANK``, ``OMPI_COMM_WORLD_RANK``, ``PMI_RANK``,
+``SLURM_PROCID`` and ``LOCAL_RANK`` that holds an integer. Rank 0 writes progress; on every other rank ``track``, ``progress``,
 ``timed``, ``phase`` and ``plan`` still run your code and write nothing. So the training
 code is written exactly as for one process, with no ``if rank == 0`` around progress calls.
 

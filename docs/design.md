@@ -93,8 +93,9 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
   (`stdout` default, or `stderr`), `PACE_COLOR` (`auto`/`always`/`never`), `PACE_BAR` (`auto`/`always`/`never`),
   `PACE_MIN_INTERVAL`, `PACE_HEARTBEAT`, `PACE_ALL_RANKS`. An explicit
   `logger.configure(...)` value beats the environment variable, which beats the default.
-- **Distributed training**: rank is read from `RANK`, then `LOCAL_RANK`, then
-  `SLURM_PROCID`. Only rank 0 emits progress by default, and the adapters report
+- **Distributed training**: rank is read from `RANK`, then `OMPI_COMM_WORLD_RANK`
+  (Open MPI), `PMI_RANK` (MPICH, Intel MPI), `SLURM_PROCID` and `LOCAL_RANK`, the global
+  ranks first. Only rank 0 emits progress by default, and the adapters report
   the global step, so there is one record per scope, not one per GPU.
 
 ### Progress scopes

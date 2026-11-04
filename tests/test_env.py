@@ -37,10 +37,23 @@ def test_rank_defaults_to_zero() -> None:
     assert current_rank({}) == 0
 
 
-def test_rank_prefers_rank_then_local_rank_then_slurm() -> None:
-    assert current_rank({"RANK": "4", "LOCAL_RANK": "1", "SLURM_PROCID": "2"}) == 4
-    assert current_rank({"LOCAL_RANK": "1", "SLURM_PROCID": "2"}) == 1
-    assert current_rank({"SLURM_PROCID": "2"}) == 2
+def test_rank_prefers_the_global_ranks_over_local_rank() -> None:
+    environment = {
+        "RANK": "7",
+        "OMPI_COMM_WORLD_RANK": "6",
+        "PMI_RANK": "5",
+        "SLURM_PROCID": "4",
+        "LOCAL_RANK": "1",
+    }
+    for name, expected in [("RANK", 7), ("OMPI_COMM_WORLD_RANK", 6), ("PMI_RANK", 5), ("SLURM_PROCID", 4)]:
+        assert current_rank(environment) == expected
+        del environment[name]
+    assert current_rank(environment) == 1
+
+
+@pytest.mark.parametrize("variable", ["OMPI_COMM_WORLD_RANK", "PMI_RANK"])
+def test_rank_reads_mpi_launchers(variable: str) -> None:
+    assert current_rank({variable: "3", "LOCAL_RANK": "0"}) == 3
 
 
 def test_rank_skips_values_that_are_not_integers() -> None:

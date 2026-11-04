@@ -32,7 +32,8 @@ LEVELS: dict[str, int] = {
 }
 DEFAULT_LEVEL = LEVELS["INFO"]
 
-_RANK_VARIABLES = ("RANK", "LOCAL_RANK", "SLURM_PROCID")
+# Global ranks first: LOCAL_RANK counts from 0 on every node, so it is the last resort.
+_RANK_VARIABLES = ("RANK", "OMPI_COMM_WORLD_RANK", "PMI_RANK", "SLURM_PROCID", "LOCAL_RANK")
 _COLOR_MODES = ("auto", "always", "never")
 _TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
 
@@ -96,7 +97,12 @@ def level_name(number: int) -> str:
 
 
 def current_rank(env: dict[str, str] | None = None) -> int:
-    """Return this process's rank from ``RANK``, ``LOCAL_RANK`` or ``SLURM_PROCID``.
+    """Return this process's rank from the launcher's environment variables.
+
+    The variables are read in this order: ``RANK`` (torchrun, Accelerate),
+    ``OMPI_COMM_WORLD_RANK`` (Open MPI), ``PMI_RANK`` (MPICH, Intel MPI), ``SLURM_PROCID``,
+    then ``LOCAL_RANK``. The global ranks come before ``LOCAL_RANK``, which restarts at 0
+    on every node.
 
     Parameters
     ----------

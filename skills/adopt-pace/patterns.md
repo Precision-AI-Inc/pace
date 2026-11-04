@@ -13,7 +13,7 @@ What every pattern relies on:
   exception leaves a `progress` block).
 - `root=True` marks the one scope that stands for the whole job. When the root ends,
   the scheduler considers the job complete.
-- Pace itself keeps rank 0 only (it reads `RANK`, `LOCAL_RANK`, `SLURM_PROCID`), so
+- Pace itself keeps rank 0 only (it reads `RANK`, `OMPI_COMM_WORLD_RANK`, `PMI_RANK`, `SLURM_PROCID`, `LOCAL_RANK`), so
   progress calls need no `if rank == 0:` guard.
 - Output goes to stdout, flushed per line, rate-limited by time (a line every 15 s at
   most, a heartbeat every 120 s at most). Step count does not change the volume.
