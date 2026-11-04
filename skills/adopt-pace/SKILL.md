@@ -51,7 +51,7 @@ With `git ls-files`, `ls` and grep, note:
 
 Each file ends with runnable examples to copy: Pace's
 [`examples/`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md) and
-tested ones in OrchAI's [example repo](https://github.com/Precision-AI-Inc/orch-example-yolov5/tree/feat/pace-examples)
+tested ones in OrchAI's [example repo](https://github.com/Precision-AI-Inc/orchai-examples)
 (detection, LLM, VLM).
 
 | Situation in the repo | Read |

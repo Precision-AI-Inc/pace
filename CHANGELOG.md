@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `adopt-pace` skill now links its tested examples in OrchAI's example repository at its new name and default branch, [`Precision-AI-Inc/orchai-examples`](https://github.com/Precision-AI-Inc/orchai-examples) (formerly `orch-example-yolov5`).
+
 ## [0.1.2] - 2026-11-04
 
 ### Fixed
