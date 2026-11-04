@@ -26,7 +26,11 @@ def start_server() -> subprocess.Popen:
 
 def stop(server: subprocess.Popen) -> None:
     server.terminate()
-    server.wait(timeout=30)
+    try:
+        server.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        server.kill()
+        server.wait()
 
 @timed("Import model")
 def import_model(path: str) -> None: ...
