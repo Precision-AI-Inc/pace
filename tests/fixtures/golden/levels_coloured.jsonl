@@ -10,5 +10,5 @@
 "2025-11-03T17:16:42Z INFO     12345\n"
 "2025-11-03T17:16:42Z \u001b[2mDEBUG\u001b[0m    now shown\n"
 "2025-11-03T17:16:42Z \u001b[31mERROR\u001b[0m    kept\n"
-"2025-11-03T17:16:42Z \u001b[36mPROGRESS\u001b[0m Coloured  0.0%  0/2 it · estimating…  [pace:2 coloured start t=2 u=it n=Coloured r=golden01]\n"
-"2025-11-03T17:16:42Z \u001b[36mPROGRESS\u001b[0m Coloured  0.0%  0/2 it · done in 0s  [pace:2 coloured end t=2 r=golden01]\n"
+"2025-11-03T17:16:42Z \u001b[36mPROGRESS\u001b[0m Coloured  0/2 it  [pace:2 coloured start t=2 u=it n=Coloured r=golden01]\n"
+"2025-11-03T17:16:42Z \u001b[36mPROGRESS\u001b[0m Coloured  0/2  done in 0s  [pace:2 coloured end t=2 r=golden01]\n"

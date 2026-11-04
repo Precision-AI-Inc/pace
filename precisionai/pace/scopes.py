@@ -30,7 +30,14 @@ from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar, Token
 from typing import Any, Self, TypeVar
 
-from precisionai.pace._render import PROGRESS_LABEL, colorize, format_timestamp, plan_text, progress_text
+from precisionai.pace._render import (
+    PROGRESS_LABEL,
+    STEP_LABEL,
+    colorize,
+    format_timestamp,
+    plan_text,
+    progress_text,
+)
 from precisionai.pace.core import Logger, Target
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import ScopeForecast
@@ -43,7 +50,7 @@ FALLBACK_ID = "scope"
 UPDATE_FRACTION = 0.01
 
 _UNSAFE_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
-_PARENT: ContextVar[str | None] = ContextVar("pace_parent_scope", default=None)
+_PARENT: ContextVar["Scope | None"] = ContextVar("pace_parent_scope", default=None)
 
 T = TypeVar("T")
 
@@ -137,6 +144,8 @@ class Scope:
         self.completed = _count(completed)
         self.total = _total(total)
         self.parent: str | None = None
+        self.depth = 0
+        self._parent_scope: Scope | None = None
         self._seq = 0
         self._started_at = 0.0
         self._state = "new"
@@ -144,7 +153,7 @@ class Scope:
         self._last_completed = 0.0
         self._next_check = 0.0
         self._forecast = ScopeForecast(self.id)
-        self._token: Token[str | None] | None = None
+        self._token: Token[Scope | None] | None = None
 
     def start(self) -> None:
         """Write the ``start`` record. Does nothing if the scope already started."""
@@ -153,7 +162,10 @@ class Scope:
                 return
             now = self._out.clock.monotonic()
             self._started_at = now
-            self.parent = _PARENT.get()
+            self._parent_scope = _PARENT.get()
+            if self._parent_scope is not None:
+                self.parent = self._parent_scope.id
+                self.depth = self._parent_scope.depth + 1
             self._state = "open"
             self._emit(Event.START, now)
 
@@ -207,7 +219,7 @@ class Scope:
 
     def bind(self) -> None:
         """Make this scope the parent of scopes opened from now on in this context."""
-        self._token = _PARENT.set(self.id)
+        self._token = _PARENT.set(self)
 
     def unbind(self) -> None:
         """Restore the parent that was in place before :meth:`bind`."""
@@ -217,7 +229,7 @@ class Scope:
         try:
             _PARENT.reset(token)
         except ValueError:
-            _PARENT.set(self.parent)
+            _PARENT.set(self._parent_scope)
 
     def _set_completed(self, completed: float) -> None:
         self.completed = min(completed, MAX_NUMBER)
@@ -300,7 +312,9 @@ class Scope:
             self._forecast.observe(record, now)
             forecast = self._forecast.snapshot(now)
             drawing = target.bar and event in (Event.START, Event.UPDATE)
-            text = progress_text(record, forecast, self.description, self.unit, target.charset, bar=drawing)
+            text = progress_text(
+                record, forecast, self.description, self.unit, target.charset, bar=drawing, depth=self.depth
+            )
             if drawing:
                 self._out.draw_bar(text, target)
                 return
@@ -308,7 +322,8 @@ class Scope:
 
     def _progress_line(self, text: str, record: Record, target: Target) -> str:
         stamp = format_timestamp(self._out.clock.wall())
-        label = colorize(PROGRESS_LABEL, target.color)
+        name = STEP_LABEL if record.event is Event.STEP else PROGRESS_LABEL
+        label = colorize(name, target.color) + " " * (len(PROGRESS_LABEL) - len(name))
         prefix = f"{stamp} {label} "
         trailer = f"  {format_trailer(record)}"
         # A reader rejects lines over MAX_LINE_BYTES, so the readable text gives way.

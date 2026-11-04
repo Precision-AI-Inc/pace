@@ -111,9 +111,7 @@ def test_line_text_shows_percent_count_rate_and_estimate(log: Logger, clock: Fak
     update = stream.lines()[5]
     # Four intervals at 20 step/s, then 12: the weighted average gives 0.7 x 20 + 0.3 x 12 = 17.6,
     # and 3160 steps left / 17.6 = 3m00s.
-    assert update.startswith(
-        "2025-11-03T17:18:22Z PROGRESS Train  36.8%  1840/5000 step · 17.6 step/s · ~3m00s  [pace:2 "
-    )
+    assert update.startswith("2025-11-03T17:18:22Z PROGRESS Train  1840/5000  36.8%  17.6 step/s · ~3m00s  [pace:2 ")
 
 
 def test_failure_writes_fail_and_reraises(log: Logger, stream: FakeStream) -> None:
@@ -359,7 +357,7 @@ def test_track_iterable_error_writes_fail(log: Logger, stream: FakeStream) -> No
         list(track(source(), "Failing", logger=log))
     assert kinds(stream) == ["start", "fail"]
     assert "1/3" not in stream.lines()[-1]
-    assert " 1 it" in stream.lines()[-1]
+    assert "Failing  1  failed after" in stream.lines()[-1]
 
 
 def test_track_scope_is_the_parent_of_scopes_in_the_loop(log: Logger, stream: FakeStream) -> None:
@@ -435,7 +433,7 @@ def test_phase_failure_is_not_marked_complete(log: Logger, stream: FakeStream) -
     with pytest.raises(RuntimeError, match="stop"), phase("Doomed", logger=log):
         raise RuntimeError("stop")
     assert records(stream)[-1]["k"] == "fail"
-    assert "0.0%" in stream.lines()[-1]
+    assert "0/1  failed after" in stream.lines()[-1]
 
 
 def test_scope_opened_in_a_new_thread_has_no_parent(log: Logger, stream: FakeStream) -> None:
@@ -646,25 +644,45 @@ def test_non_utf8_stream_gets_ascii_text_and_an_intact_trailer(log: Logger, cloc
     assert len(lines) == 3
     assert "·" not in text
     assert "…" not in text
-    assert "| estimating..." in lines[0]
-    assert "| estimating..." in lines[1]
+    assert "  50/100  50.0%  estimating..." in lines[1]
     assert "Entraînement ?" in lines[0]
     for line in lines:
         assert TRAILER.search(line)
 
 
-def test_utf8_stream_gets_unicode_glyphs(log: Logger, stream: FakeStream) -> None:
-    with progress(10, "Glyphs", logger=log):
-        pass
-    assert "· estimating…" in stream.lines()[0]
+def test_utf8_stream_gets_unicode_glyphs(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    with progress(10, "Glyphs", logger=log), progress(10, "Inner", logger=log) as inner:
+        clock.advance(30)
+        inner.advance()
+    assert "PROGRESS ├ Inner   1/10  10.0%  estimating…" in stream.lines()[2]
 
 
-def test_stream_without_encoding_gets_ascii(log: Logger) -> None:
+def test_stream_without_encoding_gets_ascii(log: Logger, clock: FakeClock) -> None:
     sink = io.StringIO()
     log.configure(stream=sink)
-    with progress(10, "Plain", logger=log):
-        pass
-    assert "| estimating..." in sink.getvalue()
+    with progress(10, "Plain", logger=log), progress(10, "Inner", logger=log) as inner:
+        clock.advance(30)
+        inner.advance()
+    assert "PROGRESS - Inner   1/10  10.0%  estimating..." in sink.getvalue()
+
+
+def test_lines_show_what_each_event_needs(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    with progress(128, "Generate", "request", logger=log) as run:
+        with progress(4, "Batch", "prompt", logger=log) as batch:
+            batch.advance(4)
+        clock.advance(20)
+        run.advance(66)
+        clock.advance(20)
+        run.advance(62)
+    texts = [line[len("2025-11-03T17:16:42Z ") : line.index("  [pace:2 ")] for line in stream.lines()]
+    assert texts == [
+        "PROGRESS Generate    0/128 request",
+        "PROGRESS ├ Batch  0/4 prompt",
+        "PROGRESS ├ Batch  4/4  done in 0s",
+        "PROGRESS Generate   66/128  51.6%  estimating…",
+        "PROGRESS Generate  128/128  100.0%  estimating…",
+        "PROGRESS Generate  128/128  done in 40s · 3.2 request/s",
+    ]
 
 
 def test_terminal_redraws_one_bar_line_without_a_trailer(clock: FakeClock) -> None:
@@ -795,9 +813,11 @@ def test_every_forecast_state_has_a_display(
 ) -> None:
     StubForecast.result = forecast
     monkeypatch.setattr(scopes, "ScopeForecast", StubForecast)
+    log.configure(min_interval=0)
     handle = progress(10, "States", "step", logger=log)
     handle.start()
-    assert shown in stream.lines()[0]
+    handle.advance()
+    assert shown in stream.lines()[-1]
 
 
 def test_a_number_passed_as_the_unit_is_an_error(log: Logger) -> None:
