@@ -18,14 +18,13 @@ The exit status is 0 when nothing is wrong, 1 when a check failed (or, with
 ``--strict``, when there is any warning), and 2 when there was nothing to read.
 """
 
-from __future__ import annotations
-
 import argparse
 import re
 import sys
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Iterable, Sequence, TextIO
+from datetime import UTC, datetime
+from typing import TextIO
 
 from precisionai.pace import Event, ForecastState, JobEstimate, JobForecast, Record, parse_line
 
@@ -120,7 +119,7 @@ def _timestamp(line: str) -> float | None:
     if match is None:
         return None
     try:
-        return datetime.strptime(match.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+        return datetime.strptime(match.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=UTC).timestamp()
     except ValueError:
         return None
 

@@ -22,15 +22,13 @@ start with the context they were created in, so a scope opened in a new thread h
 parent unless the context is copied.
 """
 
-from __future__ import annotations
-
 import contextlib
 import functools
 import math
 import re
-from collections.abc import Sized
+from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar, Token
-from typing import Any, Callable, Iterable, Iterator, Sequence, Tuple, TypeVar, Union
+from typing import Any, Self, TypeVar
 
 from precisionai.pace._render import PROGRESS_LABEL, colorize, format_timestamp, plan_text, progress_text
 from precisionai.pace.core import Logger, Target
@@ -48,7 +46,6 @@ _UNSAFE_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 _PARENT: ContextVar[str | None] = ContextVar("pace_parent_scope", default=None)
 
 T = TypeVar("T")
-PlanEntry = Union["Phase", str, Tuple[str, float]]
 
 
 def _number(value: Any) -> float | None:
@@ -194,7 +191,7 @@ class Scope:
         """Write the ``fail`` record. Does nothing if the scope has already ended."""
         self._finish(Event.FAIL)
 
-    def __enter__(self) -> Scope:
+    def __enter__(self) -> Self:
         """Start the scope and make it the parent of scopes opened inside."""
         self.start()
         self.bind()
@@ -239,9 +236,9 @@ class Scope:
         if target is None:
             return
         settings = self._out.settings
-        gap = REDRAW_INTERVAL if target.bar else min(REDRAW_INTERVAL, settings.resolve_min_interval())
+        gap = REDRAW_INTERVAL if target.bar else min(REDRAW_INTERVAL, settings.resolve("min_interval"))
         self._next_check = now + gap
-        if target.bar or self._is_due(now, settings.resolve_min_interval(), settings.resolve_heartbeat()):
+        if target.bar or self._is_due(now, settings.resolve("min_interval"), settings.resolve("heartbeat")):
             self._emit(Event.UPDATE, now, target)
 
     def _is_due(self, now: float, min_interval: float, heartbeat: float) -> bool:
@@ -357,6 +354,9 @@ class Phase(Scope):
         if exc_type is None and self._state == "open":
             self.completed = 1.0
         super().__exit__(exc_type, exc, traceback)
+
+
+PlanEntry = Phase | str | tuple[str, float]
 
 
 def progress(

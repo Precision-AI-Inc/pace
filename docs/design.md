@@ -35,7 +35,7 @@ override the output ones with `PACE_MIN_INTERVAL` and `PACE_HEARTBEAT` (or
 |---|---|
 | Distribution | `precisionai-pace` (PyPI) |
 | Import | `precisionai.pace` |
-| Python | 3.8 and later |
+| Python | 3.11 and later |
 | Runtime dependencies | none in the core |
 | Extras | `[lightning]`, `[transformers]` (includes `accelerate`), `[all]` |
 
@@ -364,7 +364,7 @@ defaults.
   They cover parsing one line at a time; splitting byte chunks into lines and removing
   duplicates are tested in Python only. The fixtures are not shipped in the package;
   readers in other languages take them from the repository. Consumers run the same fixtures against their integration.
-- Every release is tested on Python 3.8 through 3.13.
+- Every release is tested on Python 3.11 through 3.13.
 
 ## Not in this version
 

@@ -3,11 +3,9 @@
 
 """Tests for routing standard logging through the Pace logger."""
 
-from __future__ import annotations
-
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 

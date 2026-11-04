@@ -19,8 +19,6 @@ second one appears after ``configure(level="debug")``. The ``info`` line after
 use ``track`` or ``progress``.
 """
 
-from __future__ import annotations
-
 from precisionai.pace import logger
 
 

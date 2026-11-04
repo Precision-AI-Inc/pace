@@ -3,8 +3,6 @@
 
 """Tests for the readable part of output lines."""
 
-from __future__ import annotations
-
 import pytest
 
 from precisionai.pace import _render as render

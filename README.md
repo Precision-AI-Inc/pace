@@ -19,7 +19,7 @@ that a scheduler can read to estimate when the job will finish.
 - **One way to log across projects**: the same levels, format and progress bars everywhere.
 - **Progress for real ML work**: loops, manual counters, timed steps, phases, PyTorch Lightning and Hugging Face training.
 - **Completion estimates**: the terminal shows time remaining, and a scheduler such as OrchAI gets the same estimate from the job's logs.
-- **No dependencies** in the core, and Python 3.8 or later, so it fits into existing training images.
+- **No dependencies** in the core, and Python 3.11 or later, so it fits into existing training images.
 
 ---
 
@@ -109,7 +109,7 @@ python -m pytest
 ```
 
 Coverage must remain at or above **90%**, enforced by pytest and the pre-commit hook.
-CI runs the tests on Python 3.8 through 3.13. `pre-commit` itself needs Python 3.9 or later.
+CI runs the tests on Python 3.11 through 3.13.
 
 ---
 

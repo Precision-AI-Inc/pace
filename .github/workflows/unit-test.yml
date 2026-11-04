@@ -13,13 +13,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
         os: [ubuntu-latest]
-        include:
-          # actions/setup-python has no Python 3.8 build for ubuntu-24.04 (ubuntu-latest),
-          # so the oldest supported version runs on 22.04 instead.
-          - python-version: "3.8"
-            os: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v7

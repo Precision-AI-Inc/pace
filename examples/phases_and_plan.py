@@ -32,8 +32,6 @@ Expect: a ``Plan`` line listing ``preprocess 10%, train 80%, evaluate 10%``, the
 in order. The ``Train steps`` scope carries ``p=train``.
 """
 
-from __future__ import annotations
-
 import time
 
 from precisionai.pace import logger, phase, plan, track

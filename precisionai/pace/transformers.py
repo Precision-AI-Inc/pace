@@ -11,8 +11,6 @@ TRL's trainers subclass ``transformers.Trainer``, so the same callback serves th
 Install with ``pip install precisionai-pace[transformers]``.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from precisionai.pace._adapters import AdapterScopes

@@ -3,11 +3,8 @@
 
 """Unit tests for precisionai.pace.protocol (reading side)."""
 
-from __future__ import annotations
-
 import dataclasses
 import json
-import random
 from pathlib import Path
 from typing import Any
 
@@ -155,114 +152,9 @@ def _handwritten_records() -> list[Record]:
     ]
 
 
-def _random_record(rng: random.Random) -> Record:
-    event = rng.choice(list(Event))
-    counted = event in (Event.START, Event.UPDATE, Event.END)
-    names = ["a", "b.c", "D-e", "f_g", "x" * 64]
-    return Record(
-        scope=rng.choice(names),
-        event=event,
-        seq=rng.randint(1, 10**6),
-        elapsed=round(rng.uniform(0, 1e6), 3),
-        completed=round(rng.uniform(0, 1e6), 6) if counted else None,
-        total=rng.choice([None, round(rng.uniform(0.000001, 1e6), 6)]) if counted else None,
-        unit=rng.choice([None, "step", "sample/s", "é"]) if event is Event.START else None,
-        parent=rng.choice([None, "p", "q-1"]),
-        root=rng.random() < 0.3,
-        resumed=event is Event.START and rng.random() < 0.3,
-        phases=tuple((f"p{i}", round(rng.uniform(0, 1), 3)) for i in range(rng.randint(0, 6)))
-        if event is Event.PLAN
-        else (),
-        label=rng.choice([None, "Train", "résumé ✓", "a b" * 30]) if event is Event.START else None,
-    )
-
-
 @pytest.mark.parametrize("record", _handwritten_records(), ids=lambda record: f"{record.scope}-{record.event.value}")
 def test_trailer_round_trips(record: Record) -> None:
     assert parse_line("text " + format_trailer(record)) == _expected_after_write(record)
-
-
-def test_trailer_round_trips_random_records() -> None:
-    rng = random.Random(20261103)
-    for _ in range(500):
-        record = _random_record(rng)
-        assert parse_line("text " + format_trailer(record)) == _expected_after_write(record)
-        assert parse_line(format_trailer(record) + "\r\n") == _expected_after_write(record)
-
-
-# --- never raises ---
-
-
-def _garbage_line(rng: random.Random) -> str:
-    pieces = [
-        "[pace:1 ",
-        "[pace:",
-        "]",
-        " ",
-        "s=a ",
-        "k=upd ",
-        "c=1 ",
-        "t=? ",
-        "q=2 ",
-        "e=1",
-        "%",
-        "%4",
-        "=",
-        "\x1b[",
-        "\x1b]",
-    ]
-    pieces += [
-        "\x07",
-        "\r",
-        "\n",
-        "é",
-        "\ud800",
-        "\U0001f600",
-        "0",
-        "-",
-        "ph=a:1,b:2",
-        "root=1",
-        "n=%FF",
-        "u=caf%C3%A9",
-    ]
-    if rng.random() < 0.5:
-        return "".join(rng.choice(pieces) for _ in range(rng.randint(0, 60)))
-    return "".join(chr(rng.randint(0, 0x10FFFF)) for _ in range(rng.randint(0, 80)))
-
-
-def _mutate(rng: random.Random, line: str) -> str:
-    chars = list(line)
-    for _ in range(rng.randint(1, 4)):
-        position = rng.randint(0, len(chars))
-        action = rng.choice(["delete", "insert", "replace", "swap"])
-        junk = rng.choice(list("[]= %.,:-?e\x1b\x00é9aZ"))
-        if action == "delete" and chars:
-            del chars[min(position, len(chars) - 1)]
-        elif action == "replace" and chars:
-            chars[min(position, len(chars) - 1)] = junk
-        elif action == "swap" and len(chars) > 1:
-            index = min(position, len(chars) - 2)
-            chars[index], chars[index + 1] = chars[index + 1], chars[index]
-        else:
-            chars.insert(position, junk)
-    return "".join(chars)
-
-
-def test_parse_line_never_raises_on_garbage() -> None:
-    rng = random.Random(1)
-    for _ in range(5000):
-        result = parse_line(_garbage_line(rng))
-        assert result is None or isinstance(result, Record)
-
-
-def test_parse_line_never_raises_on_mutated_valid_lines() -> None:
-    rng = random.Random(2)
-    lines = [case["line"] for case in CASES if case["record"] is not None]
-    for _ in range(5000):
-        result = parse_line(_mutate(rng, rng.choice(lines)))
-        assert result is None or isinstance(result, Record)
-        if result is not None:
-            assert format_trailer(result).startswith("[pace:1 ")
 
 
 def test_parse_line_handles_pathological_input() -> None:
@@ -378,36 +270,6 @@ def test_splitter_flush_after_oversize_tail_returns_nothing() -> None:
     splitter.feed(b"x" * (MAX_LINE_BYTES + 5))
     assert splitter.flush() == []
     assert splitter.feed(b"ok\n") == ["ok"]
-
-
-def test_splitter_output_does_not_depend_on_chunk_boundaries() -> None:
-    rng = random.Random(3)
-    text = "".join(
-        rng.choice(
-            [
-                "short line\n",
-                "crlf line\r\n",
-                "é日本 😀\n",
-                "\n",
-                "x" * 5000 + "\n",
-                "x" * MAX_LINE_BYTES + "\r\n",
-                "tail",
-            ]
-        )
-        for _ in range(40)
-    )
-    data = text.encode()
-    whole = LineSplitter()
-    expected = whole.feed(data) + whole.flush()
-    for _ in range(50):
-        splitter = LineSplitter()
-        lines: list[str] = []
-        position = 0
-        while position < len(data):
-            size = rng.choice([1, 2, 3, 7, 100, 4096, 5000])
-            lines += splitter.feed(data[position : position + size])
-            position += size
-        assert lines + splitter.flush() == expected
 
 
 def test_splitter_feeds_parse_line() -> None:

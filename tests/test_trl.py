@@ -3,8 +3,6 @@
 
 """The Transformers callback on a TRL trainer, which subclasses ``transformers.Trainer``."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
 

@@ -12,8 +12,6 @@ Install with ``pip install precisionai-pace[lightning]``. Both ``lightning`` (2.
 the older ``pytorch_lightning`` import names are supported.
 """
 
-from __future__ import annotations
-
 import math
 from typing import Any
 

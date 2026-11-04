@@ -3,8 +3,6 @@
 
 """Tests for what the framework adapters share, which need no framework installed."""
 
-from __future__ import annotations
-
 import importlib.machinery
 import importlib.util
 import sys

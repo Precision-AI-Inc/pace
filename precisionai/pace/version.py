@@ -3,8 +3,6 @@
 
 """Installed package version."""
 
-from __future__ import annotations
-
 from importlib.metadata import PackageNotFoundError, version
 
 DISTRIBUTION = "precisionai-pace"

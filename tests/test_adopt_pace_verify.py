@@ -1,7 +1,5 @@
 """Tests for the adopt-pace skill's verify.py, loaded by path because skills/ is not a package."""
 
-from __future__ import annotations
-
 import importlib.util
 import io
 import sys

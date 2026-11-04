@@ -7,10 +7,9 @@ Opt-in: nothing here runs until :func:`capture_logging` is called, so importing 
 never changes how another library logs.
 """
 
-from __future__ import annotations
-
 import logging
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from precisionai.pace._env import level_name, parse_level
 from precisionai.pace.core import Logger

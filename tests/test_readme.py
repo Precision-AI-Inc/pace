@@ -3,8 +3,6 @@
 
 """The README is also the PyPI project page, where relative links and images do not resolve."""
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 

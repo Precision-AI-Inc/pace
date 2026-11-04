@@ -3,8 +3,6 @@
 
 """Tests for configuration resolution, levels and rank detection."""
 
-from __future__ import annotations
-
 import sys
 import time
 
@@ -56,12 +54,12 @@ def test_rank_reads_the_process_environment(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_defaults_when_nothing_is_set() -> None:
     settings = Settings()
-    assert settings.resolve_level() == 20
-    assert settings.resolve_min_interval() == 15.0
-    assert settings.resolve_heartbeat() == 120.0
-    assert settings.resolve_color_mode() == "auto"
-    assert settings.resolve_bar_mode() == "auto"
-    assert settings.resolve_stream() is sys.stdout
+    assert settings.resolve("level") == 20
+    assert settings.resolve("min_interval") == 15.0
+    assert settings.resolve("heartbeat") == 120.0
+    assert settings.resolve("color") == "auto"
+    assert settings.resolve("bar") == "auto"
+    assert settings.resolve("stream") is sys.stdout
     assert settings.progress_enabled()
 
 
@@ -73,12 +71,12 @@ def test_environment_overrides_defaults(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("PACE_BAR", "never")
     monkeypatch.setenv("PACE_STREAM", "Stderr")
     settings = Settings()
-    assert settings.resolve_level() == 10
-    assert settings.resolve_min_interval() == 3.5
-    assert settings.resolve_heartbeat() == 9.0
-    assert settings.resolve_color_mode() == "always"
-    assert settings.resolve_bar_mode() == "never"
-    assert settings.resolve_stream() is sys.stderr
+    assert settings.resolve("level") == 10
+    assert settings.resolve("min_interval") == 3.5
+    assert settings.resolve("heartbeat") == 9.0
+    assert settings.resolve("color") == "always"
+    assert settings.resolve("bar") == "never"
+    assert settings.resolve("stream") is sys.stderr
 
 
 def test_explicit_settings_override_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,11 +84,11 @@ def test_explicit_settings_override_the_environment(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("PACE_MIN_INTERVAL", "3")
     monkeypatch.setenv("PACE_COLOR", "always")
     settings = Settings(level=40, min_interval=0.0, heartbeat=1.0, color="never", stream="stderr")
-    assert settings.resolve_level() == 40
-    assert settings.resolve_min_interval() == 0.0
-    assert settings.resolve_heartbeat() == 1.0
-    assert settings.resolve_color_mode() == "never"
-    assert settings.resolve_stream() is sys.stderr
+    assert settings.resolve("level") == 40
+    assert settings.resolve("min_interval") == 0.0
+    assert settings.resolve("heartbeat") == 1.0
+    assert settings.resolve("color") == "never"
+    assert settings.resolve("stream") is sys.stderr
 
 
 @pytest.mark.parametrize("raw", ["", "  ", "soon", "-4", "nan", "inf"])
@@ -98,18 +96,18 @@ def test_bad_environment_numbers_fall_back_to_defaults(monkeypatch: pytest.Monke
     monkeypatch.setenv("PACE_MIN_INTERVAL", raw)
     monkeypatch.setenv("PACE_HEARTBEAT", raw)
     settings = Settings()
-    assert settings.resolve_min_interval() == 15.0
-    assert settings.resolve_heartbeat() == 120.0
+    assert settings.resolve("min_interval") == 15.0
+    assert settings.resolve("heartbeat") == 120.0
 
 
 def test_unknown_color_mode_is_auto(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PACE_COLOR", "rainbow")
-    assert Settings().resolve_color_mode() == "auto"
+    assert Settings().resolve("color") == "auto"
 
 
 def test_an_object_stream_is_used_as_is() -> None:
     sink = object()
-    assert Settings(stream=sink).resolve_stream() is sink
+    assert Settings(stream=sink).resolve("stream") is sink
 
 
 @pytest.mark.parametrize(("raw", "enabled"), [("1", True), ("true", True), ("YES", True), ("0", False), ("", False)])

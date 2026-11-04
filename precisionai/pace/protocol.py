@@ -9,17 +9,14 @@ format is specified in ``docs/design.md``; a change here is a change to that
 specification.
 """
 
-from __future__ import annotations
-
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar
+from functools import partial
+from typing import TypeVar
 from urllib.parse import unquote_to_bytes
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 MARKER = "pace"
 VERSION = 1
@@ -27,6 +24,7 @@ VERSION = 1
 MAX_LINE_BYTES = 4096
 # Largest count, total, elapsed time or weight a trailer may carry.
 MAX_NUMBER = 1e15
+MAX_SEQ = 10**12
 MAX_FIELDS = 32
 # Raw (still percent-encoded) length. 768 holds a 64-character label or unit of
 # 4-byte characters, each written as 12 escape characters.
@@ -42,6 +40,10 @@ RUN_PATTERN = re.compile(r"[a-z0-9]{1,16}")
 
 SCOPE_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
+# The terminal escape sequences a reader removes before it looks for a trailer. The logger
+# strips the same ones from user messages, so a forged marker cannot hide inside one.
+ANSI_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+
 # Characters that may appear in a trailer value without percent-encoding.
 _SAFE_VALUE_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-:,")
 
@@ -56,7 +58,7 @@ class Event(str, Enum):
     PLAN = "plan"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Record:
     """One progress record, as carried by one trailer.
 
@@ -198,20 +200,25 @@ def format_trailer(record: Record) -> str:
     return f"[{MARKER}:{VERSION} {' '.join(fields)}]"
 
 
+def check_id(pattern: re.Pattern[str], value: str, what: str) -> str:
+    """Return ``value`` if it matches ``pattern`` entirely, otherwise raise ``ValueError`` naming ``what``."""
+    if not pattern.fullmatch(value):
+        raise ValueError(f"invalid {what} {value!r}")
+    return value
+
+
 def _validate_ids(record: Record) -> None:
-    if not SCOPE_PATTERN.fullmatch(record.scope):
-        raise ValueError(f"invalid scope id {record.scope!r}")
-    if record.parent is not None and not SCOPE_PATTERN.fullmatch(record.parent):
-        raise ValueError(f"invalid parent scope id {record.parent!r}")
+    check_id(SCOPE_PATTERN, record.scope, "scope id")
+    if record.parent is not None:
+        check_id(SCOPE_PATTERN, record.parent, "parent scope id")
     if record.seq < 1:
         raise ValueError(f"seq must be at least 1, got {record.seq}")
-    if record.run is not None and not RUN_PATTERN.fullmatch(record.run):
-        raise ValueError(f"invalid run id {record.run!r}")
+    if record.run is not None:
+        check_id(RUN_PATTERN, record.run, "run id")
     if len(record.phases) > MAX_PHASES:
         raise ValueError(f"at most {MAX_PHASES} phases, got {len(record.phases)}")
     for name, _ in record.phases:
-        if not SCOPE_PATTERN.fullmatch(name):
-            raise ValueError(f"invalid phase scope id {name!r}")
+        check_id(SCOPE_PATTERN, name, "phase scope id")
 
 
 def _count_fields(record: Record) -> list[str]:
@@ -259,11 +266,8 @@ def _is_control(char: str) -> bool:
     return code < 0x20 or 0x7F <= code <= 0x9F
 
 
-MAX_SEQ = 10**12
-
 _T = TypeVar("_T")
 
-_ANSI_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 _KEY_PATTERN = re.compile(r"[a-z0-9]+")
 _VALUE_PATTERN = re.compile(r"(?:[A-Za-z0-9._:,-]|%[0-9A-Fa-f]{2})+")
 _NUMBER_PATTERN = re.compile(r"[0-9]+(?:\.[0-9]+)?")
@@ -337,7 +341,7 @@ def parse_line(line: str) -> Record | None:
 
 
 def _trailer_tokens(line: str) -> list[str] | None:
-    text = _ANSI_PATTERN.sub("", line).rstrip()
+    text = ANSI_PATTERN.sub("", line).rstrip()
     if not text.endswith("]"):
         return None
     start = text.rfind(f"[{MARKER}:")
@@ -411,12 +415,6 @@ def _optional(fields: dict[str, str], key: str, parse: Callable[[str], _T]) -> _
     return parse(fields[key]) if key in fields else None
 
 
-def _parse_scope(value: str) -> str:
-    if not SCOPE_PATTERN.fullmatch(value):
-        raise ValueError(f"invalid scope id {value!r}")
-    return value
-
-
 def _parse_seq(value: str) -> int:
     if not _INTEGER_PATTERN.fullmatch(value):
         raise ValueError(f"invalid sequence number {value!r}")
@@ -452,33 +450,6 @@ def _parse_flag(fields: dict[str, str], key: str) -> bool:
     return True
 
 
-def _parse_unit(value: str) -> str:
-    unit = decode_value(value)
-    if len(unit) > MAX_UNIT_CHARS:
-        raise ValueError("unit too long")
-    _reject_control(unit)
-    return unit
-
-
-def _parse_label(value: str) -> str:
-    label = decode_value(value)
-    if len(label) > MAX_LABEL_CHARS:
-        raise ValueError("label too long")
-    _reject_control(label)
-    return label
-
-
-def _parse_run(value: str) -> str:
-    if not RUN_PATTERN.fullmatch(value):
-        raise ValueError(f"invalid run id {value!r}")
-    return value
-
-
-def _reject_control(text: str) -> None:
-    if any(_is_control(char) for char in text):
-        raise ValueError("control character in decoded value")
-
-
 def _parse_phases(value: str) -> tuple[tuple[str, float], ...]:
     pairs = value.split(",")
     if len(pairs) > MAX_PHASES:
@@ -490,6 +461,21 @@ def _parse_phases(value: str) -> tuple[tuple[str, float], ...]:
             raise ValueError(f"malformed phase {pair!r}")
         phases.append((_parse_scope(name), _parse_number(weight)))
     return tuple(phases)
+
+
+def _parse_text(value: str, limit: int, what: str) -> str:
+    text = decode_value(value)
+    if len(text) > limit:
+        raise ValueError(f"{what} too long")
+    if any(_is_control(char) for char in text):
+        raise ValueError("control character in decoded value")
+    return text
+
+
+_parse_scope = partial(check_id, SCOPE_PATTERN, what="scope id")
+_parse_run = partial(check_id, RUN_PATTERN, what="run id")
+_parse_unit = partial(_parse_text, limit=MAX_UNIT_CHARS, what="unit")
+_parse_label = partial(_parse_text, limit=MAX_LABEL_CHARS, what="label")
 
 
 class LineSplitter:
@@ -555,7 +541,7 @@ class LineSplitter:
             self._skipping = False
             return
         # Decide on the size before copying, so one huge line in a huge chunk is never materialised.
-        if len(self._tail) + (end - start) > MAX_LINE_BYTES + 1:
+        if self._too_long(end - start):
             self._tail.clear()
             return
         data = bytes(self._tail) + chunk[start:end]
@@ -565,15 +551,15 @@ class LineSplitter:
     def _keep(self, rest: bytes) -> None:
         if self._skipping:
             return
-        if len(self._tail) + len(rest) > MAX_LINE_BYTES + 1:
+        if self._too_long(len(rest)):
             self._tail.clear()
             self._skipping = True
             return
         self._tail += rest
+
+    def _too_long(self, extra: int) -> bool:
         # One byte of slack: a line of exactly MAX_LINE_BYTES waits here with its "\r".
-        if len(self._tail) > MAX_LINE_BYTES + 1:
-            self._tail.clear()
-            self._skipping = True
+        return len(self._tail) + extra > MAX_LINE_BYTES + 1
 
     @staticmethod
     def _emit(data: bytes, lines: list[str], *, drop_empty: bool = False) -> None:

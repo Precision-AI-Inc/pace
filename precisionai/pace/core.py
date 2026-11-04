@@ -23,18 +23,16 @@ write time, so they apply to a running process.
 Progress lines are not filtered by level: a scheduler depends on them.
 """
 
-from __future__ import annotations
-
 import contextlib
-import math
 import os
 import secrets
 import shutil
 import sys
 import threading
 import traceback
+from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Any, Collection
+from typing import Any
 
 from precisionai.pace._env import LEVELS, Clock, Settings, level_name, parse_level
 from precisionai.pace._render import Charset, charset_for, encode_safely, fit, format_timestamp, log_line
@@ -42,7 +40,7 @@ from precisionai.pace._render import Charset, charset_for, encode_safely, fit, f
 DEFAULT_TERMINAL_COLUMNS = 80
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Target:
     """Where one line is going and what that stream can show.
 
@@ -142,49 +140,17 @@ class Logger:
             If ``level``, ``color``, ``bar`` or an interval is not a valid value.
         """
         with self.lock:
-            self._apply(level, stream, color, bar, min_interval, heartbeat, all_ranks)
+            self.settings.update(
+                level=level,
+                stream=stream,
+                color=color,
+                bar=bar,
+                min_interval=min_interval,
+                heartbeat=heartbeat,
+                all_ranks=all_ranks,
+            )
             if clock is not None:
                 self.clock = clock
-
-    def _apply(
-        self, level: Any, stream: Any, color: Any, bar: Any, min_interval: Any, heartbeat: Any, ranks: Any
-    ) -> None:
-        settings = Settings(
-            level=self._check_level(level),
-            stream=stream,
-            color=self._check_mode("color", color),
-            bar=self._check_mode("bar", bar),
-            min_interval=self._check_seconds("min_interval", min_interval),
-            heartbeat=self._check_seconds("heartbeat", heartbeat),
-            all_ranks=None if ranks is None else bool(ranks),
-        )
-        for name, value in vars(settings).items():
-            if value is not None:
-                setattr(self.settings, name, value)
-
-    @staticmethod
-    def _check_level(level: Any) -> int | None:
-        if level is None:
-            return None
-        parsed = parse_level(level)
-        if parsed is None:
-            raise ValueError(f"unknown level {level!r}; expected one of {', '.join(LEVELS)}")
-        return parsed
-
-    @staticmethod
-    def _check_mode(name: str, value: str | None) -> str | None:
-        if value is not None and value not in ("auto", "always", "never"):
-            raise ValueError(f"{name} must be 'auto', 'always' or 'never', got {value!r}")
-        return value
-
-    @staticmethod
-    def _check_seconds(name: str, value: float | None) -> float | None:
-        if value is None:
-            return None
-        number = value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
-        if number is None or not math.isfinite(number) or number < 0:
-            raise ValueError(f"{name} must be a non-negative number of seconds, got {value!r}")
-        return value
 
     def reset(self) -> None:
         """Forget every explicit setting, so the environment and defaults apply again."""
@@ -238,7 +204,7 @@ class Logger:
             number = LEVELS["INFO"] if number is None else number
             label = level_name(number)
             with self.lock:
-                if number < self.settings.resolve_level():
+                if number < self.settings.resolve("level"):
                     return
                 target = self.target()
                 if target is None:
@@ -248,14 +214,14 @@ class Logger:
 
     def target(self) -> Target | None:
         """Resolve the stream now and describe what it can show; ``None`` when there is no usable stream."""
-        stream = self.settings.resolve_stream()
+        stream = self.settings.resolve("stream")
         if stream is None or not callable(getattr(stream, "write", None)):
             return None
         encoding = getattr(stream, "encoding", None)
         encoding = encoding if isinstance(encoding, str) and encoding else "ascii"
         tty = _is_tty(stream)
-        color_mode = self.settings.resolve_color_mode()
-        bar_mode = self.settings.resolve_bar_mode()
+        color_mode = self.settings.resolve("color")
+        bar_mode = self.settings.resolve("bar")
         return Target(
             stream=stream,
             encoding=encoding,

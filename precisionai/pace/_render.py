@@ -7,16 +7,14 @@ Nothing here writes; it only builds strings. The text is for people and may chan
 between releases. Only the ``[pace:1 ...]`` trailer that follows it is a contract.
 """
 
-from __future__ import annotations
-
 import codecs
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import Event, Record
+from precisionai.pace.protocol import ANSI_PATTERN, Event, Record
 
 PROGRESS_LABEL = "PROGRESS"
 LABEL_WIDTH = 8
@@ -25,7 +23,7 @@ MAX_DESCRIPTION_CHARS = 80
 SEPARATOR = "  "
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Charset:
     """The glyphs used in the readable part of a line."""
 
@@ -48,8 +46,6 @@ _COLOR_CODES: dict[str, str] = {
 }
 _ESCAPE = "\x1b["
 _WHITESPACE = re.compile(r"\s+")
-# The same escape sequences precisionai.pace.protocol strips before parsing.
-_ANSI_SEQUENCE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 _FORGED_MARKER = re.compile(r"\[(?=pace:)")
 
 
@@ -113,7 +109,7 @@ def neutralize(message: str) -> str:
     are removed here first: ``[pa`` + ESC ``[31m`` + ``ce:`` must not survive as a
     marker. Any ESC left over is dropped too.
     """
-    plain = _ANSI_SEQUENCE.sub("", message).replace("\x1b", "")
+    plain = ANSI_PATTERN.sub("", message).replace("\x1b", "")
     return _FORGED_MARKER.sub("[ ", plain)
 
 

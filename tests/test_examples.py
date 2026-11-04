@@ -5,22 +5,23 @@ adapter tests. Everything else runs here as a subprocess, so an example that sto
 working, or stops following the practice the docs describe, fails the suite.
 """
 
-from __future__ import annotations
-
+import dataclasses
 import importlib.util
 import os
+import re
 import subprocess
 import sys
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, Iterator
 
 import pytest
 
-from precisionai.pace import ForecastState
+from precisionai.pace import ForecastState, parse_line
+from tests.conftest import assert_golden
 
 pytestmark = pytest.mark.examples
 
@@ -29,7 +30,7 @@ EXAMPLES = REPOSITORY / "examples"
 VERIFY_PATH = REPOSITORY / "skills" / "adopt-pace" / "verify.py"
 FRAMEWORK_EXAMPLES = {"lightning_example.py", "transformers_example.py"}
 TIMEOUT_SECONDS = 60
-Results = Dict[str, "subprocess.CompletedProcess[str]"]
+Results = dict[str, "subprocess.CompletedProcess[str]"]
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,38 @@ def test_progress_output_passes_verify(name: str, results: Results) -> None:
     assert report.estimate is not None
     assert report.estimate.state is ForecastState.COMPLETE, text
     assert all(scope.total is not None for scope in report.scopes.values()), text
+
+
+def normalize(output: str) -> str:
+    """Reduce an example's output to what does not depend on the clock, the machine or the run.
+
+    A line with a trailer becomes its record without the elapsed time and run id; any other line loses
+    its timestamp and the checkout path.
+    """
+    lines = []
+    for line in output.splitlines():
+        if line.startswith(("Traceback", " ")):  # frames differ between Python versions
+            continue
+        record = parse_line(line)
+        if record is None:
+            plain = re.sub(r"^(\[rank \d+\] )?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ ", r"\1", line)
+            lines.append(re.sub(r"\.py:\d+:", ".py:", plain.replace(str(REPOSITORY), "<repo>")))
+        else:
+            fields = dataclasses.asdict(dataclasses.replace(record, elapsed=0.0, run=None))
+            fields["event"] = record.event.value
+            lines.append(
+                " ".join(
+                    f"{key}={value}"
+                    for key, value in fields.items()
+                    if value is not None and value is not False and value != ()
+                )
+            )
+    return "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize("name", sorted(set(EXPECTED) - {"reading_output.py"}))  # that one prints real elapsed time
+def test_example_output_is_unchanged(name: str, results: Results) -> None:
+    assert_golden(f"example_{Path(name).stem}", normalize(results[name].stdout))
 
 
 def test_basic_logging_writes_every_level_and_no_progress(results: Results) -> None:

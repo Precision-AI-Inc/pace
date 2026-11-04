@@ -27,8 +27,6 @@ Expect: both ranks log that they started, and only the ``[rank 0]`` lines includ
 progress. Rank 1 prints its own log line and no progress.
 """
 
-from __future__ import annotations
-
 import os
 import subprocess
 import sys
