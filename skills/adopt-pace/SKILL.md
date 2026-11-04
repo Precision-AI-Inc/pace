@@ -95,6 +95,7 @@ rather than inventing one ([all of them](https://github.com/Precision-AI-Inc/pac
 | No known total | `unknown_total.py` (`set_total` when it appears) |
 | One-off steps | `timed_steps.py` (`@timed`) |
 | Standard `logging`, ranks | `stdlib_logging.py`, `distributed.py` |
+| A library with its own bar or log lines | `library_hooks.py` (`PaceTqdm`, `take_over`) |
 | Lightning, Hugging Face | `lightning_example.py`, `transformers_example.py` |
 
 **Choosing the root.** Ask: "when this scope ends, is the job really done?" If more than a

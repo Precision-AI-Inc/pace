@@ -55,6 +55,7 @@ EXPECTED: dict[str, Expect] = {
     "nested_scopes.py": Expect(),
     "stdlib_logging.py": Expect(),
     "distributed.py": Expect(),
+    "library_hooks.py": Expect(),
     "reading_output.py": Expect(progress=False),
 }
 
@@ -235,6 +236,16 @@ def test_stdlib_logging_is_routed_through_pace(results: Results) -> None:
     assert "OSError: checksum mismatch" in out
     assert "UserWarning: tf32 is disabled" in out
     assert "Not routed" not in out
+
+
+def test_library_hooks_report_the_library_progress_and_log_lines_once(results: Results) -> None:
+    out = results["library_hooks.py"].stdout
+
+    assert out.count("Rendering 8 prompts") == 1
+    assert out.count("Cache is full, 4 images were not kept") == 1
+    assert "Z WARNING  Cache is full" in out
+    scope = verify.analyze(out.splitlines()).scopes["rendering"]
+    assert scope.completed == 8
 
 
 def test_distributed_writes_progress_from_rank_zero_only(results: Results) -> None:
