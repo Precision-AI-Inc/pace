@@ -213,6 +213,26 @@ def test_nested_scopes_name_the_epochs_as_parent(results: Results) -> None:
     assert report.scopes["epochs"].parent is None
 
 
+def test_nested_scopes_at_the_default_interval_write_each_short_loop_as_one_line() -> None:
+    env = example_environment()
+    del env["PACE_MIN_INTERVAL"]
+    run = subprocess.run(
+        [sys.executable, str(EXAMPLES / "nested_scopes.py")],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+        timeout=TIMEOUT_SECONDS,
+        check=False,
+    )
+    assert run.returncode == 0, run.stderr
+    report = verify.analyze(run.stdout.splitlines())
+    assert report.errors == [], verify.format_report(report)
+    assert report.estimate is not None
+    assert report.estimate.state is ForecastState.COMPLETE
+    assert_golden("example_nested_scopes_default_interval", normalize(run.stdout))
+
+
 def test_phases_and_plan_nest_the_loop_in_its_phase(results: Results) -> None:
     report = verify.analyze(results["phases_and_plan.py"].stdout.splitlines())
 

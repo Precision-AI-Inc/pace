@@ -121,7 +121,7 @@ python <skill-dir>/verify.py /tmp/pace-smoke.log
 ```
 
 `verify.py` checks that every trailer parses, the root count, a total and an `end` or `fail`
-per scope (a `step`, the one line of a short `@timed` call or `phase()`, counts as both),
+per scope (a `step`, the one line of a short `@timed` call, `phase()` or child scope, counts as both),
 plan names against scope ids, and the final estimate (a finished job reads
 `complete`; a run under a minute never reaches a live one). Also, when they apply: **resume**
 (run twice; look for `res` on the start), **DDP** (`RANK=1` writes no progress lines), **callbacks** (a

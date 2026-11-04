@@ -19,7 +19,7 @@ from precisionai.pace.forecast import (
     JobForecast,
     ScopeForecast,
 )
-from precisionai.pace.protocol import Event, Record
+from precisionai.pace.protocol import Event, Record, parse_line
 
 
 class Run:
@@ -1170,6 +1170,33 @@ def test_a_step_is_a_start_and_an_end_at_once() -> None:
     forecast = job.snapshot(1000.0).scopes["load"]
     assert forecast.state is ForecastState.COMPLETE
     assert (forecast.completed, forecast.total) == (1.0, 1.0)
+
+
+def test_a_child_step_with_counts_is_a_finished_child_and_times_its_parent() -> None:
+    job = JobForecast()
+    epochs = Record(scope="epochs", event=Event.START, completed=0.0, total=3.0, unit="epoch", root=True, run=RUN_A)
+    job.observe(epochs, 0.0)
+    step = parse_line("[pace val-0<epochs step c=3 t=4 u=batch e=60 n=Validate r=aaaa1111]")
+    assert step is not None
+    assert job.observe(step, 60.0)
+    forecast = job.snapshot(60.0).scopes["val-0"]
+    assert forecast.state is ForecastState.COMPLETE
+    assert (forecast.completed, forecast.total, forecast.unit) == (3.0, 4.0, "batch")
+    # The epoch's first unit is timed from its finished child, as from a start and an end.
+    estimate = job.snapshot(60.0)
+    assert estimate.state is not ForecastState.COMPLETE
+    assert estimate.scopes["epochs"].state is ForecastState.LIVE
+
+
+def test_a_plan_times_unstarted_phases_from_a_child_step_with_counts() -> None:
+    job = JobForecast()
+    job.observe(Record(scope="plan", event=Event.PLAN, seq=1, phases=(("prep", 0.5), ("train", 0.5)), run=RUN_A), 0.0)
+    step = parse_line("[pace prep step c=40 u=file e=100 n=Prep r=aaaa1111]")
+    assert step is not None
+    job.observe(step, 100.0)
+    estimate = job.snapshot(100.0)
+    assert estimate.source == "plan"
+    assert estimate.remaining_seconds == pytest.approx(100.0)
 
 
 def test_a_plan_times_unstarted_phases_from_a_step() -> None:

@@ -52,7 +52,8 @@ What it reports:
   total is reported as unknown.
 - A child scope for each validation pass, nested under the training scope (`validation<train`
   in the trailer), counting batches. Each pass is its own scope: `validation`,
-  `validation-2`, and so on. The sanity-check pass before training is not reported.
+  `validation-2`, and so on. A pass shorter than `PACE_MIN_INTERVAL` is one line. The
+  sanity-check pass before training is not reported.
 - `trainer.validate()`, `trainer.test()` or `trainer.predict()` called on their own,
   without a fit, report a top-level scope (`validation`, `test`, `predict`) that is
   not the root, so a baseline evaluation before training never marks the job

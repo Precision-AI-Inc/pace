@@ -75,11 +75,13 @@ class Record:
     elapsed : float
         Seconds since the scope started, from a monotonic clock.
     completed : float or None
-        Amount done. Present on ``start``, ``upd``, ``end`` and ``step``.
+        Amount done. Present on ``start``, ``upd``, ``end`` and ``step`` (1 on a step
+        written without counts).
     total : float or None
         Total amount, or ``None`` when unknown (written as ``?``).
     unit : str or None
-        Unit of ``completed`` and ``total``. Written on ``start``.
+        Unit of ``completed`` and ``total``. Written on ``start``, and on a ``step`` that
+        carries its counts (a child scope that ended before its first line was due).
     parent : str or None
         Parent scope id for a nested scope.
     root : bool
@@ -231,16 +233,21 @@ def _validate_ids(record: Record) -> None:
 def _count_fields(record: Record) -> list[str]:
     event = record.event
     # A fail carries the counts it reached when it has them, so a reader still sees how far it got.
-    if event in (Event.STEP, Event.PLAN) or (event is Event.FAIL and record.completed is None):
+    if event is Event.PLAN or is_bare_step(record) or (event is Event.FAIL and record.completed is None):
         return []
     completed = format_number(record.completed or 0.0)
     total = _format_total(record.total)
     fields = [] if completed == "0" else [f"c={completed}"]
-    if event is not Event.END or total != completed:
+    if event not in (Event.END, Event.STEP) or total != completed:
         fields.append(f"t={total}")
-    if record.unit is not None and event is Event.START:
+    if record.unit is not None and event in (Event.START, Event.STEP):
         fields.append(f"u={encode_value(_printable(record.unit, MAX_UNIT_CHARS))}")
     return fields
+
+
+def is_bare_step(record: Record) -> bool:
+    """Return whether ``record`` is a one-off step of one unit, written without counts; any other step carries them."""
+    return record.event is Event.STEP and record.unit is None and record.completed == 1 and record.total == 1
 
 
 def _format_total(total: float | None) -> str:
@@ -285,9 +292,9 @@ _FIRST_SEQ = {Event.UPDATE: 2, Event.PLAN: 1}
 _KINDS = {event.value: event for event in Event if event is not Event.UPDATE}
 # The keys that only some events may carry.
 _EVENT_KEYS: dict[str, tuple[Event, ...]] = {
-    "c": (Event.START, Event.UPDATE, Event.END, Event.FAIL),
-    "t": (Event.START, Event.UPDATE, Event.END, Event.FAIL),
-    "u": (Event.START,),
+    "c": (Event.START, Event.UPDATE, Event.END, Event.FAIL, Event.STEP),
+    "t": (Event.START, Event.UPDATE, Event.END, Event.FAIL, Event.STEP),
+    "u": (Event.START, Event.STEP),
     "n": (Event.START, Event.STEP),
     "q": (Event.UPDATE, Event.PLAN),
     "ph": (Event.PLAN,),
@@ -418,14 +425,14 @@ def _check_fields(event: Event, fields: dict[str, str], words: list[str]) -> Non
 
 def _counts(event: Event, fields: dict[str, str]) -> tuple[float | None, float | None]:
     """Return the counts a record stands for, filling in what the writer leaves out."""
-    if event is Event.STEP:
+    if event is Event.STEP and "c" not in fields and "t" not in fields:
         return 1.0, 1.0
     if event is Event.PLAN or (event is Event.FAIL and "t" not in fields):
         return None, None
     completed = _parse_number(fields.get("c", "0"))
     if "t" in fields:
         return completed, _parse_total(fields["t"])
-    # Only an end may leave out its total, which then equals its count.
+    # Only an end or a step may leave out its total, which then equals its count.
     if completed <= 0:
         raise ValueError("an end without a total needs a positive count")
     return completed, completed

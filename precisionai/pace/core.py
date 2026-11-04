@@ -97,8 +97,9 @@ class Logger:
         self._next_suffix: dict[str, int] = {}
         self._bar_width = 0
         self._bar_stream: Any = None
-        # Lines held back by one-off steps, by key: (deadline, how to write it, owning process id).
+        # Lines held back by one-off steps and child scopes, by key: (deadline, how to write it, owning process id).
         self._held: dict[object, tuple[float, Callable[[], None], int]] = {}
+        self._writing_held = False
 
     def configure(
         self,
@@ -289,13 +290,21 @@ class Logger:
         if not self._held:
             return
         with self.lock:
-            now, pid = self.clock.monotonic(), os.getpid()
-            for key, (deadline, action, owner) in list(self._held.items()):
-                if owner != pid:
-                    self._held.pop(key, None)
-                elif deadline <= now and self._held.pop(key, None) is not None:
-                    with contextlib.suppress(Exception):
-                        action()
+            # A held line's own write calls back in here; the outer pass writes the rest in the
+            # order they were held, which keeps a parent's start ahead of its children's.
+            if self._writing_held:
+                return
+            self._writing_held = True
+            try:
+                now, pid = self.clock.monotonic(), os.getpid()
+                for key, (deadline, action, owner) in list(self._held.items()):
+                    if owner != pid:
+                        self._held.pop(key, None)
+                    elif deadline <= now and self._held.pop(key, None) is not None:
+                        with contextlib.suppress(Exception):
+                            action()
+            finally:
+                self._writing_held = False
 
     def claim_scope(self, base: str) -> str:
         """Return ``base`` or ``base`` with a numeric suffix, whichever no earlier scope in this process has used.

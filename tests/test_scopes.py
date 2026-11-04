@@ -15,7 +15,7 @@ from precisionai.pace import scopes
 from precisionai.pace.core import Logger
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import MAX_LINE_BYTES, MAX_NUMBER, Record, parse_line
+from precisionai.pace.protocol import MAX_LINE_BYTES, MAX_NUMBER, Event, Record, parse_line
 from precisionai.pace.scopes import (
     Phase,
     Scope,
@@ -447,8 +447,7 @@ def test_a_child_line_writes_the_pending_start_of_its_phase_first(
             shards.advance(3)
     assert [(item["s"], item["k"], item.get("e")) for item in records(stream)] == [
         ("load", "start", "2"),
-        ("shards", "start", None),
-        ("shards", "end", None),
+        ("shards", "step", None),
         ("load", "end", "2"),
     ]
 
@@ -496,6 +495,201 @@ def test_a_forked_child_does_not_write_its_parent_held_back_line(log: Logger, cl
     log.write_held()
     assert log._held == {}
     assert not log.settings.resolve("stream").lines()
+
+
+@pytest.mark.parametrize("min_interval", [None, 5.0])
+def test_a_near_instant_child_writes_exactly_one_line(
+    clock: FakeClock, stream: FakeStream, min_interval: float | None
+) -> None:
+    out = Logger(clock=clock.clock())
+    out.configure(stream=stream, min_interval=min_interval)  # None leaves the default, 15 s
+    with progress(100, "Train", "step", root=True, logger=out) as train:
+        train.advance(10)
+        before = len(stream.lines())
+        with progress(1, "Validation", "batch", logger=out) as validation:
+            clock.advance(0.1)
+            validation.advance()
+        (line,) = stream.lines()[before:]
+    assert " PROGRESS ├ Validation  1/1 batch  done in 0s  [pace validation<train step c=1 u=batch e=0.1 " in line
+    assert parse_line(line) == Record(
+        scope="validation",
+        event=Event.STEP,
+        elapsed=0.1,
+        completed=1,
+        total=1,
+        unit="batch",
+        parent="train",
+        label="Validation",
+        run=out.run_id,
+    )
+    assert out._held == {}
+    assert kinds(stream) == ["start", "step", "end"]
+
+
+def test_a_child_folds_whatever_its_counts(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    with progress(3, "Epochs", "epoch", root=True, logger=log):
+        for _ in track(range(10), "Early", "batch", logger=log):
+            clock.advance(1)
+            break
+        for _ in track(iter(range(5)), "Unsized", "file", logger=log):
+            pass
+    early, unsized = (item for item in records(stream) if item["k"] == "step")
+    assert (early.get("c"), early["t"], early["u"], early["e"]) == (None, "10", "batch", "1")
+    assert (unsized["c"], unsized["t"], unsized["u"]) == ("5", "?", "file")
+    assert " ├ Early   0/10 batch  done in 1s  [pace " in stream.lines()[1]
+
+
+def test_a_child_past_its_interval_writes_its_start_as_it_began(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    with progress(100, "Train", "step", root=True, logger=log), progress(3, "Requests", "request", logger=log) as req:
+        clock.advance(10)
+        req.advance()
+        assert kinds(stream) == ["start"]
+        clock.advance(10)
+        req.advance()
+        clock.advance(10)
+        req.advance()
+    child = [item for item in records(stream) if item["s"] == "requests"]
+    # The same records the child writes when nothing is held back, only its start comes later.
+    assert [(item["k"], item.get("c"), item.get("e"), item.get("q")) for item in child] == [
+        ("start", None, None, None),
+        ("upd", "2", "20", "2"),
+        ("end", "3", "30", None),
+    ]
+
+
+def test_a_log_line_writes_a_late_child_start_and_how_far_it_got(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    with progress(100, "Train", "step", root=True, logger=log), progress(10, "Shards", "shard", logger=log) as shards:
+        clock.advance(10)
+        shards.advance(2)
+        clock.advance(6)
+        log.info("checkpoint saved")
+        clock.advance(1)
+        shards.advance()
+    assert kinds_of(stream) == ["start", "start", "upd", "INFO", "upd", "end", "end"]
+    start, first, second = (item for item in records_in(stream) if item["s"] == "shards" and item["k"] != "end")
+    assert (start.get("c"), start.get("e")) == (None, None)
+    assert (first["c"], first["e"], first["q"]) == ("2", "16", "2")
+    # Its next update is due as if the start had been written on time.
+    assert (second["c"], second["e"], second["q"]) == ("3", "17", "3")
+
+
+def test_a_child_that_ends_after_its_interval_writes_its_start_and_end(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    with progress(100, "Train", "step", root=True, logger=log), progress(1, "Eval", "batch", logger=log) as evaluation:
+        clock.advance(20)
+        evaluation.completed = 1
+    assert [(item["s"], item["k"], item.get("e")) for item in records(stream)] == [
+        ("train", "start", None),
+        ("eval", "start", None),
+        ("eval", "end", "20"),
+        ("train", "end", "20"),
+    ]
+
+
+def test_a_failing_child_writes_its_start_and_fail(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    def validate() -> None:
+        with progress(100, "Train", "step", root=True, logger=log), progress(4, "Validate", "batch", logger=log) as val:
+            val.advance()
+            raise KeyError("x")
+
+    with pytest.raises(KeyError, match="x"):
+        validate()
+    assert [(item["s"], item["k"]) for item in records(stream)] == [
+        ("train", "start"),
+        ("validate", "start"),
+        ("validate", "fail"),
+        ("train", "fail"),
+    ]
+
+
+def test_a_short_child_inside_a_short_child_folds_only_the_inner_one(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    with (
+        progress(2, "Epochs", "epoch", root=True, logger=log),
+        progress(10, "Train", "step", logger=log) as train,
+        progress(1, "Inner", "batch", logger=log) as inner,
+    ):
+        inner.advance()
+        train.advance(10)
+    # The inner line needs its parent's start first, so only the inner scope is one line.
+    assert [(item["s"], item["k"], item.get("p")) for item in records(stream)] == [
+        ("epochs", "start", None),
+        ("train", "start", "epochs"),
+        ("inner", "step", "train"),
+        ("train", "end", "epochs"),
+        ("epochs", "end", None),
+    ]
+
+
+def test_a_child_inside_a_held_phase_is_written_after_the_phase_start(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    with phase("Generate", logger=log), progress(3, "Requests", "request", logger=log) as requests:
+        clock.advance(20)
+        requests.advance()
+    assert [(item["s"], item["k"], item.get("e")) for item in records(stream)] == [
+        ("generate", "start", "20"),
+        ("requests", "start", None),
+        ("requests", "upd", "20"),
+        ("requests", "end", "20"),
+        ("generate", "end", "20"),
+    ]
+
+
+def test_root_and_top_level_scopes_are_never_folded(log: Logger, stream: FakeStream) -> None:
+    with progress(1, "Job", logger=log, root=True) as job:
+        job.advance()
+    with progress(1, "Alone", logger=log) as alone:
+        alone.advance()
+    with progress(1, "Outer", logger=log), progress(1, "Second root", root=True, logger=log) as inner:
+        inner.advance()
+    assert [(item["s"], item["k"]) for item in records(stream) if item["s"] != "outer"] == [
+        ("job", "start"),
+        ("job", "end"),
+        ("alone", "start"),
+        ("alone", "end"),
+        ("second-root", "start"),
+        ("second-root", "end"),
+    ]
+
+
+def test_a_resumed_child_is_not_folded(log: Logger, stream: FakeStream) -> None:
+    with progress(1, "Job", logger=log), progress(10, "Part", completed=9, resumed=True, logger=log) as part:
+        part.advance()
+    assert [(item["s"], item["k"], item.get("res")) for item in records(stream)] == [
+        ("job", "start", None),
+        ("part", "start", "1"),
+        ("part", "end", None),
+        ("job", "end", None),
+    ]
+
+
+def test_a_child_on_another_rank_writes_and_holds_nothing(
+    log: Logger, stream: FakeStream, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RANK", "1")
+    with progress(1, "Job", logger=log), progress(1, "Validate", logger=log) as validation:
+        assert log._held == {}
+        validation.advance()
+    assert stream.lines() == []
+
+
+def test_a_child_on_a_terminal_bar_is_not_folded(clock: FakeClock) -> None:
+    tty = FakeStream(tty=True)
+    out = Logger(clock=clock.clock())
+    out.configure(stream=tty)
+    with progress(10, "Train", "step", logger=out), progress(1, "Validate", "batch", logger=out) as validation:
+        assert out._held == {}
+        validation.advance()
+    assert "Validate" in tty.getvalue().split("\n")[0]  # its start drew the bar at once
+    assert "[pace validate<train end c=1 r=" in tty.getvalue()
+    assert " step c=" not in tty.getvalue()
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="needs os.fork")
@@ -828,8 +1022,7 @@ def test_lines_show_what_each_event_needs(log: Logger, clock: FakeClock, stream:
     texts = [line[len("2025-11-03T17:16:42Z ") : line.index("  [pace ")] for line in stream.lines()]
     assert texts == [
         "PROGRESS Generate    0/128 request",
-        "PROGRESS ├ Batch  0/4 prompt",
-        "PROGRESS ├ Batch  4/4  done in 0s",
+        "PROGRESS ├ Batch  4/4 prompt  done in 0s",
         "PROGRESS Generate   66/128  51.6%  estimating…",
         "PROGRESS Generate  128/128  100.0%  estimating…",
         "PROGRESS Generate  128/128  done in 40s · 3.2 request/s",

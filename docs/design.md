@@ -146,7 +146,8 @@ A job run under a pseudo-terminal whose output a scheduler still reads should se
 `PACE_BAR=never`, which writes normal trailer lines even on a TTY.
 
 `start`, `end` and `fail` records are always written immediately, except that a one-off
-step holds back its `start` (see [One-off steps](#one-off-steps)). The limit is set by
+step or a child scope holds back its `start` (see [One-off steps](#one-off-steps) and
+[Short child scopes](#short-child-scopes)). The limit is set by
 time, never by step count, so a run with a million steps writes no more than one
 with a thousand. For example, a 10-hour run reaches each 1% about every 6 minutes,
 so it writes about 100 progress lines plus a heartbeat every 2 minutes in between:
@@ -204,7 +205,7 @@ The event is a bare word; an update has none. At most one event per trailer.
 | `start` | The scope started. Comes first among its run's records for the scope. |
 | `end` | The scope finished. Comes last. |
 | `fail` | The scope failed. Comes last. |
-| `step` | A one-off step that started and finished before its first line was due: a `start` and an `end` at once, of one unit (`c=1 t=1`). |
+| `step` | A scope that started and finished before its first line was due: a `start` and an `end` at once. Without `c` and `t` it is a one-off step of one unit (`c=1 t=1`); a child scope's step carries its counts and unit. |
 | `plan` | The phases still to come, with their weights. |
 | `root` | Flag: the scope stands for the whole job. At most one per process. Written on every record of the scope, so a reader that starts mid-log still learns it. |
 | `res` | Flag, `start` only: the scope resumes earlier work, so `c` begins above zero. |
@@ -215,9 +216,9 @@ A consumer ignores a word it does not know.
 
 | Key | On | Meaning |
 |---|---|---|
-| `c` | start, update, end, fail | Completed amount, a non-negative number. Left out when 0. On a `fail`, present only with `t`; a `fail` with neither does not know how far it got. |
-| `t` | start, update (required); end, fail | Total, a positive number, or `?` when unknown. An `end` leaves it out when it equals `c`. |
-| `u` | start | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...), at most 64 characters after decoding, no control characters. |
+| `c` | start, update, end, fail, step | Completed amount, a non-negative number. Left out when 0. On a `fail`, present only with `t`; a `fail` with neither does not know how far it got. A `step` with neither `c` nor `t` means `c=1 t=1`. |
+| `t` | start, update (required); end, fail, step | Total, a positive number, or `?` when unknown. An `end` or `step` leaves it out when it equals `c`. |
+| `u` | start, step | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...), at most 64 characters after decoding, no control characters. |
 | `e` | any | Seconds since the scope started, from a monotonic clock. Left out when 0. Rates use this, never wall-clock time. A `start` written late (see [One-off steps](#one-off-steps)) carries the time it was held back. |
 | `q` | update, plan (required) | Sequence number within the scope and run, from 2 for an update (the start counts as 1) and from 1 for a plan. Orders the updates; a start comes first and an end, fail or step last, so they need none. |
 | `ph` | plan | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
@@ -282,6 +283,41 @@ On a terminal (`PACE_BAR`), and with `PACE_MIN_INTERVAL=0`, nothing is held back
 `start` and an `end` are written as for any scope. A reader treats a `step` as a `start`
 and an `end` at once: a finished phase with its elapsed time, which a plan uses to time
 the phases not yet started.
+
+### Short child scopes
+
+A counted scope opened inside another (a validation loop inside training, one batch of
+work inside a request) is often over in less than `PACE_MIN_INTERVAL`, and a start line
+plus an end line says nothing the end line alone does not. Such a child holds back its
+`start` under the same rules as a one-off step, with these differences:
+
+- If it ends before the interval has passed, it writes one `step` line that carries its
+  counts and unit as well (`c`, `t` as on an `end`, `u`), labelled `PROGRESS`, since it
+  reports a counted scope like the end line it replaces:
+
+  ```text
+  2026-11-04T15:34:05Z PROGRESS ├ Validation  1/1 batch  done in 0s  [pace validation-263<train step c=1 u=batch e=0.1 n=Validation r=0a0dfc37]
+  ```
+
+- If it is still running when its line comes due, its `start` is written as it was when
+  the scope started (no `e`, its starting `c`), so a reader times its first units from
+  the real start. When the start was released by another line (a log line, another
+  scope's line, a line of its own child), an update with its count so far follows at
+  once, so a reader knows how long it has been running, and its next update is still
+  due as if the start had been written on time. A long child therefore writes every
+  record it would have written without holding back, plus at most one update.
+- Its updates are rate-limited from when it started, as if its start had been written.
+- A `root` scope, a scope with no parent and a resumed scope (whose `start` carries
+  `res`) never hold back their start. Neither does any scope on a terminal or with
+  `PACE_MIN_INTERVAL=0`, nor on a rank that does not write progress.
+- A short child inside a short child folds only the inner one: the inner `step` needs
+  its parent's `start` first.
+
+A `step` with `c`, `t` or `u` is the only form a 0.1.0 reader rejects (those keys
+belonged only to other events then); it ignores the line and misses that child, which
+never stands for the job. A new event word would be ignored the same way, and a `start`
+with a new "done" flag would be read by a 0.1.0 reader as a scope that never ends, so
+extending `step` is the change an older reader handles best.
 
 ### Timestamp
 
@@ -385,7 +421,9 @@ defaults.
   gives a running phase its elapsed time, which a plan uses to time the phases not yet
   started. A phase that holds back its start (a one-off step) is unknown to a reader
   until its `start` or `step` line arrives, at most `PACE_MIN_INTERVAL` later, so a plan
-  counts it as not started until then; the `step` line carries its elapsed time.
+  counts it as not started until then; the `step` line carries its elapsed time. A child
+  scope that holds back its start is likewise unknown until its first line, and a
+  child's `step` is a finished child like any other for timing its parent.
 
 ### Plans
 

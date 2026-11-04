@@ -61,12 +61,34 @@ def test_format_trailer_step_carries_parent_elapsed_label_and_run() -> None:
         elapsed=12.04,
         completed=1,
         total=1,
-        unit="call",
         parent="generate",
         label="Start Ollama",
         run=RUN,
     )
     assert format_trailer(record) == "[pace start-ollama<generate step e=12 n=Start%20Ollama r=1b8b7650]"
+
+
+@pytest.mark.parametrize(
+    ("completed", "total", "counts"),
+    [(1, 1, "c=1"), (3, 10, "c=3 t=10"), (5, None, "c=5 t=?"), (0, 4, "t=4")],
+)
+def test_format_trailer_step_with_a_unit_carries_its_counts_like_an_end(
+    completed: float, total: float | None, counts: str
+) -> None:
+    record = Record(
+        scope="val",
+        event=Event.STEP,
+        elapsed=0.1,
+        completed=completed,
+        total=total,
+        unit="batch",
+        parent="train",
+        label="Validate",
+        run=RUN,
+    )
+    trailer = format_trailer(record)
+    assert trailer == f"[pace val<train step {counts} u=batch e=0.1 n=Validate r=1b8b7650]"
+    assert parse_line(trailer) == record
 
 
 def test_format_trailer_plan_has_no_counts() -> None:

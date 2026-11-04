@@ -242,11 +242,21 @@ with progress(total=3, description="Epochs", unit="epoch", root=True) as epochs:
 
 ```text
 2026-11-03T17:07:40Z PROGRESS Epochs  0/3 epoch  [pace epochs start t=3 u=epoch n=Epochs r=648e2e0d root]
-2026-11-03T17:07:40Z PROGRESS ├ Train   0/20 step  [pace train-0<epochs start t=20 u=step n=Train r=648e2e0d]
-2026-11-03T17:07:40Z PROGRESS ├ Train  20/20  done in 0s · 45 step/s  [pace train-0<epochs end c=20 e=0.4 r=648e2e0d]
-2026-11-03T17:07:40Z PROGRESS ├ Validate  0/5 batch  [pace val-0<epochs start t=5 u=batch n=Validate r=648e2e0d]
-2026-11-03T17:07:40Z PROGRESS Epochs  1/3  33.3%  estimating…  [pace epochs c=1 t=3 e=0.6 q=2 r=648e2e0d root]
+2026-11-03T17:07:40Z PROGRESS ├ Train  20/20 step  done in 0s  [pace train-0<epochs step c=20 u=step e=0.4 n=Train r=648e2e0d]
+2026-11-03T17:07:40Z PROGRESS ├ Validate  5/5 batch  done in 0s  [pace val-0<epochs step c=5 u=batch e=0.1 n=Validate r=648e2e0d]
+2026-11-03T17:07:55Z PROGRESS Epochs  1/3  33.3%  estimating…  [pace epochs c=1 t=3 e=15.2 q=2 r=648e2e0d root]
 ```
+
+A child scope that ends before its first line is due (`PACE_MIN_INTERVAL`, 15 seconds by
+default) is written as one line, a `step` that carries its counts and unit, like the
+one line of a short `@timed` call. A child that runs longer writes its start line
+with the next line Pace writes once the interval has passed (its own update, another
+scope's line, a log line), then its updates and end line as usual. A child that fails
+writes its start and `fail` lines. A child's line is always written after its
+parent's start line, so a short child inside a short child folds only the inner one.
+A `root` scope, a scope with no parent and a resumed scope always write their start
+at once. On a terminal, or with `PACE_MIN_INTERVAL=0`, every child writes a start and
+an end line.
 
 A nested scope is never added on top of its parent's remaining time: the parent's
 own estimate already includes the time the children take.
@@ -355,7 +365,8 @@ a scope only when **both** hold:
    `PACE_HEARTBEAT` seconds have passed since it (default 120).
 
 `start`, `end`, `fail` and `plan` are always written at once, except the start of a
-one-off step (see [Timing a function](#timing-a-function)). The limit is on time,
+one-off step (see [Timing a function](#timing-a-function)) or of a child scope (see
+[Nested scopes](#nested-scopes)). The limit is on time,
 not on step count: a loop of a million steps and a loop of a hundred write the same number of
 lines per minute. A ten-hour run reaches each 1% about every six minutes, so it writes
 about a hundred progress lines plus a heartbeat every two minutes in between.
