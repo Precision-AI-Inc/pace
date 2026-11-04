@@ -1,4 +1,4 @@
 "2025-11-03T17:16:42Z INFO     rank one logs\n"
-"2025-11-03T17:16:42Z PROGRESS Loud on every rank  0/2 it  [pace:2 loud-on-every-rank start t=2 u=it n=Loud%20on%20every%20rank r=golden01]\n"
-"2025-11-03T17:16:42Z PROGRESS Loud on every rank  2/2  100.0%  estimating…  [pace:2 loud-on-every-rank c=2 t=2 q=2 r=golden01]\n"
-"2025-11-03T17:16:42Z PROGRESS Loud on every rank  2/2  done in 0s  [pace:2 loud-on-every-rank end c=2 r=golden01]\n"
+"2025-11-03T17:16:42Z PROGRESS Loud on every rank  0/2 it  [pace loud-on-every-rank start t=2 u=it n=Loud%20on%20every%20rank r=golden01]\n"
+"2025-11-03T17:16:42Z PROGRESS Loud on every rank  2/2  100.0%  estimating…  [pace loud-on-every-rank c=2 t=2 q=2 r=golden01]\n"
+"2025-11-03T17:16:42Z PROGRESS Loud on every rank  2/2  done in 0s  [pace loud-on-every-rank end c=2 r=golden01]\n"

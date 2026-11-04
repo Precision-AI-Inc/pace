@@ -2,9 +2,9 @@
 
 This document specifies Pace (`precisionai-pace`): the logger and progress API, the
 line format that carries progress records, and the rules that turn those records into a
-completion estimate. The `[pace:2 ...]` trailer format is a public contract versioned by
-its major number: within a major version the format only gains optional keys, and any
-other change needs a new major version.
+completion estimate. The `[pace ...]` trailer format is a public contract. It carries no
+version number, so it may only grow: new optional keys and words, which every reader
+ignores until it knows them. Removing or redefining anything is not allowed.
 
 The thresholds in this document are defaults that may be tuned in later releases;
 override the output ones with `PACE_MIN_INTERVAL` and `PACE_HEARTBEAT` (or
@@ -153,29 +153,28 @@ so it writes about 100 progress lines plus a heartbeat every 2 minutes in betwee
 roughly 300 lines, or 30 an hour. The heartbeat is what lets a consumer tell a slow
 job from a stalled one.
 
-## Line format, version 2
+## Line format
 
 One line serves both readers. The readable part comes first; a short trailer at the
 end carries the fields a consumer parses.
 
 ```text
-2026-11-04T02:22:10Z PROGRESS Generate    0/128 request  [pace:2 generate start t=128 u=request n=Generate r=1b8b7650 root]
-2026-11-04T02:22:22Z STEP     ├ Start Ollama  done in 12s  [pace:2 start-ollama<generate step e=12 n=Start%20Ollama r=1b8b7650]
-2026-11-04T02:25:16Z PROGRESS Generate   66/128  51.6%  estimating…  [pace:2 generate c=66 t=128 e=186.7 q=2 r=1b8b7650 root]
-2026-11-04T02:25:27Z PROGRESS Generate  128/128  done in 3m17s · 0.354 request/s  [pace:2 generate end c=128 e=197.4 r=1b8b7650 root]
+2026-11-04T02:22:10Z PROGRESS Generate    0/128 request  [pace generate start t=128 u=request n=Generate r=1b8b7650 root]
+2026-11-04T02:22:22Z STEP     ├ Start Ollama  done in 12s  [pace start-ollama<generate step e=12 n=Start%20Ollama r=1b8b7650]
+2026-11-04T02:25:16Z PROGRESS Generate   66/128  51.6%  estimating…  [pace generate c=66 t=128 e=186.7 q=2 r=1b8b7650 root]
+2026-11-04T02:25:27Z PROGRESS Generate  128/128  done in 3m17s · 0.354 request/s  [pace generate end c=128 e=197.4 r=1b8b7650 root]
 2026-11-03T23:59:12Z INFO     Loading model Qwen2.5-7B
 ```
 
 Only `PROGRESS` and `STEP` lines carry a trailer. Everything before the trailer is for
-people and may change between releases; consumers must not parse it. The writer writes
-only `pace:2`. A reader reads `pace:1` too (see [Version 1](#version-1)), because jobs on
-Pace 0.0.x keep writing it, and one log may hold both.
+people and may change between releases; consumers must not parse it. Pace 0.0.x wrote an
+earlier, versioned trailer (`[pace:1 ...]`); this reader takes it for ordinary text, and
+an 0.0.x reader does not read this format.
 
 ### Grammar
 
 ```text
-trailer  = "[pace:" major " " head *( " " item ) "]"     ; at the very end of the line
-major    = "2"
+trailer  = "[pace " head *( " " item ) "]"              ; at the very end of the line
 head     = scope [ "<" scope ]                           ; the scope id, then its parent's
 item     = word / field
 word     = 1*( %x61-7A / DIGIT )                         ; an event or a flag, see below
@@ -188,8 +187,7 @@ value    = "?" / 1*( ALPHA / DIGIT / "." / "_" / "-" / ":" / "," / "%" HEXDIG HE
 Items may come in any order; the writer uses the order of the fields table below. A
 consumer matches the trailer only at the end of the line, after removing ANSI escape
 sequences and trailing whitespace. Any character outside the value alphabet is
-percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, an unknown major
-version, more than 32 items (the head included), a repeated key or word, a missing required field, a key or
+percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, more than 32 items (the head included), a repeated key or word, a missing required field, a key or
 word on the wrong event, or a value that fails to parse is ignored. A raw (still
 encoded) value may be at most 768 characters, enough for a 64-character label of 4-byte
 characters; `ph` may be up to 2815, enough for 32 phases with the longest ids and
@@ -235,11 +233,12 @@ A writer keeps every line within 4096 bytes by shortening the readable text befo
 trailer, never the trailer. It never writes a number above 1e15, the parser's limit: a
 larger total is reported as unknown and a larger count is capped.
 
-Text that looks like a trailer (`[pace:`) inside a log message or description is
-rewritten to `[ pace:`, so user text cannot forge a record.
+Text that could start a trailer (`[pace`) inside a log message or description is
+rewritten to `[ pace`, so user text cannot forge a record.
 
-Additions within version 2 are new optional keys and flags; consumers ignore keys and
-words they do not know. Removing or redefining one requires `pace:3`.
+With no version number, every change must be additive: new optional keys and words,
+which consumers ignore until they know them. A key or word is never removed or given a
+new meaning.
 
 ### Duplicates and restarts
 
@@ -256,8 +255,6 @@ read in the order it was written (one stream may be read well behind the other):
   process restarted. It need not be a `start`, so a reader that missed the restarted
   run's `start` still notices.
 - A record from a run that a restart replaced is a late copy, and is ignored.
-- A record without a run id (`pace:1`) for a scope whose current run writes one on
-  every record is a stray, and is ignored.
 - Known limitation: a reader that first sees a later run and only then lines of an
   earlier run it never saw takes the earlier run for a restart and follows it.
 - A `plan` replaces an earlier plan of the same scope only if its `q` is higher, or it
@@ -285,37 +282,6 @@ On a terminal (`PACE_BAR`), and with `PACE_MIN_INTERVAL=0`, nothing is held back
 `start` and an `end` are written as for any scope. A reader treats a `step` as a `start`
 and an `end` at once: a finished phase with its elapsed time, which a plan uses to time
 the phases not yet started.
-
-### Version 1
-
-`pace:1` is what Pace 0.0.x writes. A reader still reads it; the writer no longer does.
-
-```text
-2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]
-```
-
-Every item is a field (`key=value`), in any order:
-
-| Key | Required | Meaning |
-|---|---|---|
-| `s` | always | Scope id. |
-| `k` | always | Event: `start`, `upd`, `end`, `fail`, `plan` (there is no `step`). |
-| `q` | always | Sequence number within the scope, from 1. |
-| `e` | always | Seconds since the scope started. |
-| `c`, `t` | start, upd, end; fail when known | Completed amount and total (`?` when unknown), always written. |
-| `u` | start | Unit. |
-| `p` | optional | Parent scope id. |
-| `root` | optional | `1` marks the scope that stands for the whole job. |
-| `res` | optional, `start` only | `1` when the scope resumes earlier work. |
-| `ph` | `plan` only | Remaining phases with weights. |
-| `n` | optional, `start` only | Short label. |
-| `run` | optional, `start` only | Id of the process run. |
-
-The run id is only on `start`, so a reader orders a scope's records by `q`, and a `start`
-after the scope reported beyond `q=1` is a restart unless its run id is the one already
-seen. A `start` read late from the other stream after its scope's updates therefore
-looks like a restart when the reader joined mid-run and never saw the first copy; only
-`pace:2` fixes that.
 
 ### Timestamp
 
@@ -356,8 +322,7 @@ remaining_time = max(total - completed, 0) / robust_rate
 - **Learning → Live** (default): at least 60 s observed **and** at least 3 update
   intervals **and** at least 1% of the total done.
 - **Stale** (default): no record for `max(3 × median interval, 2 × heartbeat)`.
-- A record for a scope from a new run (a run id not seen before; in `pace:1`, a `start`
-  with a different run id, or after `q=1` when it has none) begins a new segment; rates
+- A record for a scope from a new run (a run id not seen before) begins a new segment; rates
   are never averaged across a restart. A `step` is a `start` and an `end` at once. The
   segment's rate is measured from the `c` on its `start`, so a resumed scope that
   starts at its restored count measures only the work left. `res=1` itself is
@@ -466,8 +431,7 @@ defaults.
 
 ## Testing
 
-- Conformance fixtures live in `tests/fixtures/protocol/`: `pace:2` and `pace:1` input
-  lines with their expected parse results, including malformed, oversized and
+- Conformance fixtures live in `tests/fixtures/protocol/`: input lines with their expected parse results, including malformed, oversized and
   ANSI-coloured lines.
   They cover parsing one line at a time; splitting byte chunks into lines and removing
   duplicates are tested in Python only. The fixtures are not shipped in the package;

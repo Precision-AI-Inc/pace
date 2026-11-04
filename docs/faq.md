@@ -106,8 +106,8 @@ is what you pass it. So:
 - Assume that anyone who can read the job's logs can read every line. A scheduler that
   parses them stores at least the trailers.
 
-Text that looks like a trailer in a message or a description is rewritten (`[pace:`
-becomes `[ pace:`), so user text cannot forge a progress record. That protects the
+Text that looks like a trailer in a message or a description is rewritten (`[pace`
+becomes `[ pace`), so user text cannot forge a progress record. That protects the
 reader; it does not hide anything.
 
 ## Why is a repeated description numbered (`train-2`)?

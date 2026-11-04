@@ -4,7 +4,7 @@
 """Progress scopes: ``progress``, ``track``, ``timed``, ``phase`` and ``plan``.
 
 A scope is one piece of work with a start, a completed amount, an optional total and
-an end. Each progress line it writes carries the ``[pace:2 ...]`` trailer built by
+an end. Each progress line it writes carries the ``[pace ...]`` trailer built by
 :func:`precisionai.pace.protocol.format_trailer`; the text before it is for people.
 
 Output rules (see ``docs/design.md``):

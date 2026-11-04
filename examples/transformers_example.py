@@ -19,7 +19,7 @@ Run: ``python examples/transformers_example.py``
 
 Expect: a ``train`` scope marked ``root`` counting steps, ``evaluation`` scopes whose
 trailers carry ``<train``, and the ``end`` of the root. Every progress line ends with the
-``[pace:2 ...]`` trailer a scheduler reads.
+``[pace ...]`` trailer a scheduler reads.
 """
 
 import tempfile

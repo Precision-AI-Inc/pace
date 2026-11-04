@@ -1,13 +1,13 @@
 # Copyright 2026 Precision AI
 # SPDX-License-Identifier: Apache-2.0
 
-"""Progress records and the ``[pace:2 ...]`` line trailer that carries them.
+"""Progress records and the ``[pace ...]`` line trailer that carries them.
 
 This module is the contract between whatever writes progress (the logger, the
 framework adapters) and whatever reads it back (the estimator, a scheduler). The
 format is specified in ``docs/design.md``; a change here is a change to that
-specification. The writer writes ``pace:2``; the reader also reads ``pace:1``, which
-Pace 0.0.x writes.
+specification. The trailer has no version number, so the format may only grow:
+a reader ignores keys and words it does not know.
 """
 
 import math
@@ -20,7 +20,6 @@ from typing import TypeVar
 from urllib.parse import unquote_to_bytes
 
 MARKER = "pace"
-VERSION = 2
 
 MAX_LINE_BYTES = 4096
 # Largest count, total, elapsed time or weight a trailer may carry.
@@ -71,9 +70,8 @@ class Record:
     event : Event
         What happened to the scope. ``STEP`` is a start and an end at once.
     seq : int or None
-        Sequence number within the scope, starting at 1. Every ``pace:1`` record carries
-        one, and so do a ``pace:2`` update and plan; a ``pace:2`` start comes first in its
-        run and an end, fail or step last, so they need none.
+        Sequence number within the scope, on an update (from 2) and a plan (from 1). A
+        start comes first in its run and an end, fail or step last, so they need none.
     elapsed : float
         Seconds since the scope started, from a monotonic clock.
     completed : float or None
@@ -93,8 +91,8 @@ class Record:
     label : str or None
         Short human label, on ``start`` and ``step``.
     run : str or None
-        Id of the process run that wrote the record: on every ``pace:2`` record, and on
-        a ``pace:1`` ``start``. Tells a restarted scope apart from a line read twice.
+        Id of the process run that wrote the record, on every record. Tells a restarted
+        scope apart from a line read twice.
     """
 
     scope: str
@@ -168,7 +166,7 @@ def format_number(value: float) -> str:
 
 
 def format_trailer(record: Record) -> str:
-    """Return the ``[pace:2 ...]`` trailer for ``record``.
+    """Return the ``[pace ...]`` trailer for ``record``.
 
     The scope id comes first, followed by ``<`` and the parent's id for a nested scope,
     then the event as a bare word (none for an update), the fields in the order
@@ -207,7 +205,7 @@ def format_trailer(record: Record) -> str:
         items.append("root")
     if record.resumed and record.event is Event.START:
         items.append("res")
-    return f"[{MARKER}:{VERSION} {' '.join(items)}]"
+    return f"[{MARKER} {' '.join(items)}]"
 
 
 def check_id(pattern: re.Pattern[str], value: str, what: str) -> str:
@@ -281,14 +279,12 @@ _VALUE_PATTERN = re.compile(r"(?:[A-Za-z0-9._:,-]|%[0-9A-Fa-f]{2})+")
 _NUMBER_PATTERN = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 _INTEGER_PATTERN = re.compile(r"[0-9]+")
 _BAD_ESCAPE_PATTERN = re.compile(r"%(?![0-9A-Fa-f]{2})")
-_COUNTED_EVENTS = (Event.START, Event.UPDATE, Event.END)
-_MAJORS = {f"{MARKER}:1": 1, f"{MARKER}:{VERSION}": VERSION}
-# In pace:2, the lowest q an event may carry: a start counts as 1, so updates begin at 2.
+# The lowest q an event may carry: a start counts as 1, so updates begin at 2.
 _FIRST_SEQ = {Event.UPDATE: 2, Event.PLAN: 1}
-# In pace:2 the event is a bare word, and an update has none.
+# The event is a bare word, and an update has none.
 _KINDS = {event.value: event for event in Event if event is not Event.UPDATE}
-# The pace:2 keys that only some events may carry.
-_V2_EVENT_KEYS: dict[str, tuple[Event, ...]] = {
+# The keys that only some events may carry.
+_EVENT_KEYS: dict[str, tuple[Event, ...]] = {
     "c": (Event.START, Event.UPDATE, Event.END, Event.FAIL),
     "t": (Event.START, Event.UPDATE, Event.END, Event.FAIL),
     "u": (Event.START,),
@@ -331,8 +327,8 @@ def parse_line(line: str) -> Record | None:
 
     A consumer must treat every log line as untrusted input, so this never
     raises: a line without a trailer, or with one that breaks any rule in
-    ``docs/design.md``, yields ``None``. Keys this version does not know are
-    ignored, so a later minor version stays readable.
+    ``docs/design.md``, yields ``None``. Keys and words it does not know are
+    ignored, so a later release that adds some stays readable.
 
     Parameters
     ----------
@@ -343,7 +339,7 @@ def parse_line(line: str) -> Record | None:
     Returns
     -------
     Record or None
-        The record, or ``None`` when the line carries no valid ``pace:1`` or ``pace:2`` trailer.
+        The record, or ``None`` when the line carries no valid trailer.
     """
     if not isinstance(line, str):
         return None
@@ -353,29 +349,26 @@ def parse_line(line: str) -> Record | None:
     # U+FFFD stands for one undecodable source byte (see LineSplitter), so count it as one.
     if len(line.encode("utf-8", errors="surrogatepass")) - 2 * line.count("�") > MAX_LINE_BYTES:
         return None
-    found = _trailer_tokens(line)
-    if found is None:
+    tokens = _trailer_tokens(line)
+    if tokens is None:
         return None
-    major, tokens = found
     try:
-        return _build_v1(_parse_fields(tokens)) if major == 1 else _build_v2(tokens)
+        return _build_record(tokens)
     except ValueError:
         return None
 
 
-def _trailer_tokens(line: str) -> tuple[int, list[str]] | None:
+def _trailer_tokens(line: str) -> list[str] | None:
     text = ANSI_PATTERN.sub("", line).rstrip()
     if not text.endswith("]"):
         return None
-    start = text.rfind(f"[{MARKER}:")
+    start = text.rfind(f"[{MARKER} ")
     if start < 0 or (start > 0 and text[start - 1] != " "):
         return None
-    tokens = text[start + 1 : -1].split(" ")
-    major = _MAJORS.get(tokens[0])
-    return None if major is None else (major, tokens[1:])
+    return text[start + len(MARKER) + 2 : -1].split(" ")
 
 
-def _build_v2(tokens: list[str]) -> Record:
+def _build_record(tokens: list[str]) -> Record:
     if not tokens or len(tokens) > MAX_FIELDS:
         raise ValueError("no scope, or too many items")
     scope, nested, parent = tokens[0].partition("<")
@@ -387,8 +380,8 @@ def _build_v2(tokens: list[str]) -> Record:
     if len(kinds) > 1:
         raise ValueError("more than one event")
     event = kinds[0] if kinds else Event.UPDATE
-    _check_v2_fields(event, fields, words)
-    completed, total = _v2_counts(event, fields)
+    _check_fields(event, fields, words)
+    completed, total = _counts(event, fields)
     seq = _optional(fields, "q", _parse_seq)
     if seq is not None and seq < _FIRST_SEQ[event]:
         raise ValueError(f"q on {event.value} starts at {_FIRST_SEQ[event]}")
@@ -409,12 +402,12 @@ def _build_v2(tokens: list[str]) -> Record:
     )
 
 
-def _check_v2_fields(event: Event, fields: dict[str, str], words: list[str]) -> None:
+def _check_fields(event: Event, fields: dict[str, str], words: list[str]) -> None:
     """Reject a missing required key, and a key or flag that belongs to another event."""
     required = {Event.START: ("t", "r"), Event.UPDATE: ("t", "q", "r"), Event.PLAN: ("q", "r")}.get(event, ("r",))
     if any(key not in fields for key in required):
         raise ValueError(f"{event.value} requires {', '.join(required)}")
-    for key, events in _V2_EVENT_KEYS.items():
+    for key, events in _EVENT_KEYS.items():
         if key in fields and event not in events:
             raise ValueError(f"{key} does not belong on {event.value}")
     if "res" in words and event is not Event.START:
@@ -423,8 +416,8 @@ def _check_v2_fields(event: Event, fields: dict[str, str], words: list[str]) -> 
         raise ValueError("a fail with a count carries its total")
 
 
-def _v2_counts(event: Event, fields: dict[str, str]) -> tuple[float | None, float | None]:
-    """Return the counts a ``pace:2`` record stands for, filling in what the writer leaves out."""
+def _counts(event: Event, fields: dict[str, str]) -> tuple[float | None, float | None]:
+    """Return the counts a record stands for, filling in what the writer leaves out."""
     if event is Event.STEP:
         return 1.0, 1.0
     if event is Event.PLAN or (event is Event.FAIL and "t" not in fields):
@@ -439,8 +432,6 @@ def _v2_counts(event: Event, fields: dict[str, str]) -> tuple[float | None, floa
 
 
 def _parse_fields(tokens: list[str]) -> dict[str, str]:
-    if len(tokens) > MAX_FIELDS:
-        raise ValueError("too many fields")
     fields: dict[str, str] = {}
     for token in tokens:
         key, sep, value = token.partition("=")
@@ -457,45 +448,6 @@ def _valid_value(key: str, value: str) -> bool:
         return key == "t"
     limit = MAX_PHASES_CHARS if key == "ph" else MAX_VALUE_CHARS
     return len(value) <= limit and _VALUE_PATTERN.fullmatch(value) is not None
-
-
-def _build_v1(fields: dict[str, str]) -> Record:
-    for key in ("s", "k", "q", "e"):
-        if key not in fields:
-            raise ValueError(f"missing required key {key!r}")
-    event = Event(fields["k"])
-    if event is Event.STEP:
-        raise ValueError("pace:1 has no step event")
-    if event in _COUNTED_EVENTS and ("c" not in fields or "t" not in fields):
-        raise ValueError(f"{event.value} requires c and t")
-    _check_event_fields(event, fields)
-    return Record(
-        scope=_parse_scope(fields["s"]),
-        event=event,
-        seq=_parse_seq(fields["q"]),
-        elapsed=_parse_number(fields["e"]),
-        completed=_optional(fields, "c", _parse_number),
-        total=_optional(fields, "t", _parse_total),
-        unit=_optional(fields, "u", _parse_unit),
-        parent=_optional(fields, "p", _parse_scope),
-        root=_parse_flag(fields, "root"),
-        resumed=_parse_flag(fields, "res"),
-        phases=_optional(fields, "ph", _parse_phases) or (),
-        label=_optional(fields, "n", _parse_label),
-        run=_optional(fields, "run", _parse_run),
-    )
-
-
-def _check_event_fields(event: Event, fields: dict[str, str]) -> None:
-    """Reject keys that belong to another event: run, n, res and u on start, ph on plan."""
-    if event is not Event.START and any(key in fields for key in ("run", "n", "res", "u")):
-        raise ValueError(f"run, n, res and u belong on start, not {event.value}")
-    if event is Event.FAIL and ("c" in fields) != ("t" in fields):
-        raise ValueError("a fail carries both c and t, or neither")
-    if event is not Event.PLAN and "ph" in fields:
-        raise ValueError(f"ph belongs on plan, not {event.value}")
-    if event is Event.PLAN and any(key in fields for key in ("c", "t")):
-        raise ValueError("a plan carries no counts")
 
 
 def _optional(fields: dict[str, str], key: str, parse: Callable[[str], _T]) -> _T | None:
@@ -527,14 +479,6 @@ def _parse_total(value: str) -> float | None:
     if total <= 0:
         raise ValueError("total must be positive")
     return total
-
-
-def _parse_flag(fields: dict[str, str], key: str) -> bool:
-    if key not in fields:
-        return False
-    if fields[key] != "1":
-        raise ValueError(f"{key} must be 1, got {fields[key]!r}")
-    return True
 
 
 def _parse_phases(value: str) -> tuple[tuple[str, float], ...]:

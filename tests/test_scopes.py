@@ -29,7 +29,7 @@ from precisionai.pace.scopes import (
 )
 from tests.conftest import FakeClock, FakeStream
 
-TRAILER = re.compile(r"\[pace:2 [^\]]+\]$")
+TRAILER = re.compile(r"\[pace [^\]]+\]$")
 KINDS = {"start", "end", "fail", "step", "plan"}
 
 
@@ -37,7 +37,7 @@ def fields(line: str) -> dict[str, str]:
     """Return a trailer as a dict: ``s``, ``p`` and ``k`` (``upd`` when there is no event word), each flag as ``1``, then the fields."""
     match = TRAILER.search(line)
     assert match, f"no trailer on {line!r}"
-    head, *items = match.group(0)[len("[pace:2 ") : -1].split(" ")
+    head, *items = match.group(0)[len("[pace ") : -1].split(" ")
     scope, _, parent = head.partition("<")
     out = {"s": scope, "k": "upd"} | ({"p": parent} if parent else {})
     for item in items:
@@ -122,7 +122,7 @@ def test_line_text_shows_percent_count_rate_and_estimate(log: Logger, clock: Fak
     update = stream.lines()[5]
     # Four intervals at 20 step/s, then 12: the weighted average gives 0.7 x 20 + 0.3 x 12 = 17.6,
     # and 3160 steps left / 17.6 = 3m00s.
-    assert update.startswith("2025-11-03T17:18:22Z PROGRESS Train  1840/5000  36.8%  17.6 step/s · ~3m00s  [pace:2 ")
+    assert update.startswith("2025-11-03T17:18:22Z PROGRESS Train  1840/5000  36.8%  17.6 step/s · ~3m00s  [pace ")
 
 
 def test_failure_writes_fail_and_reraises(log: Logger, stream: FakeStream) -> None:
@@ -213,10 +213,10 @@ def test_update_can_go_backwards(log: Logger, clock: FakeClock, stream: FakeStre
 
 
 def test_description_with_newlines_cannot_break_the_line(log: Logger, stream: FakeStream) -> None:
-    with progress(1, "Bad\nname [pace:1 s=x k=end]", logger=log):
+    with progress(1, "Bad\nname [pace x end c=1 r=ab]", logger=log):
         pass
     for line in stream.lines():
-        assert line.count("[pace:") == 1
+        assert line.count("[pace ") == 1
     assert len(stream.lines()) == 2
 
 
@@ -393,7 +393,7 @@ def test_timed_with_description(log: Logger, clock: FakeClock, stream: FakeStrea
     # It ended before its first line was due (PACE_MIN_INTERVAL, 15 s), so it is one line.
     (step,) = records(stream)
     assert step == {"s": "load-model", "k": "step", "e": "7", "n": "Load%20model", "r": log.run_id}
-    assert stream.lines()[0].startswith("2025-11-03T17:16:49Z STEP     Load model  done in 7s  [pace:2 ")
+    assert stream.lines()[0].startswith("2025-11-03T17:16:49Z STEP     Load model  done in 7s  [pace ")
 
 
 def test_timed_without_a_minimum_interval_writes_start_and_end(
@@ -422,7 +422,7 @@ def test_steps_nest_under_a_running_loop(log: Logger, clock: FakeClock, stream: 
     lines = stream.lines()
     assert [item["k"] for item in records(stream)] == ["start", "step", "upd", "step", "upd", "end"]
     assert [item.get("p") for item in records(stream) if item["k"] == "step"] == ["train", "train"]
-    assert " STEP     ├ Save  done in 2s  [pace:2 save<train step e=2 n=Save r=" in lines[1]
+    assert " STEP     ├ Save  done in 2s  [pace save<train step e=2 n=Save r=" in lines[1]
 
 
 def test_a_failing_step_writes_its_start_and_fail(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
@@ -825,7 +825,7 @@ def test_lines_show_what_each_event_needs(log: Logger, clock: FakeClock, stream:
         run.advance(66)
         clock.advance(20)
         run.advance(62)
-    texts = [line[len("2025-11-03T17:16:42Z ") : line.index("  [pace:2 ")] for line in stream.lines()]
+    texts = [line[len("2025-11-03T17:16:42Z ") : line.index("  [pace ")] for line in stream.lines()]
     assert texts == [
         "PROGRESS Generate    0/128 request",
         "PROGRESS ├ Batch  0/4 prompt",

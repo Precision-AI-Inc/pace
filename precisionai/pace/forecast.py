@@ -195,14 +195,10 @@ class _Runs:
 
     def __init__(self) -> None:
         self.current: str | None = None
-        # Whether the current run writes its id on every record (pace:2), so a record without one is not of it.
-        self.stamped = False
         self._left: deque[str] = deque(maxlen=_RUNS_REMEMBERED)
 
     def ignores(self, run: str | None) -> bool:
-        """Return whether a record of ``run`` is a late copy: from a run a restart replaced, or run-less in a pace:2 run."""
-        if run is None:
-            return self.stamped
+        """Return whether a record of ``run`` is a late copy, from a run a restart replaced."""
         return run != self.current and run in self._left
 
     def leave(self) -> None:
@@ -210,7 +206,6 @@ class _Runs:
         if self.current is not None:
             self._left.append(self.current)
         self.current = None
-        self.stamped = False
 
 
 class ScopeForecast:
@@ -305,10 +300,8 @@ class ScopeForecast:
         A record from a run id not seen before begins a new segment (the process
         restarted); one from a run this scope has left behind is ignored. Within a run, a
         record that does not come after the latest one taken is ignored: a copy read from
-        the other stream, or a ``start`` read late. Records are ordered by ``seq``; a
-        ``pace:2`` start, which has none, comes first and an end, fail or step last. A
-        ``pace:1`` ``start`` without a run id after the scope reported beyond ``q=1`` also
-        begins a new segment.
+        the other stream, or a ``start`` read late. Updates are ordered by ``seq``; a
+        start comes first and an end, fail or step last.
 
         Parameters
         ----------
@@ -391,17 +384,10 @@ class ScopeForecast:
         self._root = False
 
     def _is_restart(self, record: Record) -> bool:
-        if self._last_key is None:
-            return False
-        if record.run is not None:
-            return record.run != self._runs.current
-        # A pace:1 start without a run id: after q=1 it can only be a restart.
-        return record.event is Event.START and self._last_key > 1
+        return self._last_key is not None and record.run != self._runs.current
 
     def _take(self, record: Record) -> None:
-        self._runs.current = record.run or self._runs.current
-        # A pace:1 record carries a run id only on a start, which also has a sequence number.
-        self._runs.stamped |= record.run is not None and (record.event is not Event.START or record.seq is None)
+        self._runs.current = record.run
         self._parent = record.parent or self._parent
         self._root = self._root or record.root
         self._unit = record.unit or self._unit
@@ -610,13 +596,12 @@ class JobForecast:
         runs = self._plan_runs.setdefault(record.scope, _Runs())
         if not record.phases or runs.ignores(record.run):
             return False
-        if record.run is not None and record.run != runs.current and record.scope in self._plan_seq:
+        if record.run != runs.current and record.scope in self._plan_seq:
             runs.leave()
             del self._plan_seq[record.scope]
         if (record.seq or 0) <= self._plan_seq.get(record.scope, 0):
             return False
         runs.current = record.run
-        runs.stamped = record.run is not None
         self._plan_seq[record.scope] = record.seq or 0
         self._plan = record.phases
         return True

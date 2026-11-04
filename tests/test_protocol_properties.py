@@ -79,8 +79,8 @@ def test_a_written_trailer_is_read_back_as_written(record: Record) -> None:
 
 # Fragments of the syntax, so that arbitrary text sometimes gets close to a trailer.
 FRAGMENTS = [
+    "[pace ",
     "[pace:1 ",
-    "[pace:2 ",
     "[pace:",
     "a<b ",
     "start ",
@@ -194,7 +194,7 @@ def estimator_streams(draw: Any) -> list[tuple[float, Record]]:
     names = ["a", "b", "c"]
     parents = {"a": None, "b": draw(st.sampled_from([None, "a"])), "c": draw(st.sampled_from([None, "a", "b"]))}
     is_root = draw(st.booleans())
-    # pace:2 records carry a run id, and a sequence number only on an update or plan.
+    # Records carry a run id, and a sequence number only on an update or plan.
     run = draw(st.sampled_from([None, "r1"]))
     state: dict[str, dict[str, Any]] = {}
     now = 0.0

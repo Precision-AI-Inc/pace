@@ -65,10 +65,10 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 ```
 
 ```text
-2026-11-03T17:06:30Z PROGRESS Evaluation   0/40 request  [pace:2 evaluation start t=40 u=request n=Evaluation r=6bfc3dd5]
-2026-11-03T17:06:26Z PROGRESS Evaluation  17/40  42.5%  estimating…  [pace:2 evaluation c=17 t=40 e=0.3 q=2 r=6bfc3dd5]
-2026-11-03T17:06:26Z PROGRESS Evaluation  33/40  82.5%  estimating…  [pace:2 evaluation c=33 t=40 e=0.5 q=3 r=6bfc3dd5]
-2026-11-03T17:06:26Z PROGRESS Evaluation  40/40  done in 1s · 72.7 request/s  [pace:2 evaluation end c=40 e=0.5 r=6bfc3dd5]
+2026-11-03T17:06:30Z PROGRESS Evaluation   0/40 request  [pace evaluation start t=40 u=request n=Evaluation r=6bfc3dd5]
+2026-11-03T17:06:26Z PROGRESS Evaluation  17/40  42.5%  estimating…  [pace evaluation c=17 t=40 e=0.3 q=2 r=6bfc3dd5]
+2026-11-03T17:06:26Z PROGRESS Evaluation  33/40  82.5%  estimating…  [pace evaluation c=33 t=40 e=0.5 q=3 r=6bfc3dd5]
+2026-11-03T17:06:26Z PROGRESS Evaluation  40/40  done in 1s · 72.7 request/s  [pace evaluation end c=40 e=0.5 r=6bfc3dd5]
 ```
 
 (Run with `PACE_MIN_INTERVAL=0.2` so the short example writes more than start and end.)
@@ -107,8 +107,8 @@ with progress(description="Reading shards", unit="shard") as run:
 ```
 
 ```text
-2026-11-03T17:07:42Z PROGRESS Reading shards  0 shard  [pace:2 reading-shards start t=? u=shard n=Reading%20shards r=6a68257f]
-2026-11-03T17:07:43Z PROGRESS Reading shards  17  no estimate  [pace:2 reading-shards c=17 t=? e=0.6 q=2 r=6a68257f]
+2026-11-03T17:07:42Z PROGRESS Reading shards  0 shard  [pace reading-shards start t=? u=shard n=Reading%20shards r=6a68257f]
+2026-11-03T17:07:43Z PROGRESS Reading shards  17  no estimate  [pace reading-shards c=17 t=? e=0.6 q=2 r=6a68257f]
 ```
 
 `t=?` tells a reader the total is unknown. Nothing can be estimated, but the
@@ -117,7 +117,7 @@ the total later, call `run.set_total(40)`. The next line carries the new total a
 the estimate begins from there; the rate seen so far is kept.
 
 ```text
-2026-11-03T17:07:43Z PROGRESS Reading shards  32/40  80.0%  estimating…  [pace:2 reading-shards c=32 t=40 e=1 q=3 r=6a68257f]
+2026-11-03T17:07:43Z PROGRESS Reading shards  32/40  80.0%  estimating…  [pace reading-shards c=32 t=40 e=1 q=3 r=6a68257f]
 ```
 
 With an unknown total, lines are written on the heartbeat only (there is no 1%
@@ -142,7 +142,7 @@ def tokenize(): ...
 ```
 
 ```text
-2026-11-03T17:08:16Z STEP     Load model  done in 0s  [pace:2 load-model step e=0.1 n=Load%20model r=a22feb8b]
+2026-11-03T17:08:16Z STEP     Load model  done in 0s  [pace load-model step e=0.1 n=Load%20model r=a22feb8b]
 ```
 
 A longer call has its start line written with the next line Pace writes once the interval
@@ -182,7 +182,7 @@ for batch in track(val_loader, description="Evaluate", unit="batch"):
 `plan` writes one record that lists the phases and weights:
 
 ```text
-2026-11-03T17:12:54Z PROGRESS Plan  preprocess 5%, train 90%, evaluate 5%  [pace:2 plan plan q=1 ph=preprocess:0.05,train:0.9,evaluate:0.05 r=6bfc3dd5]
+2026-11-03T17:12:54Z PROGRESS Plan  preprocess 5%, train 90%, evaluate 5%  [pace plan plan q=1 ph=preprocess:0.05,train:0.9,evaluate:0.05 r=6bfc3dd5]
 ```
 
 How a reader uses it (see [Specification: plans](design.md#plans)):
@@ -241,11 +241,11 @@ with progress(total=3, description="Epochs", unit="epoch", root=True) as epochs:
 ```
 
 ```text
-2026-11-03T17:07:40Z PROGRESS Epochs  0/3 epoch  [pace:2 epochs start t=3 u=epoch n=Epochs r=648e2e0d root]
-2026-11-03T17:07:40Z PROGRESS ├ Train   0/20 step  [pace:2 train-0<epochs start t=20 u=step n=Train r=648e2e0d]
-2026-11-03T17:07:40Z PROGRESS ├ Train  20/20  done in 0s · 45 step/s  [pace:2 train-0<epochs end c=20 e=0.4 r=648e2e0d]
-2026-11-03T17:07:40Z PROGRESS ├ Validate  0/5 batch  [pace:2 val-0<epochs start t=5 u=batch n=Validate r=648e2e0d]
-2026-11-03T17:07:40Z PROGRESS Epochs  1/3  33.3%  estimating…  [pace:2 epochs c=1 t=3 e=0.6 q=2 r=648e2e0d root]
+2026-11-03T17:07:40Z PROGRESS Epochs  0/3 epoch  [pace epochs start t=3 u=epoch n=Epochs r=648e2e0d root]
+2026-11-03T17:07:40Z PROGRESS ├ Train   0/20 step  [pace train-0<epochs start t=20 u=step n=Train r=648e2e0d]
+2026-11-03T17:07:40Z PROGRESS ├ Train  20/20  done in 0s · 45 step/s  [pace train-0<epochs end c=20 e=0.4 r=648e2e0d]
+2026-11-03T17:07:40Z PROGRESS ├ Validate  0/5 batch  [pace val-0<epochs start t=5 u=batch n=Validate r=648e2e0d]
+2026-11-03T17:07:40Z PROGRESS Epochs  1/3  33.3%  estimating…  [pace epochs c=1 t=3 e=0.6 q=2 r=648e2e0d root]
 ```
 
 A nested scope is never added on top of its parent's remaining time: the parent's
@@ -283,8 +283,8 @@ with progress(total=total_steps, description="Train", unit="step",
 ```
 
 ```text
-2026-11-03T17:07:44Z PROGRESS Train  3100/3200 step  [pace:2 train start c=3100 t=3200 u=step n=Train r=6cbe4833 res]
-2026-11-03T17:07:45Z PROGRESS Train  3140/3200  98.1%  estimating…  [pace:2 train c=3140 t=3200 e=0.4 q=2 r=6cbe4833]
+2026-11-03T17:07:44Z PROGRESS Train  3100/3200 step  [pace train start c=3100 t=3200 u=step n=Train r=6cbe4833 res]
+2026-11-03T17:07:45Z PROGRESS Train  3140/3200  98.1%  estimating…  [pace train c=3140 t=3200 e=0.4 q=2 r=6cbe4833]
 ```
 
 `completed=` is what matters: it sets the count the scope starts from, and the reader
@@ -417,7 +417,7 @@ for item in track(range(5), description="Body crash"):
 ```
 
 ```text
-2026-11-03T17:08:17Z PROGRESS Body crash  2/5  done in 0s  [pace:2 body end c=2 t=5 r=6bfc3dd5]
+2026-11-03T17:08:17Z PROGRESS Body crash  2/5  done in 0s  [pace body end c=2 t=5 r=6bfc3dd5]
 ```
 
 The exception still propagates and your program still crashes as usual. But the

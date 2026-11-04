@@ -83,7 +83,7 @@ def test_output_without_a_trailer_is_an_error() -> None:
 
 
 def test_a_trailer_that_does_not_parse_is_reported_with_its_line_number() -> None:
-    lines = [*run_lines(start(root=True)), "2026-11-03T10:00:00Z PROGRESS broken  [pace:1 s=train k=bogus]"]
+    lines = [*run_lines(start(root=True)), "2026-11-03T10:00:00Z PROGRESS broken  [pace train bogus=%]"]
     lines.extend(run_lines(end(root=True)))
 
     report = verify.analyze(lines)
@@ -396,30 +396,3 @@ def test_main_returns_two_for_a_missing_file_or_empty_input(tmp_path: Path) -> N
     assert verify.main([str(tmp_path / "missing.log")], stdout=out) == 2
     assert "cannot read input" in out.getvalue()
     assert verify.main([], stdin=io.StringIO(""), stdout=io.StringIO()) == 2
-
-
-def test_a_restart_without_run_ids_is_not_hidden_as_a_duplicate() -> None:
-    lines = [
-        "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
-        "[pace:1 s=train root=1 k=upd c=5 t=10 e=2 q=2]",
-        "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
-        "[pace:1 s=train root=1 k=upd c=5 t=10 e=2 q=2]",
-        "[pace:1 s=train root=1 k=end c=10 t=10 e=3 q=3]",
-    ]
-
-    report = verify.analyze(lines)
-
-    assert report.duplicates == 0
-    assert report.scopes["train"].starts == 2
-
-
-def test_the_same_start_read_twice_without_run_ids_is_a_duplicate() -> None:
-    report = verify.analyze(
-        [
-            "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
-            "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
-            "[pace:1 s=train root=1 k=end c=10 t=10 e=2 q=2]",
-        ]
-    )
-
-    assert report.duplicates == 1

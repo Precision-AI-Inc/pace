@@ -182,12 +182,12 @@ def test_basic_logging_writes_every_level_and_no_progress(results: Results) -> N
     assert "Only warnings and above" in out
     assert "Back to the defaults" in out
     assert "KeyError: 'lr'" in out
-    assert "[pace:" not in out
+    assert "[pace " not in out
 
 
 def test_resume_starts_above_zero_and_says_so(results: Results) -> None:
     report = verify.analyze(results["resume.py"].stdout.splitlines())
-    start = next(line for line in results["resume.py"].stdout.splitlines() if "[pace:2 train start " in line)
+    start = next(line for line in results["resume.py"].stdout.splitlines() if "[pace train start " in line)
 
     assert report.scopes["train"].resumed
     assert "c=70" in start
@@ -196,7 +196,7 @@ def test_resume_starts_above_zero_and_says_so(results: Results) -> None:
 
 
 def test_unknown_total_starts_unknown_and_learns_the_total(results: Results) -> None:
-    lines = [line for line in results["unknown_total.py"].stdout.splitlines() if "[pace:" in line]
+    lines = [line for line in results["unknown_total.py"].stdout.splitlines() if "[pace " in line]
 
     assert "t=?" in lines[0]
     last = parse_line(lines[-1])
@@ -263,7 +263,7 @@ def test_distributed_writes_progress_from_rank_zero_only(results: Results) -> No
 def test_reading_output_reports_the_job_as_complete(results: Results) -> None:
     lines = results["reading_output.py"].stdout.splitlines()
 
-    assert "[pace:" not in results["reading_output.py"].stdout
+    assert "[pace " not in results["reading_output.py"].stdout
     assert lines[0].startswith("inference start")
     assert any("complete" in line for line in lines)
     assert lines[-1] == "child exited with 0"

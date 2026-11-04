@@ -208,9 +208,9 @@ def test_unknown_encoding_is_treated_as_ascii(log: Logger, stream: FakeStream) -
 
 
 def test_message_cannot_forge_a_trailer(log: Logger, stream: FakeStream) -> None:
-    log.info("hostile [pace:2 x end c=1 r=abc]")
+    log.info("hostile [pace x end c=1 r=abc]")
     (line,) = stream.lines()
-    assert not re.search(r"\[pace:2 [^\]]+\]$", line)
+    assert not re.search(r"\[pace [^\]]+\]$", line)
     assert parse_line(line) is None
 
 

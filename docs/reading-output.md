@@ -10,12 +10,12 @@ The package ships the reading side, so a Python consumer and the terminal's own
 bytes ──> LineSplitter ──> parse_line ──> Record ──> JobForecast ──> JobEstimate
 ```
 
-Only the `[pace:2 ...]` trailer at the end of a `PROGRESS` or `STEP` line is a contract.
+Only the `[pace ...]` trailer at the end of a `PROGRESS` or `STEP` line is a contract.
 The text before it is for people and changes between releases. Never parse it, and never
 infer progress from other output such as a `tqdm` bar. The grammar, the fields and the
-forecasting rules are specified in the [specification](design.md#line-format-version-2); this page
-shows how to use them. The reader also reads the `[pace:1 ...]` lines that Pace 0.0.x
-writes, mixed in one log or not.
+forecasting rules are specified in the [specification](design.md#line-format); this page
+shows how to use them. The `[pace:1 ...]` lines that Pace 0.0.x wrote are not read: they
+are ordinary text to this reader.
 
 ## A complete reader
 
@@ -113,7 +113,7 @@ splitter.feed(b"ne\n")          # ['ne']
 from precisionai.pace import parse_line
 
 record = parse_line("2026-11-04T02:25:16Z PROGRESS Generate   66/128  51.6%  estimating…  "
-                    "[pace:2 generate c=66 t=128 e=186.7 q=2 r=1b8b7650 root]")
+                    "[pace generate c=66 t=128 e=186.7 q=2 r=1b8b7650 root]")
 ```
 
 ```text
@@ -122,7 +122,7 @@ Record(scope='generate', event=<Event.UPDATE: 'upd'>, seq=2, elapsed=186.7, comp
 ```
 
 `parse_line` never raises. A line with no trailer, or a trailer that breaks any rule (a
-malformed value, a missing required field, an unknown major version, a line over 4096
+malformed value, a missing required field, a line over 4096
 bytes, a value out of range) returns `None`. Treat every line as untrusted input: a job's
 logs can contain anything.
 
@@ -144,22 +144,19 @@ The `Record` fields:
 | `label` | `n` | Short human label, on `start` and `step`. |
 | `run` | `r` | Id of the process run, on every record. |
 
-A `pace:1` line fills the same fields from its own keys (`s`, `k`, `q`, `p`, `run`, ...):
-`seq` on every record, and `run` on a `start` only.
-
 Compute rates from `elapsed`, never from the timestamp at the front of the line.
 `elapsed` is on a monotonic clock, so it is unaffected by clock changes. The timestamp
 is UTC and meant for display.
 
 Keys and words a reader does not know are ignored, so a later minor version stays
-readable. Removing or redefining one would be `pace:3`, which `parse_line` rejects.
+readable. The trailer has no version number, so the format only ever grows.
 
 ## Two streams, duplicate lines
 
 Pace writes to stdout by default, or to stderr with `PACE_STREAM=stderr`. A reader that
 captures both (or a user who mirrors the output to both) sees every line twice. Each
 stream must be read in the order it was written, but one may be read well behind the
-other, even to its end first. Every `pace:2` record carries what a reader needs to
+other, even to its end first. Every record carries what a reader needs to
 ignore the copies:
 
 - **`r`**, the run id, is on every record and the same for every scope in one process run.
@@ -170,8 +167,7 @@ ignore the copies:
   a restart, even for a reader that joined mid-run and never saw the first copy.
 - A record from a run id not seen before begins a new segment: the process restarted.
   Rates are never averaged across a restart. A record from a run that a restart left
-  behind is a late copy, and so is a `pace:1` record without a run id once the scope's
-  run is known from `pace:2` records.
+  behind is a late copy.
 - One limitation: the reader does not know the order of runs it has not seen. If it first
   sees a later run and only then lines of an earlier run it never saw (it attached to the
   second stream of a restarted job late), it takes the earlier run for a restart and
@@ -184,9 +180,9 @@ de-duplicating yourself. `observe` returns `False` for a record it ignored.
 
 ```python
 log = [
-    "[pace:2 train start t=100 u=step r=a1b2c3d4 root]",
-    "[pace:2 train c=10 t=100 e=10 q=2 r=a1b2c3d4 root]",
-    "[pace:2 train c=20 t=100 e=20 q=3 r=a1b2c3d4 root]",
+    "[pace train start t=100 u=step r=a1b2c3d4 root]",
+    "[pace train c=10 t=100 e=10 q=2 r=a1b2c3d4 root]",
+    "[pace train c=20 t=100 e=20 q=3 r=a1b2c3d4 root]",
 ]
 job = JobForecast()
 for second, line in enumerate(log):
@@ -196,7 +192,7 @@ for line in log:
 print(job.snapshot(now=3.0).scopes["train"].completed)   # 20.0: the late start is a copy
 
 # The same job restarted: a new run id begins a new segment.
-job.observe(parse_line("[pace:2 train start t=100 u=step r=ffff0000 root]"), 4.0)
+job.observe(parse_line("[pace train start t=100 u=step r=ffff0000 root]"), 4.0)
 print(job.snapshot(4.0).scopes["train"].completed)       # 0.0
 ```
 
@@ -204,12 +200,6 @@ If you write your own reader, in any language, keep for each scope its current r
 the few run ids a restart left behind, and the position of the latest record taken (0
 for a `start`, `q` for an update, last for an `end`, `fail` or `step`), and apply the same
 rules.
-
-A `pace:1` line carries its run id only on a `start` and orders every record by `q`. A
-`start` read after its scope's updates, from the other stream, is then taken as a restart
-when the reader never saw the first copy: nothing on a `pace:1` update says which run
-wrote it. Merge both streams into one (as with `stderr=subprocess.STDOUT`) when you read a
-job that still writes `pace:1`.
 
 ## From records to an estimate: `JobForecast`
 
@@ -295,9 +285,9 @@ record. Without new lines nothing else will change the state:
 
 ```python
 job = JobForecast(config=ForecastConfig(heartbeat_seconds=120))
-job.observe(parse_line("[pace:2 t start t=100 r=a1 root]"), 0.0)
+job.observe(parse_line("[pace t start t=100 r=a1 root]"), 0.0)
 for i in range(1, 5):
-    job.observe(parse_line(f"[pace:2 t c={i * 20} t=100 e={i * 20} q={i + 1} r=a1 root]"), i * 20.0)
+    job.observe(parse_line(f"[pace t c={i * 20} t=100 e={i * 20} q={i + 1} r=a1 root]"), i * 20.0)
 for now in (80.0, 200.0, 500.0):
     estimate = job.snapshot(now)
     print(now, estimate.state.value, estimate.remaining_seconds, estimate.source)
@@ -335,10 +325,10 @@ Two consequences:
 ## Conformance fixtures for other languages
 
 `tests/fixtures/protocol/cases.jsonl` in the repository is the shared specification of
-the line format as test data. It holds 193 cases, one JSON object per line: 55 lines
-that parse and 138 that must be rejected (oversize, bad escapes, wrong version, wrong
+the line format as test data. It holds 171 cases, one JSON object per line: 52 lines
+that parse and 119 that must be rejected (oversize, bad escapes, an old `[pace:1 ...]` marker, wrong
 number syntax, a key on the wrong event, trailer not at the end, ANSI colour, CRLF and so
-on). They cover `pace:2` and `pace:1`, since a reader reads both. The Python parser
+on). The Python parser
 passes every case in `tests/test_protocol_reading.py`.
 
 Each case has three keys:

@@ -47,8 +47,8 @@ def levels(log: Logger, clock: FakeClock) -> None:
     log.info("plain")
     log.success("done")
     log.warning("two\nlines")
-    log.error("a [pace:1 s=x k=end c=1 t=1 e=1 q=1] forged marker")
-    log.error("a forged [pace:2 x end c=1 r=abc]")
+    log.error("a [pace:1 s=x k=end c=1 t=1 e=1 q=1] old marker")
+    log.error("a forged [pace x end c=1 r=abc]")
     log.critical("[pa\x1b[31mce:1 s=x k=end c=1 t=1 e=1 q=1] hidden by escapes")
     log.log(35, "numeric level")
     log.log("nonsense", "unknown level")
@@ -152,7 +152,7 @@ def long_labels(log: Logger, clock: FakeClock) -> None:
         clock.advance(1.0)
     with progress(2, "日本語 label ✓", "步", logger=log) as scope:
         scope.advance()
-    with progress(1, "\x1b[31mred\x1b[0m [pace:1 s=x k=end c=1 t=1 e=1 q=1]", logger=log):
+    with progress(1, "\x1b[31mred\x1b[0m [pace x end c=1 r=abc]", logger=log):
         pass
     with progress(4, "x" * 5000, logger=log):
         pass

@@ -68,6 +68,7 @@ def test_timestamp_is_iso_utc_to_the_second() -> None:
 def test_clean_text_makes_one_line_and_cuts() -> None:
     assert render.clean_text("a\n\tb\x00c  d") == "a b c d"
     assert render.clean_text("x" * 200) == "x" * render.MAX_DESCRIPTION_CHARS
+    assert render.clean_text("see [pace a r=x]") == "see [ pace a r=x]"
     assert render.clean_text("see [pace:1 s=a]") == "see [ pace:1 s=a]"
 
 

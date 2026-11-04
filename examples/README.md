@@ -22,7 +22,7 @@ PACE_MIN_INTERVAL=0 python examples/track_loop.py
 PACE_MIN_INTERVAL=0 PACE_BAR=never python examples/track_loop.py | tail
 ```
 
-`PACE_BAR=never` writes the lines (with their `[pace:2 ...]` trailer) even on a terminal.
+`PACE_BAR=never` writes the lines (with their `[pace ...]` trailer) even on a terminal.
 Every setting is described in `docs/configuration.md`.
 
 The scripts import only the standard library and `precisionai.pace`, except the two

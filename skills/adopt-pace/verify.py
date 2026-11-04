@@ -28,7 +28,7 @@ from typing import TextIO
 
 from precisionai.pace import Event, ForecastState, JobEstimate, JobForecast, Record, parse_line
 
-TRAILER_MARK = "[pace:"
+TRAILER_MARK = "[pace "
 MAX_LISTED_LINES = 5
 LABEL_LIMIT = 64
 _TIMESTAMP = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z\b")
@@ -194,7 +194,7 @@ def _check(report: Report) -> None:
         listed = ", ".join(str(n) for n in report.malformed[:MAX_LISTED_LINES])
         add(
             Finding(
-                "error", f"{len(report.malformed)} line(s) carry a [pace: trailer that does not parse (lines {listed})"
+                "error", f"{len(report.malformed)} line(s) carry a [pace trailer that does not parse (lines {listed})"
             )
         )
     if not report.scopes and not report.plans:

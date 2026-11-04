@@ -14,7 +14,7 @@ def test_format_trailer_update_matches_design_example() -> None:
     record = Record(
         scope="train", event=Event.UPDATE, seq=57, elapsed=763.12, completed=1840, total=5000, root=True, run=RUN
     )
-    assert format_trailer(record) == "[pace:2 train c=1840 t=5000 e=763.1 q=57 r=1b8b7650 root]"
+    assert format_trailer(record) == "[pace train c=1840 t=5000 e=763.1 q=57 r=1b8b7650 root]"
 
 
 def test_format_trailer_start_with_unit_label_and_resume() -> None:
@@ -29,12 +29,12 @@ def test_format_trailer_start_with_unit_label_and_resume() -> None:
         label="Fine-tune 7B",
         run=RUN,
     )
-    assert format_trailer(record) == "[pace:2 train<job start c=3100 t=5000 u=step n=Fine-tune%207B r=1b8b7650 res]"
+    assert format_trailer(record) == "[pace train<job start c=3100 t=5000 u=step n=Fine-tune%207B r=1b8b7650 res]"
 
 
 def test_format_trailer_start_leaves_out_a_zero_count_and_elapsed_time() -> None:
     record = Record(scope="generate", event=Event.START, completed=0, total=128, unit="request", run=RUN)
-    assert format_trailer(record) == "[pace:2 generate start t=128 u=request r=1b8b7650]"
+    assert format_trailer(record) == "[pace generate start t=128 u=request r=1b8b7650]"
 
 
 def test_format_trailer_unknown_total() -> None:
@@ -50,7 +50,7 @@ def test_format_trailer_end_leaves_out_a_total_equal_to_the_count(
     completed: float, total: float | None, counts: str
 ) -> None:
     record = Record(scope="g", event=Event.END, elapsed=197.4, completed=completed, total=total, run=RUN)
-    assert format_trailer(record) == f"[pace:2 g end {counts} e=197.4 r=1b8b7650]"
+    assert format_trailer(record) == f"[pace g end {counts} e=197.4 r=1b8b7650]"
     assert parse_line(format_trailer(record)) == record
 
 
@@ -66,22 +66,22 @@ def test_format_trailer_step_carries_parent_elapsed_label_and_run() -> None:
         label="Start Ollama",
         run=RUN,
     )
-    assert format_trailer(record) == "[pace:2 start-ollama<generate step e=12 n=Start%20Ollama r=1b8b7650]"
+    assert format_trailer(record) == "[pace start-ollama<generate step e=12 n=Start%20Ollama r=1b8b7650]"
 
 
 def test_format_trailer_plan_has_no_counts() -> None:
     record = Record(scope="job", event=Event.PLAN, seq=1, phases=(("prep", 0.05), ("train", 0.95)), run=RUN)
-    assert format_trailer(record) == "[pace:2 job plan q=1 ph=prep:0.05,train:0.95 r=1b8b7650]"
+    assert format_trailer(record) == "[pace job plan q=1 ph=prep:0.05,train:0.95 r=1b8b7650]"
 
 
 def test_format_trailer_fail_carries_counts_it_reached() -> None:
     record = Record(scope="train", event=Event.FAIL, elapsed=12.5, completed=10, total=20, run=RUN)
-    assert format_trailer(record) == "[pace:2 train fail c=10 t=20 e=12.5 r=1b8b7650]"
+    assert format_trailer(record) == "[pace train fail c=10 t=20 e=12.5 r=1b8b7650]"
 
 
 def test_format_trailer_fail_without_counts_has_none() -> None:
     record = Record(scope="train", event=Event.FAIL, elapsed=12.5, run=RUN)
-    assert format_trailer(record) == "[pace:2 train fail e=12.5 r=1b8b7650]"
+    assert format_trailer(record) == "[pace train fail e=12.5 r=1b8b7650]"
 
 
 def test_format_trailer_truncates_label() -> None:

@@ -7,7 +7,7 @@ description: Add Pace (precisionai-pace) logging and progress reporting to this 
 
 Pace (`precisionai-pace`, import `precisionai.pace`) is a zero-dependency Python logger with
 progress reporting. Each progress line ends with a trailer such as
-`[pace:2 train c=1840 t=5000 e=763.1 q=57 r=6bfc3dd5 root]`; a scheduler reads them from the
+`[pace train c=1840 t=5000 e=763.1 q=57 r=6bfc3dd5 root]`; a scheduler reads them from the
 job's output to estimate when it finishes. Make this repo's jobs write them, with the
 smallest correct change, and prove it.
 
@@ -20,7 +20,7 @@ its own file under `patterns/` (beside this one): read **only** the ones the sur
 - A **total**, so progress is a fraction. No known total gives no estimate.
 - Exactly **one `root` scope** standing for the whole job (or a `plan(...)` listing every
   phase). **The job is complete when the root ends**; work after it is invisible.
-- An **`end`** (or `fail`) for every scope. Never hand-write a `[pace:` trailer or put one in
+- An **`end`** (or `fail`) for every scope. Never hand-write a `[pace ...]` trailer or put one in
   a log message.
 
 Pace flushes every line, rate-limits by time, writes progress from rank 0 only (no

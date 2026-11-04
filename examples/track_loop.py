@@ -16,7 +16,7 @@ line (a real job writes one at most every 15 seconds).
 
 Expect: a ``start`` line, update lines when ``PACE_MIN_INTERVAL=0``, an ``end`` line, then
 ``SUCCESS``. On a terminal the lines are replaced by one bar that redraws in place. Every
-progress line ends with the ``[pace:2 inference ... root]`` trailer a scheduler reads.
+progress line ends with the ``[pace inference ... root]`` trailer a scheduler reads.
 """
 
 import time

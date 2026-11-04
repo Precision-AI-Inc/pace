@@ -4,7 +4,7 @@
 """Turn log messages and progress records into the readable part of an output line.
 
 Nothing here writes; it only builds strings. The text is for people and may change
-between releases. Only the ``[pace:2 ...]`` trailer that follows it is a contract.
+between releases. Only the ``[pace ...]`` trailer that follows it is a contract.
 """
 
 import codecs
@@ -49,7 +49,7 @@ _COLOR_CODES: dict[str, str] = {
 }
 _ESCAPE = "\x1b["
 _WHITESPACE = re.compile(r"\s+")
-_FORGED_MARKER = re.compile(r"\[(?=pace:)")
+_FORGED_MARKER = re.compile(r"\[(?=pace)")
 
 
 def is_utf8(encoding: str) -> bool:
@@ -106,7 +106,7 @@ def log_line(timestamp: str, label: str, message: str, color: bool) -> str:
 
 
 def neutralize(message: str) -> str:
-    """Break up any ``[pace:`` in a user message so it cannot pass for a progress trailer.
+    """Break up any ``[pace`` in a user message so it cannot pass for a progress trailer.
 
     A reader removes terminal escape sequences before it looks for a trailer, so they
     are removed here first: ``[pa`` + ESC ``[31m`` + ``ce:`` must not survive as a
