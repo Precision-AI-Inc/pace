@@ -27,7 +27,7 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. Read
 
 ```
 precisionai/pace/
-  core.py, _env.py, _render.py, capture.py   # the logger
+  core.py, _env.py, _render.py, capture.py   # the logger; _env.py holds Settings, one table of PACE_ variable, check and default per setting
   scopes.py        # track, progress, timed, phase, plan
   protocol.py      # Record, the [pace:1 ...] trailer, parse_line, LineSplitter
   forecast.py      # ScopeForecast, JobForecast
@@ -233,6 +233,7 @@ docs/
 ## Testing
 
 - Mirror package structure: `tests/test_<module>.py`
+- `tests/test_golden_output.py` pins every byte Pace writes for representative scripts; rewrite its files with `PACE_UPDATE_GOLDEN=1` only for a deliberate format change. `tests/test_protocol_properties.py` runs `hypothesis` property tests on the trailer and the splitter
 - Shared fixtures in `tests/conftest.py`
 - 90% coverage hard minimum — enforced by pytest and pre-commit
 - Format conformance cases live in `tests/fixtures/protocol/` as input lines plus expected parse results; consumers run the same files
