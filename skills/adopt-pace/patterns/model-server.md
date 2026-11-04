@@ -17,8 +17,16 @@ def start_server() -> subprocess.Popen:
     log = Path(tempfile.mkdtemp()) / "server.log"
     with log.open("w") as handle:
         server = subprocess.Popen(["ollama", "serve"], stdout=handle, stderr=subprocess.STDOUT)
-    wait_until_ready(timeout=120)  # raise, naming `log`, if it never answers
+    try:
+        wait_until_ready(timeout=120)  # raise, naming `log`, if it never answers
+    except BaseException:
+        stop(server)  # the caller's `finally` is not reached yet
+        raise
     return server
+
+def stop(server: subprocess.Popen) -> None:
+    server.terminate()
+    server.wait(timeout=30)
 
 @timed("Import model")
 def import_model(path: str) -> None: ...
@@ -32,8 +40,7 @@ with progress(total=len(requests), description="Generate", unit="request", root=
                 answers.append(future.result())
                 run.advance()
     finally:
-        server.terminate()
-        server.wait(timeout=30)
+        stop(server)
 ```
 
 - Requests finish out of order, so advance as each one completes (`as_completed`), from the
@@ -43,7 +50,8 @@ with progress(total=len(requests), description="Generate", unit="request", root=
 - The server's own log is per-request chatter. Send it to a temporary file and name that
   file only if the server fails to start. Do not put it in the job's outputs or stdout.
 - Pass `check=True` or check the return code for the model import, and always stop the
-  server in a `finally`, so a failure still ends the scope as `fail`.
+  server in a `finally`, so a failure still ends the scope as `fail`. A server that never becomes ready is
+  stopped inside `start_server`, since the caller's `finally` does not exist yet.
 - A server that runs until stopped and has no end of its own (vLLM's OpenAI-compatible
   server) gives no completion estimate: there is no total to count. Report only its startup
   (`@timed` or `phase`) and say in the report that the job has no estimate.
