@@ -31,7 +31,7 @@ Rules that apply to all of them:
 
 | Variable | Used for |
 |---|---|
-| `RANK`, `LOCAL_RANK`, `SLURM_PROCID` | The process rank. The first one that holds an integer is used, and the rank is 0 when none does. Only rank 0 writes progress unless `PACE_ALL_RANKS` is on. See [Distributed runs](logging.md#distributed-runs-and-ranks). |
+| `RANK`, `OMPI_COMM_WORLD_RANK`, `PMI_RANK`, `SLURM_PROCID`, `LOCAL_RANK` | The process rank, in that order of precedence: the global ranks (torchrun, Open MPI, MPICH and Intel MPI, SLURM) before the per-node `LOCAL_RANK`. The first one that holds an integer is used, and the rank is 0 when none does. Only rank 0 writes progress unless `PACE_ALL_RANKS` is on. See [Distributed runs](logging.md#distributed-runs-and-ranks). |
 | `NO_COLOR` | See the table above. |
 
 Pace does not read `PYTHONIOENCODING`, but it follows the encoding of the stream it writes to

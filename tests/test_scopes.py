@@ -588,7 +588,7 @@ def test_advance_from_many_threads_keeps_seq_strictly_increasing(log: Logger, st
 # ---- ranks -----------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("variable", ["RANK", "LOCAL_RANK", "SLURM_PROCID"])
+@pytest.mark.parametrize("variable", ["RANK", "OMPI_COMM_WORLD_RANK", "PMI_RANK", "SLURM_PROCID", "LOCAL_RANK"])
 def test_only_rank_zero_writes_progress_but_every_rank_logs(
     log: Logger, stream: FakeStream, monkeypatch: pytest.MonkeyPatch, variable: str
 ) -> None:

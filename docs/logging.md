@@ -335,8 +335,10 @@ To force UTF-8 on a stream that supports it, set `PYTHONIOENCODING=utf-8` or
 
 ## Distributed runs and ranks
 
-Pace reads the process rank from the first of `RANK`, `LOCAL_RANK` and `SLURM_PROCID`
-that holds an integer; with none it is rank 0.
+Pace reads the process rank from the first of `RANK` (torchrun, Accelerate),
+`OMPI_COMM_WORLD_RANK` (Open MPI), `PMI_RANK` (MPICH, Intel MPI), `SLURM_PROCID` and
+`LOCAL_RANK` that holds an integer; with none it is rank 0. The global ranks come first
+because `LOCAL_RANK` counts from 0 on every node.
 
 - **Progress** is written only by rank 0. On other ranks `track`, `progress`,
   `timed`, `phase` and `plan` still run your code and yield your items, and write

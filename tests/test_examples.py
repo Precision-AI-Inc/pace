@@ -77,7 +77,8 @@ def example_environment() -> dict[str, str]:
     env = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith("PACE_") and key not in {"RANK", "LOCAL_RANK", "SLURM_PROCID", "NO_COLOR"}
+        if not key.startswith("PACE_")
+        and key not in {"RANK", "OMPI_COMM_WORLD_RANK", "PMI_RANK", "SLURM_PROCID", "LOCAL_RANK", "NO_COLOR"}
     }
     env.update({"PACE_MIN_INTERVAL": "0", "PACE_BAR": "never", "PYTHONIOENCODING": "utf-8"})
     env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(REPOSITORY), env.get("PYTHONPATH", "")]))

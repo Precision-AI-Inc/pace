@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Under `mpirun` (Open MPI) and MPICH or Intel MPI launchers, Pace now reads the process rank from `OMPI_COMM_WORLD_RANK` and `PMI_RANK`. Before, every MPI process counted as rank 0, so every one of them wrote progress. The global rank variables (`RANK`, the MPI ones, `SLURM_PROCID`) are now read before `LOCAL_RANK`, which restarts at 0 on every node.
 - A reader fed both stdout and stderr no longer mistakes a scope's `start` line, read after that scope's updates, for a restart. Before, it threw away the progress already seen, and the copies of earlier updates from the other stream were counted again, which made the completion estimate jump.
 - The Hugging Face Transformers callback no longer shows an absurd speed for an evaluation pass (for example `158 batch/s` on a pass that took six seconds). The Trainer reports a batch only after it has run, so the pass now starts with its first batch already counted, and the speed and "done in" time cover the batches after it.
 
