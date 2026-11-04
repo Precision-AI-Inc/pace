@@ -3,6 +3,8 @@
 
 """Tests for the readable part of output lines."""
 
+import dataclasses
+
 import pytest
 
 from precisionai.pace import _render as render
@@ -154,6 +156,17 @@ def test_progress_text_of_a_step_indented_two_levels() -> None:
         item, Forecast(ForecastState.COMPLETE, 0.0, 0.1), "Load", "call", render.UNICODE, depth=2
     )
     assert text == "  ├ Load  done in 10s"
+
+
+@pytest.mark.parametrize(("completed", "total", "shown"), [(3, 10, " 3/10 batch"), (1, 1, "1/1 batch")])
+def test_progress_text_of_a_step_with_counts_shows_them(completed: float, total: float, shown: str) -> None:
+    item = record(Event.STEP, completed=completed, total=total)
+    unitless = render.progress_text(item, Forecast(ForecastState.COMPLETE, 0.0, 0.1), "Val", "batch", render.UNICODE)
+    item = dataclasses.replace(item, unit="batch")
+    with_unit = render.progress_text(item, Forecast(ForecastState.COMPLETE, 0.0, 0.1), "Val", "batch", render.UNICODE)
+    assert with_unit == f"Val  {shown}  done in 10s"
+    # Without a unit only a step of one unit is the bare one-off step.
+    assert unitless == (with_unit if completed != 1 else "Val  done in 10s")
 
 
 def test_progress_text_of_a_start_shows_the_count_and_unit_only() -> None:

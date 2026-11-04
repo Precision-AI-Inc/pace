@@ -42,7 +42,15 @@ from precisionai.pace._render import (
 from precisionai.pace.core import Logger, Target
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import ScopeForecast
-from precisionai.pace.protocol import MAX_LINE_BYTES, MAX_NUMBER, SCOPE_PATTERN, Event, Record, format_trailer
+from precisionai.pace.protocol import (
+    MAX_LINE_BYTES,
+    MAX_NUMBER,
+    SCOPE_PATTERN,
+    Event,
+    Record,
+    format_trailer,
+    is_bare_step,
+)
 
 REDRAW_INTERVAL = 0.1
 MAX_DERIVED_ID_CHARS = 48
@@ -399,7 +407,7 @@ class Scope:
     def _progress_line(self, text: str, record: Record, target: Target) -> str:
         stamp = format_timestamp(self._out.clock.wall())
         # A child folded into one line keeps the PROGRESS label its start and end would have had.
-        name = STEP_LABEL if record.event is Event.STEP and record.unit is None else PROGRESS_LABEL
+        name = STEP_LABEL if is_bare_step(record) else PROGRESS_LABEL
         label = colorize(name, target.color) + " " * (len(PROGRESS_LABEL) - len(name))
         prefix = f"{stamp} {label} "
         trailer = f"  {format_trailer(record)}"

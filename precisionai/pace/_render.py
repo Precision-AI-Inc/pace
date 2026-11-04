@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import ANSI_PATTERN, Event, Record
+from precisionai.pace.protocol import ANSI_PATTERN, Event, Record, is_bare_step
 
 PROGRESS_LABEL = "PROGRESS"
 STEP_LABEL = "STEP"
@@ -185,7 +185,7 @@ def progress_text(
 
     A ``start`` shows the count and unit, an update the count, percentage, rate and time
     left, an ``end`` or ``fail`` the count, outcome and rate, a ``step`` its outcome (after
-    the count and unit when it carries a unit, as a child scope's step does).
+    the count and unit when it carries counts, as a child scope's step does).
     The count is right-aligned to the width of the total, so a scope's lines line up.
 
     Parameters
@@ -216,7 +216,7 @@ def progress_text(
         return _bar_text(record, forecast, name, shown_unit, charset)
     parts = [("  " * (depth - 1) + charset.branch if depth else "") + name]
     event = record.event
-    if event is Event.START or (event is Event.STEP and record.unit is not None):
+    if event is Event.START or (event is Event.STEP and not is_bare_step(record)):
         parts.append(f"{_count_text(record)} {shown_unit}".rstrip())
     elif event is not Event.STEP:
         parts.append(_count_text(record))
