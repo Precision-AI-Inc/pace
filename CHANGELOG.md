@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-04
+
 ### Changed
 
 - Progress lines are shorter, in a new line format: the trailer is `[pace ...]`, with no version number. It starts with the scope id (and `<parent` for a nested scope), names the event as a plain word (`start`, `end`, `fail`, `step`, `plan`; an update has none), and leaves out what a reader can work out: zeros, an end's total when it equals the count, the label after the start, and the sequence number except on updates and plans. The process run id (`r=`) is now on every line. The readable part drops the `0.0%` and `estimating…` from start lines, lines up the counts of a scope, and indents a nested scope under its parent. A real Ollama job's progress goes from five lines of 132 to 169 characters to four of 123 to 133. This release does not read the `[pace:1 ...]` lines of Pace 0.0.x, and 0.0.x does not read these, so a job and the program reading its output move to 0.1.0 together. With no version number, the format will from now on only gain keys and words, which older readers ignore.
@@ -52,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runnable examples, one per style of logging and progress (plain loops, epochs, concurrent work, phases and a plan, resuming, unknown totals, nested scopes, `logging` capture, distributed ranks, and reading the output).
 - User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Precision-AI-Inc/pace/compare/v0.0.2...v0.1.0
 [0.0.2]: https://github.com/Precision-AI-Inc/pace/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/Precision-AI-Inc/pace/releases/tag/v0.0.1
