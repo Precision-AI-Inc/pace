@@ -148,8 +148,8 @@
 {"name": "res_on_update", "line": "[pace a c=1 t=2 q=2 r=1b8b7650 res]", "record": null}
 {"name": "unit_on_update", "line": "[pace a c=1 t=2 q=2 u=step r=1b8b7650]", "record": null}
 {"name": "label_on_end", "line": "[pace a end c=2 n=x r=1b8b7650]", "record": null}
-{"name": "count_on_step", "line": "[pace a step c=1 r=1b8b7650]", "record": null}
-{"name": "total_on_step", "line": "[pace a step t=1 r=1b8b7650]", "record": null}
+{"name": "step_count_without_total_equals_it", "line": "[pace a step c=1 r=1b8b7650]", "record": {"scope": "a", "event": "step", "completed": 1.0, "total": 1.0, "run": "1b8b7650"}}
+{"name": "step_total_without_count_is_none_done", "line": "[pace a step t=1 r=1b8b7650]", "record": {"scope": "a", "event": "step", "completed": 0.0, "total": 1.0, "run": "1b8b7650"}}
 {"name": "count_on_plan", "line": "[pace p plan c=1 q=1 r=1b8b7650]", "record": null}
 {"name": "phases_on_start", "line": "[pace a start t=1 ph=a:1 r=1b8b7650]", "record": null}
 {"name": "fail_count_without_total", "line": "[pace a fail c=3 r=1b8b7650]", "record": null}
@@ -169,3 +169,16 @@
 {"name": "two_spaces_after_marker", "line": "[pace  a c=1 t=2 e=1 q=2 r=ab]", "record": null}
 {"name": "last_trailer_wins_over_earlier_marker_text", "line": "see [pace not a trailer] then [pace a c=1 t=2 e=1 q=2 r=ab]", "record": {"scope": "a", "event": "upd", "seq": 2, "elapsed": 1, "completed": 1, "total": 2, "run": "ab"}}
 {"name": "zero_completed_and_elapsed", "line": "[pace a c=0 t=1 e=0 q=2 r=ab]", "record": {"scope": "a", "event": "upd", "seq": 2, "completed": 0, "total": 1, "run": "ab"}}
+{"name": "child_step_with_counts_and_unit", "line": "2026-11-04T15:34:05Z PROGRESS ├ Validation  1/1 batch  done in 0s  [pace validation-263<train step c=1 u=batch e=0.1 n=Validation r=0a0dfc37]", "record": {"scope": "validation-263", "event": "step", "elapsed": 0.1, "completed": 1.0, "total": 1.0, "unit": "batch", "parent": "train", "label": "Validation", "run": "0a0dfc37"}}
+{"name": "child_step_ended_early", "line": "[pace val<epochs step c=3 t=10 u=batch e=2.5 n=Validate r=1b8b7650]", "record": {"scope": "val", "event": "step", "elapsed": 2.5, "completed": 3.0, "total": 10.0, "unit": "batch", "parent": "epochs", "label": "Validate", "run": "1b8b7650"}}
+{"name": "child_step_with_unknown_total", "line": "[pace a<b step c=5 t=? u=file r=1b8b7650]", "record": {"scope": "a", "event": "step", "completed": 5.0, "unit": "file", "parent": "b", "run": "1b8b7650"}}
+{"name": "step_with_unit_only_is_one_unit", "line": "[pace a step u=call r=1b8b7650]", "record": {"scope": "a", "event": "step", "completed": 1.0, "total": 1.0, "unit": "call", "run": "1b8b7650"}}
+{"name": "step_zero_count_without_total", "line": "[pace a step c=0 u=batch r=1b8b7650]", "record": null}
+{"name": "step_zero_total", "line": "[pace a step c=1 t=0 u=batch r=1b8b7650]", "record": null}
+{"name": "step_with_q", "line": "[pace a step c=1 u=batch q=2 r=1b8b7650]", "record": null}
+{"name": "step_with_res", "line": "[pace a step c=1 t=2 u=batch r=1b8b7650 res]", "record": null}
+{"name": "step_with_phases", "line": "[pace a step c=1 u=batch ph=a:1 r=1b8b7650]", "record": null}
+{"name": "step_with_bad_unit", "line": "[pace a step c=1 u=%ZZ r=1b8b7650]", "record": null}
+{"name": "step_with_negative_count", "line": "[pace a step c=-1 t=2 u=batch r=1b8b7650]", "record": null}
+{"name": "step_with_repeated_count", "line": "[pace a step c=1 c=2 u=batch r=1b8b7650]", "record": null}
+{"name": "step_and_end", "line": "[pace a step end c=1 u=batch r=1b8b7650]", "record": null}

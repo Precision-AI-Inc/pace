@@ -131,12 +131,12 @@ The `Record` fields:
 | Field | In the trailer | Meaning |
 |---|---|---|
 | `scope` | the head, `scope<parent` | Scope id, unique within one process run. |
-| `event` | the event word | `Event.START`, `UPDATE` (no word), `END`, `FAIL`, `STEP` or `PLAN`. A `STEP` is a start and an end at once. |
+| `event` | the event word | `Event.START`, `UPDATE` (no word), `END`, `FAIL`, `STEP` or `PLAN`. A `STEP` is a start and an end at once: a short `@timed` call or `phase()`, or a child scope that ended before its first line was due. |
 | `seq` | `q` | Sequence number within the scope, on an update or plan; `None` on the others. |
 | `elapsed` | `e` | Seconds since the scope started, on the job's monotonic clock; 0 when left out. |
-| `completed` | `c` | Amount done (0 when left out, 1 on a `step`), or `None` (a `fail` may not know it, and a `plan` has none). |
-| `total` | `t` | Total, or `None` when written as `?`. An `end` without `t` has its count as total; a `step` has 1. |
-| `unit` | `u` | Unit, on `start` only. |
+| `completed` | `c` | Amount done (0 when left out, 1 on a `step` with neither `c` nor `t`), or `None` (a `fail` may not know it, and a `plan` has none). |
+| `total` | `t` | Total, or `None` when written as `?`. An `end` or `step` with `c` but no `t` has its count as total; a `step` with neither has 1. |
+| `unit` | `u` | Unit, on `start`, and on a `step` that carries its counts (a child scope's). |
 | `parent` | after `<` in the head | Parent scope id for a nested scope. |
 | `root` | `root` | `True` when the scope stands for the whole job. |
 | `resumed` | `res` | `True` on a `start` that resumes earlier work. |
@@ -149,7 +149,10 @@ Compute rates from `elapsed`, never from the timestamp at the front of the line.
 is UTC and meant for display.
 
 Keys and words a reader does not know are ignored, so a later minor version stays
-readable. The trailer has no version number, so the format only ever grows.
+readable. The trailer has no version number, so the format only ever grows. One case
+where an older reader loses a line: from 0.1.1 a short child scope is one `step` that
+carries `c`, `t` and `u`, which a 0.1.0 reader rejects as keys on the wrong event. It
+then misses that one child; its parent and the job estimate are unaffected.
 
 ## Two streams, duplicate lines
 
@@ -325,8 +328,8 @@ Two consequences:
 ## Conformance fixtures for other languages
 
 `tests/fixtures/protocol/cases.jsonl` in the repository is the shared specification of
-the line format as test data. It holds 171 cases, one JSON object per line: 52 lines
-that parse and 119 that must be rejected (oversize, bad escapes, an old `[pace:1 ...]` marker, wrong
+the line format as test data. It holds 184 cases, one JSON object per line: 58 lines
+that parse and 126 that must be rejected (oversize, bad escapes, an old `[pace:1 ...]` marker, wrong
 number syntax, a key on the wrong event, trailer not at the end, ANSI colour, CRLF and so
 on). The Python parser
 passes every case in `tests/test_protocol_reading.py`.

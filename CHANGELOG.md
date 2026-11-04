@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A child scope that ends before its first line is due (`PACE_MIN_INTERVAL`, 15 seconds by default), such as a one-batch validation inside training, now writes one line instead of a start line and an end line: `PROGRESS ├ Validation  1/1 batch  done in 0s`. Its trailer is a `step` that carries the counts and unit (`step c=1 u=batch`). A longer child writes its start line with the next line once the interval has passed and then reports as before; a failing one still writes a start and a `fail` line. Root scopes, top-level scopes and resumed scopes are unchanged, as is everything on a terminal or with `PACE_MIN_INTERVAL=0`. A Pace 0.1.0 reader ignores the new one-line form, so it misses those short children (never the job's own progress); upgrade readers together with jobs.
+
 ## [0.1.0] - 2026-11-04
 
 ### Changed

@@ -184,7 +184,8 @@ def progress_text(
     """Return the readable part of a progress line, for example ``Train  1840/5000  36.8%  2.4 step/s · ~21m57s``.
 
     A ``start`` shows the count and unit, an update the count, percentage, rate and time
-    left, an ``end`` or ``fail`` the count, outcome and rate, a ``step`` only its outcome.
+    left, an ``end`` or ``fail`` the count, outcome and rate, a ``step`` its outcome (after
+    the count and unit when it carries a unit, as a child scope's step does).
     The count is right-aligned to the width of the total, so a scope's lines line up.
 
     Parameters
@@ -215,7 +216,7 @@ def progress_text(
         return _bar_text(record, forecast, name, shown_unit, charset)
     parts = [("  " * (depth - 1) + charset.branch if depth else "") + name]
     event = record.event
-    if event is Event.START:
+    if event is Event.START or (event is Event.STEP and record.unit is not None):
         parts.append(f"{_count_text(record)} {shown_unit}".rstrip())
     elif event is not Event.STEP:
         parts.append(_count_text(record))

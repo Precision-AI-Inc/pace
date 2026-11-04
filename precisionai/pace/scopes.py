@@ -11,8 +11,9 @@ Output rules (see ``docs/design.md``):
 
 * On a terminal a single in-place bar line is redrawn about ten times a second, with no
   trailer. ``start`` draws it; ``end`` and ``fail`` print a normal line with a trailer.
-* Otherwise ``start``, ``end``, ``fail`` and ``plan`` are written at once, and ``upd``
-  only after ``PACE_MIN_INTERVAL`` seconds and either 1% more of the total or
+* Otherwise ``start``, ``end``, ``fail`` and ``plan`` are written at once, except that a
+  one-off step or a child scope holds back its ``start`` and, if it ends before its first
+  line is due, writes one ``step`` line instead. ``upd`` is written only after ``PACE_MIN_INTERVAL`` seconds and either 1% more of the total or
   ``PACE_HEARTBEAT`` seconds (with an unknown total, the heartbeat alone).
 * Only rank 0 writes progress unless ``PACE_ALL_RANKS=1``.
 
@@ -117,7 +118,8 @@ class Scope:
         Output to use; the module-level logger by default.
     """
 
-    # A one-off step (a phase or a timed call) that ends before its first line is due writes one step line.
+    # A one-off step (a phase or a timed call) that ends before its first line is due writes a
+    # bare step line of one unit; a child scope does the same with its counts and unit.
     _ONE_OFF = False
 
     def __init__(
@@ -150,8 +152,10 @@ class Scope:
         self.depth = 0
         self._parent_scope: Scope | None = None
         self._pending = False
+        self._due = 0.0
         self._seq = 0
         self._started_at = 0.0
+        self._start_completed = 0.0
         self._state = "new"
         self._last_out = 0.0
         self._last_completed = 0.0
@@ -166,6 +170,7 @@ class Scope:
                 return
             now = self._out.clock.monotonic()
             self._started_at = now
+            self._start_completed = self.completed
             self._parent_scope = _PARENT.get()
             if self._parent_scope is not None:
                 self.parent = self._parent_scope.id
@@ -173,9 +178,12 @@ class Scope:
             self._state = "open"
             delay = self._start_delay()
             if delay > 0:
-                # A one-off step may end before a line is due; then its start and end are one line.
+                # It may end before a line is due; then its start and end are one line. Its
+                # updates wait as if the start had been written.
                 self._pending = True
-                self._out.hold(self, now + delay, self._write_pending_start)
+                self._last_out = now
+                self._due = now + delay
+                self._out.hold(self, self._due, self._write_pending_start)
             else:
                 self._emit(Event.START, now)
 
@@ -250,19 +258,20 @@ class Scope:
             self.start()
         if self._state != "open":
             return
-        self._out.write_held()
         now = self._out.clock.monotonic()
         # The rank check reads the environment, so it comes after the cheap time gate.
-        if now < self._next_check or not self._out.settings.progress_enabled():
-            return
-        target = self._out.target()
-        if target is None:
-            return
-        settings = self._out.settings
-        gap = REDRAW_INTERVAL if target.bar else min(REDRAW_INTERVAL, settings.resolve("min_interval"))
-        self._next_check = now + gap
-        if target.bar or self._is_due(now, settings.resolve("min_interval"), settings.resolve("heartbeat")):
-            self._emit(Event.UPDATE, now, target)
+        target = None
+        if now >= self._next_check and self._out.settings.progress_enabled():
+            target = self._out.target()
+        if target is not None:
+            settings = self._out.settings
+            gap = REDRAW_INTERVAL if target.bar else min(REDRAW_INTERVAL, settings.resolve("min_interval"))
+            self._next_check = now + gap
+            if target.bar or self._is_due(now, settings.resolve("min_interval"), settings.resolve("heartbeat")):
+                # Writing the update also writes the held lines that are due, this scope's start among them.
+                self._emit(Event.UPDATE, now, target)
+                return
+        self._out.write_held()
 
     def _is_due(self, now: float, min_interval: float, heartbeat: float) -> bool:
         since = now - self._last_out
@@ -284,8 +293,9 @@ class Scope:
             self._emit(event, self._out.clock.monotonic())
 
     def _start_delay(self) -> float:
-        """Return how long a one-off step may hold back its start line; 0 to write it now."""
-        if not self._ONE_OFF or not self._out.settings.progress_enabled():
+        """Return how long a one-off step or a child scope may hold back its start line; 0 to write it now."""
+        child = self._parent_scope is not None and not self.root and not self.resumed
+        if not (self._ONE_OFF or child) or not self._out.settings.progress_enabled():
             return 0.0
         target = self._out.target()
         if target is None or target.bar:
@@ -293,12 +303,30 @@ class Scope:
         return self._out.settings.resolve("min_interval")
 
     def _write_pending_start(self) -> None:
-        """Write the start held back by a one-off step that is still running, and the starts it must follow."""
+        """Write the start held back by a scope that is still running, and the starts it must follow."""
         with contextlib.suppress(Exception), self._out.lock:
             if self._pending:
-                self._pending = False
-                self._out.release(self)
-                self._emit(Event.START, self._out.clock.monotonic())
+                self._write_late_start()
+                now = self._out.clock.monotonic()
+                if not self._ONE_OFF and now >= self._due:
+                    # The start says when the child began and this how far it has got since. Its
+                    # next update stays due as if the start had been written on time, so the
+                    # child still writes every record it would have written without holding.
+                    self._emit(Event.UPDATE, now)
+                    self._last_out, self._last_completed = self._started_at, self._start_completed
+
+    def _write_late_start(self) -> None:
+        self._pending = False
+        self._out.release(self)
+        if self._ONE_OFF:
+            self._emit(Event.START, self._out.clock.monotonic())
+            return
+        # A child's start is written as it was when it started, so a reader times its first units.
+        completed, self.completed = self.completed, self._start_completed
+        try:
+            self._emit(Event.START, self._started_at)
+        finally:
+            self.completed = completed
 
     def _settle_pending(self, event: Event) -> Event:
         """Return the event to write: a pending start is written first, or folded into a step."""
@@ -307,11 +335,11 @@ class Scope:
             self._parent_scope._write_pending_start()
         if not self._pending or event is Event.START:
             return event
-        if event is Event.END and self.completed == 1 and self.total == 1:
+        folds = not self._ONE_OFF or (self.completed == 1 and self.total == 1)
+        if event is Event.END and folds and self._out.clock.monotonic() < self._due:
             self._pending = False
-            self._out.release(self)
             return Event.STEP
-        self._write_pending_start()
+        self._write_late_start()
         return event
 
     def _record(self, event: Event, now: float, phases: tuple[tuple[str, float], ...] = ()) -> Record:
@@ -324,7 +352,8 @@ class Scope:
             elapsed=max(now - self._started_at, 0.0),
             completed=None if event is Event.PLAN else self.completed,
             total=self.total,
-            unit=self.unit if first else None,
+            # A one-off step is written as the bare one-unit step; a child's step carries its counts and unit.
+            unit=self.unit if event is Event.START or (first and not self._ONE_OFF) else None,
             parent=self.parent,
             root=self.root,
             resumed=first and self.resumed,
@@ -345,6 +374,9 @@ class Scope:
         target = target or self._out.target()
         if target is None:
             return
+        if self._pending:
+            # This scope's own held start is settled below, against the line being written.
+            self._out.release(self)
         self._out.write_held()
         event = self._settle_pending(event)
         record = self._record(event, now, phases)
@@ -366,7 +398,8 @@ class Scope:
 
     def _progress_line(self, text: str, record: Record, target: Target) -> str:
         stamp = format_timestamp(self._out.clock.wall())
-        name = STEP_LABEL if record.event is Event.STEP else PROGRESS_LABEL
+        # A child folded into one line keeps the PROGRESS label its start and end would have had.
+        name = STEP_LABEL if record.event is Event.STEP and record.unit is None else PROGRESS_LABEL
         label = colorize(name, target.color) + " " * (len(PROGRESS_LABEL) - len(name))
         prefix = f"{stamp} {label} "
         trailer = f"  {format_trailer(record)}"
@@ -434,7 +467,8 @@ def progress(
     """Report progress of a counted piece of work, as a context manager.
 
     ``start`` is written on entry, ``upd`` as the work advances, ``end`` on normal exit
-    and ``fail`` when an exception leaves (the exception is re-raised).
+    and ``fail`` when an exception leaves (the exception is re-raised). A scope opened
+    inside another that ends before its first line is due writes one ``step`` line instead.
 
     Parameters
     ----------
