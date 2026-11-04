@@ -166,7 +166,7 @@ carry what a reader needs to ignore the copies:
 - A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from the
   other stream never overrides a newer one.
 
-`JobForecast` does all three. Feed it both streams without de-duplicating yourself:
+`JobForecast` does all three. Feed it both streams without de-duplicating yourself, interleaved in the order they were written (stderr merged into stdout, as with `stderr=subprocess.STDOUT`). A `start` read only after its own scope's updates, from the other stream, is taken as a restart: nothing on an update says which run wrote it.
 
 ```python
 log = [

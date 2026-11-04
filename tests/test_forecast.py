@@ -782,41 +782,6 @@ def test_a_start_from_the_same_run_read_late_is_a_duplicate() -> None:
     assert fc.snapshot(run.now) == live
 
 
-def test_a_start_read_after_its_updates_is_a_duplicate_not_a_restart() -> None:
-    # Merged stdout and stderr can deliver a scope's updates before its start.
-    fc = ScopeForecast("train")
-    updates = [
-        _rec(Event.UPDATE, seq, (seq - 1) * 10.0, (seq - 1) * 10.0, total=100.0, root=True, unit="step")
-        for seq in range(2, 9)
-    ]
-    for record in updates:
-        fc.observe(record, 1000.0 + record.elapsed)
-    now = 1000.0 + updates[-1].elapsed
-    live = fc.snapshot(now)
-    assert live.state is ForecastState.LIVE
-    assert live.completed == 70.0
-
-    late_start = _rec(Event.START, 1, 0.0, 0.0, total=100.0, root=True, unit="step", run="aaaa1111")
-    fc.observe(late_start, now)
-    assert fc.snapshot(now) == live
-
-    for record in updates[:3]:
-        fc.observe(record, now)
-    assert fc.snapshot(now) == live
-
-    fc.observe(late_start, now)
-    assert fc.snapshot(now) == live
-
-
-def test_a_start_with_a_new_run_after_updates_without_a_start_is_a_restart() -> None:
-    fc = ScopeForecast("train")
-    fc.observe(_rec(Event.START, 1, 0.0, 0.0, total=100.0, run="aaaa1111"), 1000.0)
-    for seq in range(2, 8):
-        fc.observe(_rec(Event.UPDATE, seq, seq * 10.0, seq * 10.0, total=100.0), 1000.0 + seq * 10.0)
-    fc.observe(_rec(Event.START, 1, 0.0, 0.0, total=100.0, run="bbbb2222"), 1100.0)
-    assert fc.snapshot(1100.0).state is ForecastState.LEARNING
-
-
 def test_a_start_from_a_new_run_is_a_restart() -> None:
     fc = ScopeForecast("train")
     run = Run(fc)

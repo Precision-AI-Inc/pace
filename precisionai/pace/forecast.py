@@ -277,9 +277,7 @@ class ScopeForecast:
 
         A record whose ``seq`` is not above the highest seen in the current segment is
         ignored (a duplicate from the other stream). A ``start`` after the scope has
-        reported beyond ``q=1`` begins a new segment, unless it is the late copy of a
-        ``start`` whose run id was not yet known (its ``seq`` is not above the highest
-        seen), or both run ids are known and equal.
+        reported beyond ``q=1`` begins a new segment.
 
         Parameters
         ----------
@@ -290,10 +288,6 @@ class ScopeForecast:
             to decide staleness; must be the same clock passed to :meth:`snapshot`.
         """
         if record.scope != self.scope or record.event is Event.PLAN:
-            return
-        if record.event is Event.START and self._run is None and record.run is not None and record.seq <= self._max_seq:
-            # The other stream's copy of a start, read after the updates that followed it.
-            self._run = record.run
             return
         if record.event is Event.START and self._is_restart(record):
             self._begin_segment()
@@ -354,9 +348,8 @@ class ScopeForecast:
         self._root = False
 
     def _is_restart(self, record: Record) -> bool:
-        # With run ids on both sides, a start from another run is a restart and one from
-        # the same run is the same line read twice. Without them, a start after q=1 is
-        # taken as a restart.
+        # With run ids, a start from another run is a restart and one from the same run is
+        # the same line read twice. Without them, a start after q=1 is taken as a restart.
         if record.run is not None and self._run is not None:
             return record.run != self._run
         return self._max_seq > 1
