@@ -7,8 +7,12 @@ Every test injects its clock: records carry ``elapsed`` and are delivered with a
 explicit ``received_at``; nothing sleeps.
 """
 
+import calendar
 import dataclasses
+import math
 import random
+import time
+from pathlib import Path
 
 import pytest
 
@@ -281,14 +285,177 @@ def test_a_mild_slowdown_is_followed_by_the_moving_average() -> None:
     assert fc.snapshot(run.now).rate == pytest.approx(2.0 - 0.3)
 
 
-def test_warmup_rates_are_averaged_plainly() -> None:
+def test_a_slow_first_interval_is_warm_up_and_left_out() -> None:
     fc = ScopeForecast("train")
     run = Run(fc)
     run.start()
     run.tick(20.0, 0.5)  # slow first interval (compilation)
     run.tick(20.0, 2.0)
     run.tick(20.0, 2.0)
+    assert fc.snapshot(run.now).rate == pytest.approx(2.0)
+
+
+def test_warm_up_lasts_while_each_rate_climbs_past_the_one_before() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.start()
+    run.tick(50.0, 0.05)  # model load
+    run.tick(15.0, 1.0)  # still compiling
+    run.tick(15.0, 1.5)  # 1.5 x the one before: still warming up
+    assert fc.snapshot(run.now).state is ForecastState.LIVE
+    assert fc.snapshot(run.now).rate == pytest.approx(1.5)
+    run.tick(15.0, 1.6)  # not 1.25 x faster: warm-up over, averaged from here
+    assert fc.snapshot(run.now).rate == pytest.approx((1.5 + 1.6) / 2)
+
+
+def test_a_steady_start_is_averaged_plainly() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.start()
+    for rate in (2.0, 2.2, 1.9):  # 2.2 is within 1.25 x of 2.0
+        run.tick(20.0, rate)
+    assert fc.snapshot(run.now).rate == pytest.approx((2.0 + 2.2 + 1.9) / 3)
+
+
+def test_a_start_that_slows_down_is_averaged_plainly() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.start()
+    for rate in (2.0, 1.0, 1.0):
+        run.tick(20.0, rate)
+    assert fc.snapshot(run.now).rate == pytest.approx((2.0 + 1.0 + 1.0) / 3)
+
+
+def test_after_warm_up_a_speed_up_is_averaged_in_not_restarted_from() -> None:
+    fc, run = _live_run()
+    run.tick(15.0, 3.0)  # 1.5 x faster, but warm-up ended long ago
+    assert fc.snapshot(run.now).rate == pytest.approx(2.0 + 0.3 * (3.0 - 2.0))
+
+
+def test_after_warm_up_a_sustained_speed_up_wins_within_a_few_intervals() -> None:
+    fc, run = _live_run()
+    run.ticks(2, 15.0, 10.0)
+    assert fc.snapshot(run.now).rate == pytest.approx(2.0)
+    run.tick(15.0, 10.0)
+    assert fc.snapshot(run.now).rate == pytest.approx(10.0)
+
+
+def test_a_stall_during_warm_up_is_measured_across_and_left_out() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.start()
+    run.mark(60.0, 0.0)  # heartbeat while the model loads: not an interval
+    run.mark(75.0, 15.0)  # first progress: 15 units over 75 s
+    run.ticks(4, 15.0, 2.0)
+    snap = fc.snapshot(run.now)
+    assert snap.state is ForecastState.LIVE
+    assert snap.rate == pytest.approx(2.0)
+
+
+def test_a_restarted_run_warms_up_again() -> None:
+    fc, run = _live_run()
+    run.restart()
+    run.tick(40.0, 0.1)  # reloading the model
+    run.ticks(3, 15.0, 10.0)
+    snap = fc.snapshot(run.now)
+    assert snap.state is ForecastState.LIVE
+    assert snap.rate == pytest.approx(10.0)
+
+
+def test_warm_up_can_be_turned_off() -> None:
+    fc = ScopeForecast("train", config=ForecastConfig(warmup_factor=math.inf))
+    run = Run(fc)
+    run.start()
+    for rate in (0.5, 2.0, 2.0):
+        run.tick(20.0, rate)
     assert fc.snapshot(run.now).rate == pytest.approx((0.5 + 2.0 + 2.0) / 3)
+
+
+def _steady_job(seed: int, config: ForecastConfig = DEFAULT_CONFIG) -> list:
+    """A jittery job of 3000 steps at about 2.4 steps/s, written by Pace's emission rules."""
+    rng = random.Random(seed)
+    total = 3000
+    fc = ScopeForecast("train", config=config)
+    fc.observe(Record(scope="train", event=Event.START, elapsed=0.0, completed=0, total=total, run="run1"), 0.0)
+    now, last_emit, last_done, seq = 0.0, 0.0, 0, 1
+    snapshots = []
+    for step in range(1, total + 1):
+        now += max(rng.gauss(1 / 2.4, 0.15), 0.05)
+        if now - last_emit >= 15.0 and step - last_done >= total // 100:
+            seq += 1
+            record = Record(
+                scope="train", event=Event.UPDATE, seq=seq, elapsed=now, completed=step, total=total, run="run1"
+            )
+            fc.observe(record, now)
+            last_emit, last_done = now, step
+            snapshots.append((now, fc.snapshot(now)))
+    end = now
+    return [(at, snap, end) for at, snap in snapshots]
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_a_steady_job_is_estimated_as_without_warm_up(seed) -> None:
+    with_warmup = _steady_job(seed)
+    without = _steady_job(seed, ForecastConfig(warmup_factor=math.inf))
+    assert with_warmup == without
+    live = [
+        (at, snap, end) for at, snap, end in with_warmup if snap.state is ForecastState.LIVE and end - at > 0.1 * end
+    ]
+    assert live
+    for at, snap, end in live:
+        assert snap.remaining_seconds == pytest.approx(end - at, rel=0.10)
+
+
+SFT_LOG = Path(__file__).parent / "fixtures" / "forecast" / "llm_sft_lora.log"
+
+
+def _received_at(line: str) -> float:
+    return float(calendar.timegm(time.strptime(line[:20], "%Y-%m-%dT%H:%M:%SZ")))
+
+
+def _sft_records() -> list[tuple[Record, float]]:
+    """The records of a real 2-minute TRL + LoRA fine-tune of 300 steps, with each line's timestamp."""
+    out = []
+    for line in SFT_LOG.read_text().splitlines():
+        record = parse_line(line)
+        if record is not None:
+            out.append((record, _received_at(line)))
+    return out
+
+
+def test_a_slow_warm_up_does_not_hold_the_estimate_down() -> None:
+    # Model load and compile take 54 s for 3 steps; then about 4.5 steps/s. The plain
+    # mean of the first rates said 74 s when 38 s were left (+94%), 35 s for 23 s, and
+    # 11 s for 8 s.
+    fc = ScopeForecast("fine-tune")
+    records = _sft_records()
+    end = next(record.elapsed for record, _ in records if record.event is Event.END and record.scope == "fine-tune")
+    errors = []
+    for record, received in records:
+        fc.observe(record, received)
+        snap = fc.snapshot(received)
+        if record.scope == "fine-tune" and snap.state is ForecastState.LIVE:
+            assert snap.remaining_seconds is not None
+            errors.append(snap.remaining_seconds / (end - record.elapsed) - 1)
+    assert len(errors) == 3
+    assert abs(errors[0]) <= 0.30
+    assert all(abs(error) <= 0.15 for error in errors)
+
+
+def test_the_reader_and_the_writer_agree_on_a_large_root() -> None:
+    # The writer prints the root's own forecast; the reader's job estimate for it must
+    # be the same. Before, a finished Evaluation child let the reader borrow the root's
+    # mean pace since its start, 5m42s with 49 s left, while the root still said
+    # "estimating…".
+    job = JobForecast()
+    root = ScopeForecast("fine-tune")
+    for record, received in _sft_records():
+        job.observe(record, received)
+        root.observe(record, received)
+        own = root.snapshot(received)
+        estimate = job.snapshot(received)
+        assert estimate.state is own.state
+        assert estimate.remaining_seconds == own.remaining_seconds
 
 
 def test_a_stalled_heartbeat_is_not_an_interval() -> None:
@@ -1047,7 +1214,7 @@ def test_a_large_parent_without_a_pace_has_no_estimate_from_its_children() -> No
     assert job.snapshot(second.now).remaining_seconds is None
 
 
-def test_a_step_root_is_not_timed_by_a_child_before_its_first_update() -> None:
+def test_a_step_root_is_never_timed_by_its_children() -> None:
     # A 60 s model load inside a root over 5000 steps is not the length of a step.
     job = JobForecast()
     root = Run(job, "train", total=5000.0, root=True)
@@ -1057,9 +1224,14 @@ def test_a_step_root_is_not_timed_by_a_child_before_its_first_update() -> None:
     load.t = 60.0
     load.end()
     assert job.snapshot(1065.0).remaining_seconds is None
-    # Once the root reports progress, its own pace is used.
+    # Nor by its own pace while it is still Learning: the job says what the root's line says.
     root.mark(100.0, 80.0)
-    assert job.snapshot(1100.0).remaining_seconds == pytest.approx(4920 * 1.25)
+    assert job.snapshot(1100.0).state is ForecastState.LEARNING
+    assert job.snapshot(1100.0).remaining_seconds is None
+    root.ticks(2, 15.0, 2.0)
+    estimate = job.snapshot(root.now)
+    assert estimate.state is ForecastState.LIVE
+    assert estimate.remaining_seconds == pytest.approx((5000.0 - 140.0) / 2.0)
 
 
 def test_seconds_per_unit_restarts_when_the_count_goes_backwards() -> None:

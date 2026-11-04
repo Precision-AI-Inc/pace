@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The time remaining no longer stays too long for a job that starts slowly (model loading, compilation) and then runs faster. The slow first intervals used to be averaged into the rate until the end: a 2-minute LoRA fine-tune whose first 3 steps took 54 s first estimated 1m14s with 38 s left, and still 35 s with 23 s left. While each interval's rate is more than 1.25 times the one before, the rate now restarts from it, and averaging begins once the speed settles; the same job now estimates 44 s, 24 s and 9 s against 38 s, 23 s and 8 s. A job that is steady from the start (its second interval no more than 1.25 times its first), or slows down, is estimated exactly as before. The new `ForecastConfig.warmup_factor` sets the threshold (`math.inf` turns it off).
+- A reader (`JobForecast`) no longer gives a root of more than 100 units an estimate from its own average pace since the start while that root is still Learning. A finished child, such as a short evaluation, used to trigger it: the fine-tune above showed 5m42s with 49 s left while its own line still said "estimating…". Such a root now has an estimate exactly when its own line does, and the same one. Parents of up to 100 units (epochs) still take estimates from their children as before.
+
 ### Changed
 
 - The `adopt-pace` skill now links its tested examples in OrchAI's example repository at its new name and default branch, [`Precision-AI-Inc/orchai-examples`](https://github.com/Precision-AI-Inc/orchai-examples) (formerly `orch-example-yolov5`).

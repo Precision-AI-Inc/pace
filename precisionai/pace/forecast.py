@@ -56,7 +56,7 @@ class ForecastConfig:
         two heartbeats) without a record.
     ewma_alpha : float
         Weight of a new interval rate in the exponentially weighted average. The first
-        intervals use ``1 / n`` instead, so the start is a plain mean.
+        intervals after warm-up use ``1 / n`` instead, so they are a plain mean.
     outlier_factor : float
         An interval rate more than this many times above, or below, the recent median is
         an outlier and does not enter the average.
@@ -67,6 +67,11 @@ class ForecastConfig:
     shift_intervals : int
         This many consecutive outliers on the same side are a sustained change, not a
         blip: the average is re-seeded from them.
+    warmup_factor : float
+        A segment is warming up (model loading, compilation, caches filling) while each
+        interval rate is more than this many times the one before it: the average restarts
+        from each such rate, so the slow start is never averaged in. The first rate that is
+        not that much faster ends the warm-up for the rest of the segment.
     """
 
     min_observed_seconds: float = 60.0
@@ -79,6 +84,7 @@ class ForecastConfig:
     reference_window: int = 9
     min_reference: int = 3
     shift_intervals: int = 3
+    warmup_factor: float = 1.25
 
 
 DEFAULT_CONFIG = ForecastConfig()
@@ -120,6 +126,11 @@ class _RateEstimator:
     evaluation pause or checkpoint (a single very slow interval) leaves the average
     alone. When ``shift_intervals`` outliers in a row fall on the same side, the speed
     really changed: the average is re-seeded from those rates.
+
+    Before any of that, the segment warms up: while each rate is more than
+    ``warmup_factor`` times the one before, the average restarts from it, so a slow start
+    is not averaged into the speed that follows. The first rate that is not ends the
+    warm-up for good; a later speed-up goes through the outlier rules like any other.
     """
 
     def __init__(self, config: ForecastConfig) -> None:
@@ -128,12 +139,18 @@ class _RateEstimator:
         self._pending: list[float] = []
         self._pending_side = 0
         self._count = 0
+        self._warming = True
         self.value: float | None = None
         self.intervals = 0
 
     def add(self, rate: float) -> None:
         """Take one interval rate into account."""
         self.intervals += 1
+        if self._warming:
+            if self.value is None or rate > self.value * self._config.warmup_factor:
+                self._restart_from([rate])
+                return
+            self._warming = False
         side = self._side(rate)
         if side == 0:
             self._blend(rate)
@@ -145,7 +162,10 @@ class _RateEstimator:
             self._pending_side = side
         self._pending.append(rate)
         if len(self._pending) >= self._config.shift_intervals:
-            self._shift()
+            pending = self._pending
+            self._pending = []
+            self._pending_side = 0
+            self._restart_from(pending)
 
     def _side(self, rate: float) -> int:
         if len(self._reference) < self._config.min_reference:
@@ -168,14 +188,11 @@ class _RateEstimator:
         alpha = max(self._config.ewma_alpha, 1.0 / self._count)
         self.value += alpha * (rate - self.value)
 
-    def _shift(self) -> None:
-        pending = self._pending
-        self._pending = []
-        self._pending_side = 0
+    def _restart_from(self, rates: list[float]) -> None:
         self._reference.clear()
         self._count = 0
         self.value = None
-        for rate in pending:
+        for rate in rates:
             self._blend(rate)
 
 
@@ -648,7 +665,8 @@ class JobForecast:
         the time already spent in the running unit, and never less than the running
         child's remaining time. Once a unit has finished, the parent's own records time a
         unit, however many children it holds; before that, the running unit counts as the
-        time it has taken so far plus the running child's remaining time. A parent with no
+        time it has taken so far plus the running child's remaining time. A parent of more
+        than 100 units takes nothing from its children and waits for its own Live. A parent with no
         count of its own (a phase, or no total) cannot know how many children are still to
         come, so its estimate is only the running child's and is marked partial.
         """
@@ -684,6 +702,12 @@ class JobForecast:
         counted = parent.total is not None and parent.total > 1 and parent.completed is not None
         if not running and not (counted and finished):
             return None
+        if counted and (parent.total or 0.0) > _EVERY_ADVANCE_WRITTEN:
+            # A larger parent need not write every advance, and its units are steps rather
+            # than children (a model load inside a root over 5000 steps), so no child says
+            # how long a unit takes. Its own records say it, once they are enough for Live:
+            # borrowing its pace earlier would skip the Live rules its own line follows.
+            return None
         child_left = max((effective[child].remaining_seconds or 0.0 for child in running), default=0.0)
         stale_children = [child for child in running if effective[child].state is ForecastState.STALE]
         state = ForecastState.STALE if stale_children else ForecastState.LIVE
@@ -701,16 +725,11 @@ class JobForecast:
             return replace(parent, state=state, remaining_seconds=child_left), True
         scope = self._scopes[name]
         per_unit = scope.seconds_per_unit()
-        if per_unit is None and (parent.total or 0.0) <= _EVERY_ADVANCE_WRITTEN:
+        if per_unit is None:
             # No unit finished yet: this one has taken at least its time so far plus
             # what the running child has left.
             in_unit = scope.elapsed_at(now)
             per_unit = in_unit + child_left
-        elif per_unit is None:
-            # A larger parent need not write every advance, and its units are often steps
-            # rather than children (a model load inside a root over 5000 steps), so no
-            # child says how long a unit takes. Wait for the parent's own pace.
-            return None
         else:
             # Units left and the time since are both measured from the parent's latest record.
             in_unit = scope.elapsed_at(now) - scope.elapsed

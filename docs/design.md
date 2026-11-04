@@ -362,7 +362,8 @@ remaining_time = max(total - completed, 0) / robust_rate
 - `robust_rate`: an exponentially weighted average of interval rates, where each
   interval is the work done between two consecutive records divided by the change
   in `e`. Intervals far outside the recent median are discounted (stalls, retries,
-  evaluation pauses), but a sustained slowdown is not hidden.
+  evaluation pauses), but a sustained slowdown is not hidden. A slow start (model
+  loading, compilation) is left out once the speed it led up to shows.
 - **Learning → Live** (default): at least 60 s observed **and** at least 3 update
   intervals **and** at least 1% of the total done.
 - **Stale** (default): no record for `max(3 × median interval, 2 × heartbeat)`.
@@ -386,8 +387,16 @@ defaults.
 - An interval with no progress (`c` unchanged, a heartbeat) is not measured; the next
   interval with progress spans back to the last one that had it. Intervals with
   `Δe <= 0` are skipped.
-- The first intervals are averaged plainly (`1/n`); after that the weight of a new
-  interval is 0.3.
+- **Warm-up.** A segment starts warming up. While each interval rate is more than
+  1.25x the one before it, the average restarts from that rate, so the slow intervals
+  of model loading and compilation are never averaged into the speed that follows.
+  The first rate that is not 1.25x faster ends the warm-up for the rest of the segment;
+  a later speed-up goes through the outlier rules below. A start that is steady or
+  slows down ends the warm-up at its second interval, which leaves its average as it
+  would be without the rule. The Live thresholds count every interval, warm-up
+  included, so warm-up never delays Live. `warmup_factor=math.inf` turns it off.
+- From the last warm-up rate on, intervals are averaged plainly (`1/n`) at first;
+  after that the weight of a new interval is 0.3.
 - An interval rate more than 3x above or below the median of the last 9 accepted rates
   is an outlier and is left out (a pause for evaluation or a checkpoint). Outlier
   tests start once 3 rates have been accepted. Three outliers in a row on the same
@@ -415,9 +424,10 @@ defaults.
   records give the time per unit, however many children a unit holds (a training and a
   validation loop per epoch); before that, the running unit counts as the time it has
   taken so far plus the running child's remaining time. A parent of more than 100 units
-  gets no estimate from its children until it has a pace of its own: it need not write
-  every advance, and its units are often steps rather than children, so a child's
-  duration says nothing about a unit's. A `phase()` or a parent with no
+  never takes an estimate from its children: it need not write every advance, and its
+  units are often steps rather than children, so a child's duration says nothing about
+  a unit's. It has an estimate once its own records make it Live, so a reader shows the
+  same state and estimate for it as its own line does. A `phase()` or a parent with no
   total cannot know how many children are still to come, so it takes only the running
   child's estimate and the job estimate is marked partial (a lower bound). Such a
   borrowed estimate is Stale when a running child it borrows from is, or, between two
