@@ -23,5 +23,5 @@ brackets. Pace needs Python 3.11 or later.
 ## Examples
 
 - Tested: the `requirements.txt` and `Dockerfile` beside each script in OrchAI's example
-  repo, for example [`detection/requirements.txt`](https://github.com/Precision-AI-Inc/orch-example-yolov5/blob/feat/pace-examples/detection/requirements.txt)
-  and [`llm/requirements.txt`](https://github.com/Precision-AI-Inc/orch-example-yolov5/blob/feat/pace-examples/llm/requirements.txt).
+  repo, for example [`detection/requirements.txt`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/requirements.txt)
+  and [`llm/requirements.txt`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/requirements.txt).

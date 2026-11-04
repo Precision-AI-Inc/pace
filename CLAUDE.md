@@ -270,7 +270,7 @@ MANIFEST.in                 # sdist packaging — include docs/license/changelog
 - Versions are **never hardcoded** — `setuptools-scm` derives the package version from the current git tag (see the `pyproject.toml` block above). Tag with `vX.Y.Z`.
 - Update `CHANGELOG.md` under `[Unreleased]` as you go; move those entries to a new `## [X.Y.Z] - YYYY-MM-DD` section when cutting a release.
 - Pushing a `v*.*.*` tag triggers `.github/workflows/release.yml`: runs the full test matrix, builds the sdist/wheel, verifies the built version matches the tag, publishes to PyPI via trusted publishing (`id-token: write`, no stored API tokens), and creates a GitHub Release with generated notes.
-- After a release is on PyPI, check OrchAI's example repo (`Precision-AI-Inc/orch-example-yolov5`, to be renamed): raise the `precisionai-pace>=` minimum in each `requirements.txt` and `Dockerfile` to the new version (a minimum, never a pin; raising it is what makes the nodes rebuild their cached images), and replace any workaround the release makes unnecessary. Open that as a PR in the example repo.
+- After a release is on PyPI, check OrchAI's example repo (`Precision-AI-Inc/orchai-examples`, formerly `orch-example-yolov5`): raise the `precisionai-pace>=` minimum in each `requirements.txt` and `Dockerfile` to the new version (a minimum, never a pin; raising it is what makes the nodes rebuild their cached images), and replace any workaround the release makes unnecessary. Open that as a PR in the example repo.
 - CI checkout steps that build from git history (release builds, docs version detection) must use `fetch-depth: 0` — a shallow checkout has no tags for `setuptools-scm` or `git describe` to find.
 
 ---

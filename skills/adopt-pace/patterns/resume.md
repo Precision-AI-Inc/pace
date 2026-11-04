@@ -37,5 +37,5 @@ with progress(
 
 - Pace: [`resume.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/resume.py)
   (`completed=`, `resumed=True`).
-- Tested: [`detection/train_loop.py`](https://github.com/Precision-AI-Inc/orch-example-yolov5/blob/feat/pace-examples/detection/train_loop.py)
+- Tested: [`detection/train_loop.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/train_loop.py)
   in OrchAI's example repo (`--resume-from`).
