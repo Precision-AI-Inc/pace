@@ -55,7 +55,12 @@ def records(draw: Any) -> Record:
         phases = draw(st.lists(st.tuples(scope_ids, quarters), max_size=MAX_PHASES))
         return Record(phases=tuple(phases), **common)
     if event is Event.STEP:
-        return Record(completed=1.0, total=1.0, label=draw(st.none() | printable_text), **common)
+        label = draw(st.none() | printable_text)
+        if draw(st.booleans()):  # the bare one-off step
+            return Record(completed=1.0, total=1.0, label=label, **common)
+        # A child scope's step, with its counts and (usually) its unit.
+        counts = {"completed": draw(quarters), "total": draw(st.none() | positive_quarters)}
+        return Record(unit=draw(st.none() | printable_text), label=label, **counts, **common)
     if event is Event.FAIL and draw(st.booleans()):
         return Record(**common)
     common["completed"] = draw(quarters)

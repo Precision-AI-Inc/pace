@@ -233,12 +233,9 @@ def _validate_ids(record: Record) -> None:
 def _count_fields(record: Record) -> list[str]:
     event = record.event
     # A fail carries the counts it reached when it has them, so a reader still sees how far it got.
-    # A step without a unit is the bare one-off step of one unit; with one, it carries its counts like an end.
-    if (
-        event is Event.PLAN
-        or (event is Event.STEP and record.unit is None)
-        or (event is Event.FAIL and record.completed is None)
-    ):
+    # A step of one unit with no unit name is the bare one-off step; any other carries its counts like an end.
+    bare_step = event is Event.STEP and record.unit is None and record.completed == 1 and record.total == 1
+    if event is Event.PLAN or bare_step or (event is Event.FAIL and record.completed is None):
         return []
     completed = format_number(record.completed or 0.0)
     total = _format_total(record.total)
