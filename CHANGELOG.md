@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Progress lines are shorter, in a new line format, `pace:2`. The trailer starts with the scope id (and `<parent` for a nested scope), names the event as a plain word (`start`, `end`, `fail`, `step`, `plan`; an update has none), and leaves out what a reader can work out: zeros, an end's total when it equals the count, the label after the start, and the sequence number except on updates and plans. The process run id (`r=`) is now on every line. The readable part drops the `0.0%` and `estimating…` from start lines, lines up the counts of a scope, and indents a nested scope under its parent. A real Ollama job's progress goes from five lines of 132 to 169 characters to four of 123 to 133. Pace still reads `pace:1` lines, so a reader keeps working with jobs that run Pace 0.0.x, even in the same log.
+- A `@timed` call or a `phase()` that is over before its first line is due (`PACE_MIN_INTERVAL`, 15 seconds by default) now writes one `STEP` line instead of a start line and an end line. One that takes longer still shows while it runs: its start line is written once the interval has passed. A failing one still writes its start and a `fail` line. A terminal, and `PACE_MIN_INTERVAL=0`, write start and end lines as before.
+
+### Fixed
+
+- A reader that captures both stdout and stderr, and reads a scope's start line from one only after its updates from the other, no longer takes the late start for a restart and resets the estimate. Every line now carries the run id, so a late copy is told apart from a real restart, including when the reader joined the job partway through. This needs the job to run this version; for a job that still writes `pace:1`, read both streams merged into one, as before.
+
 ## [0.0.2] - 2026-11-03
 
 ### Added

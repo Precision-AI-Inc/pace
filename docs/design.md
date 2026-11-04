@@ -2,7 +2,7 @@
 
 This document specifies Pace (`precisionai-pace`): the logger and progress API, the
 line format that carries progress records, and the rules that turn those records into a
-completion estimate. The `[pace:1 ...]` trailer format is a public contract versioned by
+completion estimate. The `[pace:2 ...]` trailer format is a public contract versioned by
 its major number: within a major version the format only gains optional keys, and any
 other change needs a new major version.
 
@@ -113,8 +113,9 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
 Records go to **stdout** by default. Progress and status are the job's normal
 output, not diagnostics, and stdout is where people look for them. A program whose
 stdout is data piped to another program can set `PACE_STREAM=stderr`. A consumer
-reads both streams and removes duplicates using the per-scope sequence number
-(`q=`), so a user who mirrors output to both streams is not double-counted.
+reads both streams and removes duplicates using the run id on every record and the
+order of a scope's records (see [Duplicates and restarts](#duplicates-and-restarts)), so a
+user who mirrors output to both streams is not double-counted.
 
 Every line is flushed as it is written. Python block-buffers stdout when it is not a
 terminal, which would otherwise hold progress back for minutes in a container.
@@ -144,76 +145,170 @@ without a trailer, and only `end`, `fail` and `plan` print full lines with trail
 A job run under a pseudo-terminal whose output a scheduler still reads should set
 `PACE_BAR=never`, which writes normal trailer lines even on a TTY.
 
-`start`, `end` and `fail` records are always written immediately. The limit is set by
+`start`, `end` and `fail` records are always written immediately, except that a one-off
+step holds back its `start` (see [One-off steps](#one-off-steps)). The limit is set by
 time, never by step count, so a run with a million steps writes no more than one
 with a thousand. For example, a 10-hour run reaches each 1% about every 6 minutes,
 so it writes about 100 progress lines plus a heartbeat every 2 minutes in between:
 roughly 300 lines, or 30 an hour. The heartbeat is what lets a consumer tell a slow
 job from a stalled one.
 
-## Line format, version 1
+## Line format, version 2
 
 One line serves both readers. The readable part comes first; a short trailer at the
 end carries the fields a consumer parses.
 
 ```text
-2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]
-2026-11-03T17:23:59Z INFO     Loading model Qwen2.5-7B
+2026-11-04T02:22:10Z PROGRESS Generate    0/128 request  [pace:2 generate start t=128 u=request n=Generate r=1b8b7650 root]
+2026-11-04T02:22:22Z STEP     ├ Start Ollama  done in 12s  [pace:2 start-ollama<generate step e=12 n=Start%20Ollama r=1b8b7650]
+2026-11-04T02:25:16Z PROGRESS Generate   66/128  51.6%  estimating…  [pace:2 generate c=66 t=128 e=186.7 q=2 r=1b8b7650 root]
+2026-11-04T02:25:27Z PROGRESS Generate  128/128  done in 3m17s · 0.354 request/s  [pace:2 generate end c=128 e=197.4 r=1b8b7650 root]
+2026-11-03T23:59:12Z INFO     Loading model Qwen2.5-7B
 ```
 
-Only `PROGRESS` lines carry a trailer. Everything before the trailer is for people
-and may change between releases; consumers must not parse it.
+Only `PROGRESS` and `STEP` lines carry a trailer. Everything before the trailer is for
+people and may change between releases; consumers must not parse it. The writer writes
+only `pace:2`. A reader reads `pace:1` too (see [Version 1](#version-1)), because jobs on
+Pace 0.0.x keep writing it, and one log may hold both.
 
 ### Grammar
 
 ```text
-trailer  = "[pace:" major " " field *( " " field ) "]"   ; at the very end of the line
-major    = 1*DIGIT                                       ; "1" for this version
+trailer  = "[pace:" major " " head *( " " item ) "]"     ; at the very end of the line
+major    = "2"
+head     = scope [ "<" scope ]                           ; the scope id, then its parent's
+item     = word / field
+word     = 1*( %x61-7A / DIGIT )                         ; an event or a flag, see below
 field    = key "=" value
 key      = 1*( %x61-7A / DIGIT )                          ; lower-case letters and digits
 value    = "?" / 1*( ALPHA / DIGIT / "." / "_" / "-" / ":" / "," / "%" HEXDIG HEXDIG )
                                                          ; "?" only as the value of t
 ```
 
-A consumer matches the trailer only at the end of the line, after removing ANSI
-escape sequences and trailing whitespace. Any character outside the value alphabet
-is percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, an unknown major
-version, a missing required field, or a value that fails to parse is ignored.
-A raw (still encoded) value may be at most 768 characters, enough for a 64-character
-label of 4-byte characters; `ph` may be up to 2815, enough for 32 phases with the longest ids and weights. The writer
-shortens labels and units to 64 characters and replaces control characters with spaces,
-so it never produces a line the parser rejects.
+Items may come in any order; the writer uses the order of the fields table below. A
+consumer matches the trailer only at the end of the line, after removing ANSI escape
+sequences and trailing whitespace. Any character outside the value alphabet is
+percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, an unknown major
+version, more than 32 items (the head included), a repeated key or word, a missing required field, a key or
+word on the wrong event, or a value that fails to parse is ignored. A raw (still
+encoded) value may be at most 768 characters, enough for a 64-character label of 4-byte
+characters; `ph` may be up to 2815, enough for 32 phases with the longest ids and
+weights. The writer shortens labels and units to 64 characters and replaces control
+characters with spaces, so it never produces a line the parser rejects.
+
+### Events and flags
+
+The event is a bare word; an update has none. At most one event per trailer.
+
+| Word | Meaning |
+|---|---|
+| (none) | An update: progress since the start. |
+| `start` | The scope started. Comes first among its run's records for the scope. |
+| `end` | The scope finished. Comes last. |
+| `fail` | The scope failed. Comes last. |
+| `step` | A one-off step that started and finished before its first line was due: a `start` and an `end` at once, of one unit (`c=1 t=1`). |
+| `plan` | The phases still to come, with their weights. |
+| `root` | Flag: the scope stands for the whole job. At most one per process. Written on every record of the scope, so a reader that starts mid-log still learns it. |
+| `res` | Flag, `start` only: the scope resumes earlier work, so `c` begins above zero. |
+
+A consumer ignores a word it does not know.
 
 ### Fields
 
-| Key | Required | Meaning |
+| Key | On | Meaning |
 |---|---|---|
-| `s` | always | Scope id, `[A-Za-z0-9._-]{1,64}`. Unique within one process run. |
-| `k` | always | Event: `start`, `upd`, `end`, `fail`, `plan`. |
-| `q` | always | Sequence number within the scope, from 1. Used for de-duplication and ordering. |
-| `e` | always | Seconds since the scope started, from a monotonic clock. Rates use this, never wall-clock time. |
-| `c` | start, upd, end; fail when known | Completed amount, a non-negative number. |
-| `t` | start, upd, end; fail when known | Total, a positive number, or `?` when unknown. |
+| `c` | start, update, end, fail | Completed amount, a non-negative number. Left out when 0. On a `fail`, present only with `t`; a `fail` with neither does not know how far it got. |
+| `t` | start, update (required); end, fail | Total, a positive number, or `?` when unknown. An `end` leaves it out when it equals `c`. |
 | `u` | start | Unit (`step`, `batch`, `sample`, `byte`, `file`, ...), at most 64 characters after decoding, no control characters. |
-| `p` | optional | Parent scope id. A nested scope is never added to its parent's remaining time. Written on every record of the scope, so a reader that starts mid-log still learns the hierarchy. |
-| `root` | optional | `1` marks the scope that stands for the whole job. At most one per process. Written on every record of the scope. |
-| `res` | optional | `1` on a `start` that resumes earlier work, so `c` begins above zero. |
-| `ph` | `plan` only | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
-| `n` | optional, `start` only | Short label, at most 64 characters after decoding, no control characters. |
-| `run` | optional, `start` only | Id of the process run, `[a-z0-9]{1,16}`, the same for every scope in one process. A `start` with the run id already seen for that scope is a duplicate (the line was read from both streams); a different run id is a restart. |
+| `e` | any | Seconds since the scope started, from a monotonic clock. Left out when 0. Rates use this, never wall-clock time. A `start` written late (see [One-off steps](#one-off-steps)) carries the time it was held back. |
+| `q` | update, plan (required) | Sequence number within the scope and run, from 2 for an update (the start counts as 1) and from 1 for a plan. Orders the updates; a start comes first and an end, fail or step last, so they need none. |
+| `ph` | plan | Remaining phases, as scope ids, with weights, e.g. `ph=prep:0.05,train:0.9,eval:0.05`. |
+| `n` | start, step | Short label, at most 64 characters after decoding, no control characters. |
+| `r` | any (required) | Id of the process run, `[a-z0-9]{1,16}`, the same for every scope in one process. |
 
-Keys belong to particular events, and a reader rejects a record that carries one
-on the wrong event: `run`, `n`, `res` and `u` only on `start`, `ph` only on `plan`,
-and no `c` or `t` on `plan`. A writer keeps every line within 4096 bytes by
-shortening the readable text before the trailer, never the trailer. It never writes a
-number above 1e15, the parser's limit: a larger total is reported as unknown and a
-larger count is capped.
+The scope id in the head is `[A-Za-z0-9._-]{1,64}`, unique within one process run. A
+nested scope's head is `scope<parent`, written on every record so a reader that starts
+mid-log still learns the hierarchy; a nested scope is never added to its parent's
+remaining time.
+
+A writer keeps every line within 4096 bytes by shortening the readable text before the
+trailer, never the trailer. It never writes a number above 1e15, the parser's limit: a
+larger total is reported as unknown and a larger count is capped.
 
 Text that looks like a trailer (`[pace:`) inside a log message or description is
 rewritten to `[ pace:`, so user text cannot forge a record.
 
-Additions within version 1 are new optional keys; consumers ignore keys they do not
-know. Removing or redefining a key requires `pace:2`.
+Additions within version 2 are new optional keys and flags; consumers ignore keys and
+words they do not know. Removing or redefining one requires `pace:3`.
+
+### Duplicates and restarts
+
+A reader that captures both streams, or a job that mirrors its output to both, sees
+every line twice, in any interleaving. The run id on every record makes that safe:
+
+- Within one run, a scope's records are ordered: the `start`, then the updates by `q`,
+  then the `end`, `fail` or `step`. A record that does not come after the latest one
+  taken for that scope and run is a copy or was read late, and is ignored. A `start`
+  read after the scope's updates, from the other stream, is therefore a late copy, not
+  a restart.
+- A record with a run id not seen before for the scope begins a new segment: the
+  process restarted. It need not be a `start`, so a reader that missed the restarted
+  run's `start` still notices.
+- A record from a run that a restart replaced is a late copy, and is ignored.
+- A `plan` replaces an earlier plan of the same scope only if its `q` is higher, or it
+  comes from a newer run.
+
+### One-off steps
+
+A `phase()` or a `@timed` call is one unit of work that often takes less time than
+`PACE_MIN_INTERVAL`. When output is not a terminal and the interval is above 0, such a
+scope holds back its `start`:
+
+- If it ends before the interval has passed, it writes one `step` line, labelled `STEP`,
+  with its parent, elapsed time, label and run id.
+- If it is still running when the interval has passed, a timer writes its `start` then
+  (with `e` the time held back), and its `end` follows as usual, so a long step such as
+  a download is visible while it runs. The timer is one daemon thread per logger,
+  started on first use.
+- Before any line of a scope nested in it, its `start` is written first, so a reader
+  always meets a parent before its children and the text indents under it.
+- If it fails, it writes its `start` and then `fail`, so a failure is never folded away.
+
+On a terminal (`PACE_BAR`), and with `PACE_MIN_INTERVAL=0`, nothing is held back: a
+`start` and an `end` are written as for any scope. A reader treats a `step` as a `start`
+and an `end` at once: a finished phase with its elapsed time, which a plan uses to time
+the phases not yet started.
+
+### Version 1
+
+`pace:1` is what Pace 0.0.x writes. A reader still reads it; the writer no longer does.
+
+```text
+2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]
+```
+
+Every item is a field (`key=value`), in any order:
+
+| Key | Required | Meaning |
+|---|---|---|
+| `s` | always | Scope id. |
+| `k` | always | Event: `start`, `upd`, `end`, `fail`, `plan` (there is no `step`). |
+| `q` | always | Sequence number within the scope, from 1. |
+| `e` | always | Seconds since the scope started. |
+| `c`, `t` | start, upd, end; fail when known | Completed amount and total (`?` when unknown), always written. |
+| `u` | start | Unit. |
+| `p` | optional | Parent scope id. |
+| `root` | optional | `1` marks the scope that stands for the whole job. |
+| `res` | optional, `start` only | `1` when the scope resumes earlier work. |
+| `ph` | `plan` only | Remaining phases with weights. |
+| `n` | optional, `start` only | Short label. |
+| `run` | optional, `start` only | Id of the process run. |
+
+The run id is only on `start`, so a reader orders a scope's records by `q`, and a `start`
+after the scope reported beyond `q=1` is a restart unless its run id is the one already
+seen. A `start` read late from the other stream after its scope's updates therefore
+looks like a restart when the reader joined mid-run and never saw the first copy; only
+`pace:2` fixes that.
 
 ### Timestamp
 
@@ -254,8 +349,9 @@ remaining_time = max(total - completed, 0) / robust_rate
 - **Learning → Live** (default): at least 60 s observed **and** at least 3 update
   intervals **and** at least 1% of the total done.
 - **Stale** (default): no record for `max(3 × median interval, 2 × heartbeat)`.
-- A `start` for a scope from a new run (a different `run` id, or after `q=1` when there
-  is no run id) begins a new segment; rates are never averaged across a restart. The
+- A record for a scope from a new run (a run id not seen before; in `pace:1`, a `start`
+  with a different run id, or after `q=1` when it has none) begins a new segment; rates
+  are never averaged across a restart. A `step` is a `start` and an `end` at once. The
   segment's rate is measured from the `c` on its `start`, so a resumed scope that
   starts at its restored count measures only the work left. `res=1` itself is
   informational: it tells a reader the scope resumed, and changes no arithmetic.
@@ -315,7 +411,9 @@ defaults.
 - A running scope's elapsed time counts on from its latest record, by the time
   received since it. A `phase()` writes only when it starts and ends, so this is what
   gives a running phase its elapsed time, which a plan uses to time the phases not yet
-  started.
+  started. A phase that holds back its start (a one-off step) is unknown to a reader
+  until its `start` or `step` line arrives, at most `PACE_MIN_INTERVAL` later, so a plan
+  counts it as not started until then; the `step` line carries its elapsed time.
 
 ### Plans
 
@@ -323,8 +421,9 @@ defaults.
   Repeated calls under the same name share that scope, so their `q` orders them. The
   record lists the scope ids the phases will get, including the `-2` suffix for a
   repeated name.
-- A plan replaces an earlier plan of the same scope only if its `q` is higher, so a
-  plan read late from the other stream never overrides a newer one.
+- A plan replaces an earlier plan of the same scope only if its `q` is higher or it
+  comes from a newer run, so a plan read late from the other stream never overrides a
+  newer one.
 - A plan's finished phases count 0, its active phase its own estimate, and each phase
   not yet started `weight x s`, where `s` is the (elapsed + remaining) seconds of the
   finished and active phases divided by their weights. If a phase in the plan has no
@@ -360,8 +459,9 @@ defaults.
 
 ## Testing
 
-- Conformance fixtures live in `tests/fixtures/protocol/`: input lines with their
-  expected parse results, including malformed, oversized and ANSI-coloured lines.
+- Conformance fixtures live in `tests/fixtures/protocol/`: `pace:2` and `pace:1` input
+  lines with their expected parse results, including malformed, oversized and
+  ANSI-coloured lines.
   They cover parsing one line at a time; splitting byte chunks into lines and removing
   duplicates are tested in Python only. The fixtures are not shipped in the package;
   readers in other languages take them from the repository. Consumers run the same fixtures against their integration.

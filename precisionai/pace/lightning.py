@@ -67,7 +67,7 @@ class PaceCallback(Callback):  # type: ignore[misc,valid-type]
     Progress is read in optimizer steps (``trainer.global_step``), the unit
     ``trainer.estimated_stepping_batches`` uses. The total is unknown when Lightning
     cannot estimate it (``max_epochs=-1`` with no ``max_steps``, or an unsized
-    dataloader). A fit restored from a checkpoint writes ``res=1`` and starts at the
+    dataloader). A fit restored from a checkpoint writes the ``res`` flag and starts at the
     restored step. Evaluation loops run during the fit are child scopes of the fit scope;
     the sanity check is not reported. Each pass is its own scope (``validation``,
     ``validation-2``, ...), because a scope cannot start twice.

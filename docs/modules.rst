@@ -37,7 +37,7 @@ Routing the standard library's ``logging`` through Pace.
 precisionai.pace.protocol
 -------------------------
 
-Progress records and the ``[pace:1 ...]`` trailer: writing, parsing, line splitting.
+Progress records and the ``[pace:2 ...]`` trailer: writing, parsing, line splitting.
 
 .. automodule:: precisionai.pace.protocol
    :members:

@@ -15,8 +15,8 @@ Needs: ``pip install precisionai-pace[lightning]``. The other examples need no e
 
 Run: ``python examples/lightning_example.py``
 
-Expect: a ``train`` scope marked ``root=1`` counting steps, ``validation`` scopes whose
-trailers carry ``p=train``, and the ``end`` of the root. Every progress line ends with the
+Expect: a ``train`` scope marked ``root`` counting steps, ``validation`` scopes whose
+trailers carry ``<train``, and the ``end`` of the root. Every progress line ends with the
 ``[pace:2 ...]`` trailer a scheduler reads.
 """
 

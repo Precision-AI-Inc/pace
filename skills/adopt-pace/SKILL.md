@@ -7,7 +7,7 @@ description: Add Pace (precisionai-pace) logging and progress reporting to this 
 
 Pace (`precisionai-pace`, import `precisionai.pace`) is a zero-dependency Python logger with
 progress reporting. Each progress line ends with a trailer such as
-`[pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]`; a scheduler reads them from the
+`[pace:2 train c=1840 t=5000 e=763.1 q=57 r=6bfc3dd5 root]`; a scheduler reads them from the
 job's output to estimate when it finishes. Make this repo's jobs write them, with the
 smallest correct change, and prove it.
 
@@ -121,9 +121,10 @@ python <skill-dir>/verify.py /tmp/pace-smoke.log
 ```
 
 `verify.py` checks that every trailer parses, the root count, a total and an `end` or `fail`
-per scope, plan names against scope ids, and the final estimate (a finished job reads
+per scope (a `step`, the one line of a short `@timed` call or `phase()`, counts as both),
+plan names against scope ids, and the final estimate (a finished job reads
 `complete`; a run under a minute never reaches a live one). Also, when they apply: **resume**
-(run twice; look for `res=1`), **DDP** (`RANK=1` writes no progress lines), **callbacks** (a
+(run twice; look for `res` on the start), **DDP** (`RANK=1` writes no progress lines), **callbacks** (a
 few steps on a tiny model), **exceptions** (raise once; expect a `fail`). Fix and rerun.
 
 ## 6. Report

@@ -10,7 +10,7 @@
 
 ---
 
-> Pace follows semantic versioning. Before 1.0, a minor version may change the Python API but not the `pace:1` line format.
+> Pace follows semantic versioning. Before 1.0, a minor version may change the Python API, and a new line format comes with a minor version: 0.1 writes `pace:2` and still reads `pace:1`.
 
 Pace is a logger with progress reporting built in. Its output reads like any good
 logger in a terminal, and every progress line also carries a short, versioned trailer
@@ -59,10 +59,10 @@ In a terminal, progress is one bar that redraws in place. In a container or a lo
 is a rate-limited line like this one:
 
 ```text
-2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  [pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]
+2026-11-03T17:36:42Z PROGRESS Train  1840/5000  36.8%  2.4 step/s · ~21m57s  [pace:2 train c=1840 t=5000 e=763.1 q=57 r=6bfc3dd5 root]
 ```
 
-The part before `[pace:1 ...]` is for people. The bracketed trailer is a stable,
+The part before `[pace:2 ...]` is for people. The bracketed trailer is a stable,
 versioned format described in [docs/design.md](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md); a program that reads it
 should use `parse_line`, `LineSplitter` and `JobForecast` (see
 [Reading Pace output](https://github.com/Precision-AI-Inc/pace/blob/main/docs/reading-output.md)).

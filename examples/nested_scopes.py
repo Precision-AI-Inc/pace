@@ -1,14 +1,14 @@
 # Copyright 2026 Precision AI
 # SPDX-License-Identifier: Apache-2.0
 
-"""Open a child scope inside a parent scope, and see what ``p=`` means for the estimate.
+"""Open a child scope inside a parent scope, and see what nesting means for the estimate.
 
 Situation: 3 epochs, each a training loop followed by a validation loop. The epochs are the
 parent and each loop is a child. A scope opened while another is open names it as its
-parent (``p=epochs`` in the trailer), following the Python context, so it works across
+parent (``train-0<epochs`` in the trailer), following the Python context, so it works across
 function calls.
 
-What ``p=`` means for estimates: a reader never adds a child's remaining time on top of its
+What nesting means for estimates: a reader never adds a child's remaining time on top of its
 parent's. The parent's own estimate already includes the time its children take, so the
 job's estimate is the root's. Here the root counts epochs, so it has a rate of its own only
 after three updates. Until then the reader builds the root's estimate from the children:
@@ -25,8 +25,8 @@ Each pass creates new scopes, so give them distinct ids with ``scope=`` (``train
 Run: ``python examples/nested_scopes.py``. Add ``PACE_MIN_INTERVAL=0`` to see every progress
 line.
 
-Expect: an ``Epochs`` scope marked ``root=1`` and, inside it, ``Train`` and ``Validate``
-scopes whose trailers carry ``p=epochs``.
+Expect: an ``Epochs`` scope marked ``root`` and, indented inside it, ``Train`` and
+``Validate`` scopes whose trailers carry ``<epochs``.
 """
 
 import time

@@ -50,14 +50,14 @@ What it reports:
   estimate. See [Choosing a root scope](progress.md#choosing-a-root-scope). When the
   number of steps is not known in advance (an infinite dataloader, no `max_steps`), the
   total is reported as unknown.
-- A child scope for each validation pass, nested under the training scope (`p=train`
+- A child scope for each validation pass, nested under the training scope (`validation<train`
   in the trailer), counting batches. Each pass is its own scope: `validation`,
   `validation-2`, and so on. The sanity-check pass before training is not reported.
 - `trainer.validate()`, `trainer.test()` or `trainer.predict()` called on their own,
   without a fit, report a top-level scope (`validation`, `test`, `predict`) that is
   not the root, so a baseline evaluation before training never marks the job
   complete. Only training is the root.
-- On resume, the scope starts from the checkpoint's global step with `res=1`, so the
+- On resume, the scope starts from the checkpoint's global step with the `res` flag, so the
   estimate measures the work left rather than the work already done
   (see [Resuming from a checkpoint](progress.md#resuming-from-a-checkpoint)).
 - An exception during the run writes `fail`. Early stopping or `max_time` ends the
@@ -92,8 +92,8 @@ What it reports:
   about a batch only after it has run, and has no hook before the first, so the scope opens
   already at `c=1`. Its rate and its "done in" time cover the batches after the first, and
   leave out how long the first one took. (Lightning has a hook before the first batch, so
-  its validation scopes start at `c=0` and time every batch.)
-- On `resume_from_checkpoint`, the scope starts from the restored global step with `res=1`.
+  its validation scopes start at 0 and time every batch.)
+- On `resume_from_checkpoint`, the scope starts from the restored global step with the `res` flag.
 - **A crash writes no `fail`.** Transformers gives callbacks no hook when training
   raises, so the scope stays open until the process exits. A scheduler should treat
   process exit as the real end. To record the failure yourself, call the callback's

@@ -29,7 +29,7 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. Read
 precisionai/pace/
   core.py, _env.py, _render.py, capture.py   # the logger; _env.py holds Settings, one table of PACE_ variable, check and default per setting
   scopes.py        # track, progress, timed, phase, plan
-  protocol.py      # Record, the [pace:1 ...] trailer, parse_line, LineSplitter
+  protocol.py      # Record, the [pace:2 ...] trailer (reads pace:1 too), parse_line, LineSplitter
   forecast.py      # ScopeForecast, JobForecast
   lightning.py, transformers.py, _adapters.py   # framework callbacks (extras only)
   tqdm.py          # PaceTqdm: stands in for the tqdm class where a library takes one (stdlib only)

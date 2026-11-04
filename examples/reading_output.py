@@ -19,8 +19,8 @@ A real reader keeps the default ``ForecastConfig``, which waits for 60 seconds o
 observations before it calls an estimate ``live``, and calls ``snapshot`` on a timer as
 well as after each record, so a silent job turns ``stale``. This demo watches a job of a
 second, so it lowers ``min_observed_seconds`` to be able to show a live estimate at all.
-Only the trailer at the end of a ``PROGRESS`` line is a contract: never parse the readable
-text in front of it. Show an estimate with ``partial=True`` as a lower bound ("at least
+Only the trailer at the end of a ``PROGRESS`` or ``STEP`` line is a contract: never parse
+the readable text in front of it. Show an estimate with ``partial=True`` as a lower bound ("at least
 10 min"): it covers only the work seen so far.
 
 Run: ``python examples/reading_output.py``. The child is ``examples/track_loop.py`` with

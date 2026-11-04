@@ -22,7 +22,7 @@ PACE_MIN_INTERVAL=0 python examples/track_loop.py
 PACE_MIN_INTERVAL=0 PACE_BAR=never python examples/track_loop.py | tail
 ```
 
-`PACE_BAR=never` writes the lines (with their `[pace:1 ...]` trailer) even on a terminal.
+`PACE_BAR=never` writes the lines (with their `[pace:2 ...]` trailer) even on a terminal.
 Every setting is described in `docs/configuration.md`.
 
 The scripts import only the standard library and `precisionai.pace`, except the two
@@ -45,7 +45,7 @@ pip install "precisionai-pace[transformers]"               # transformers_exampl
 | [`resume.py`](resume.py) | Continuing from a checkpoint | `completed=`, `resumed=True` |
 | [`unknown_total.py`](unknown_total.py) | A paged stream whose length is learned later | `progress` with no total, `set_total` |
 | [`timed_steps.py`](timed_steps.py) | One-off steps (load a model, save results) around a loop | `@timed`, steps nested in a root |
-| [`nested_scopes.py`](nested_scopes.py) | Train and validate loops inside an epoch scope | `p=` parents, `scope=`, what nesting means for the estimate |
+| [`nested_scopes.py`](nested_scopes.py) | Train and validate loops inside an epoch scope | parents (`child<parent`), `scope=`, what nesting means for the estimate |
 | [`stdlib_logging.py`](stdlib_logging.py) | A library that logs with the standard `logging` module | `capture_logging`, `logging.captureWarnings` |
 | [`library_hooks.py`](library_hooks.py) | A library draws its own tqdm bar and prints its own log lines | `PaceTqdm` as `use_tqdm=`, `capture_logging(take_over=[...])` |
 | [`distributed.py`](distributed.py) | A multi-GPU job; two ranks simulated with `RANK` | Progress from rank 0 only, rank-guarded log lines |

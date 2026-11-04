@@ -15,7 +15,7 @@ terminal bar and works out the time remaining.
 | `plan([...])` | Declares the stages and their weights up front, so the whole job can be estimated. |
 
 All of them create a **scope**: one piece of work with a start, a completed amount,
-an optional total, a unit, and an end. Each scope has an id (`s=` in the trailer),
+an optional total, a unit, and an end. Each scope has an id (the first word of the trailer),
 derived from its description (`"Fine-tune 7B"` becomes `fine-tune-7b`) or given
 with `scope="..."`. Ids are unique within a process: if you open a second scope
 called `Train`, it is `train-2`.
@@ -65,10 +65,10 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 ```
 
 ```text
-2026-11-03T17:06:30Z PROGRESS Evaluation  0.0%  0/40 request · estimating…  [pace:1 s=evaluation k=start c=0 t=40 u=request e=0 q=1 run=6bfc3dd5 n=Evaluation]
-2026-11-03T17:06:26Z PROGRESS Evaluation  42.5%  17/40 request · estimating…  [pace:1 s=evaluation k=upd c=17 t=40 e=0.3 q=2]
-2026-11-03T17:06:26Z PROGRESS Evaluation  82.5%  33/40 request · estimating…  [pace:1 s=evaluation k=upd c=33 t=40 e=0.5 q=3]
-2026-11-03T17:06:26Z PROGRESS Evaluation  100.0%  40/40 request · 72.7 request/s · done in 1s  [pace:1 s=evaluation k=end c=40 t=40 e=0.5 q=4]
+2026-11-03T17:06:30Z PROGRESS Evaluation   0/40 request  [pace:2 evaluation start t=40 u=request n=Evaluation r=6bfc3dd5]
+2026-11-03T17:06:26Z PROGRESS Evaluation  17/40  42.5%  estimating…  [pace:2 evaluation c=17 t=40 e=0.3 q=2 r=6bfc3dd5]
+2026-11-03T17:06:26Z PROGRESS Evaluation  33/40  82.5%  estimating…  [pace:2 evaluation c=33 t=40 e=0.5 q=3 r=6bfc3dd5]
+2026-11-03T17:06:26Z PROGRESS Evaluation  40/40  done in 1s · 72.7 request/s  [pace:2 evaluation end c=40 e=0.5 r=6bfc3dd5]
 ```
 
 (Run with `PACE_MIN_INTERVAL=0.2` so the short example writes more than start and end.)
@@ -107,8 +107,8 @@ with progress(description="Reading shards", unit="shard") as run:
 ```
 
 ```text
-2026-11-03T17:07:42Z PROGRESS Reading shards  0 shard · no estimate  [pace:1 s=reading-shards k=start c=0 t=? u=shard e=0 q=1 run=6a68257f n=Reading%20shards]
-2026-11-03T17:07:43Z PROGRESS Reading shards  17 shard · no estimate  [pace:1 s=reading-shards k=upd c=17 t=? e=0.6 q=2]
+2026-11-03T17:07:42Z PROGRESS Reading shards  0 shard  [pace:2 reading-shards start t=? u=shard n=Reading%20shards r=6a68257f]
+2026-11-03T17:07:43Z PROGRESS Reading shards  17  no estimate  [pace:2 reading-shards c=17 t=? e=0.6 q=2 r=6a68257f]
 ```
 
 `t=?` tells a reader the total is unknown. Nothing can be estimated, but the
@@ -117,7 +117,7 @@ the total later, call `run.set_total(40)`. The next line carries the new total a
 the estimate begins from there; the rate seen so far is kept.
 
 ```text
-2026-11-03T17:07:43Z PROGRESS Reading shards  80.0%  32/40 shard · estimating…  [pace:1 s=reading-shards k=upd c=32 t=40 e=1 q=3]
+2026-11-03T17:07:43Z PROGRESS Reading shards  32/40  80.0%  estimating…  [pace:2 reading-shards c=32 t=40 e=1 q=3 r=6a68257f]
 ```
 
 With an unknown total, lines are written on the heartbeat only (there is no 1%
@@ -126,7 +126,8 @@ to measure); see [How often lines are written](#how-often-lines-are-written).
 ## Timing a function
 
 `@timed` turns each call of a function into a scope that starts when the call begins
-and ends when it returns:
+and ends when it returns. A call that ends before its first line is due
+(`PACE_MIN_INTERVAL`, 15 seconds by default) is written as one `STEP` line:
 
 ```python
 from precisionai.pace import logger, timed
@@ -141,12 +142,17 @@ def tokenize(): ...
 ```
 
 ```text
-2026-11-03T17:08:16Z PROGRESS Load model  0.0%  0/1 call · estimating…  [pace:1 s=load-model k=start c=0 t=1 u=call e=0 q=1 run=a22feb8b n=Load%20model]
-2026-11-03T17:08:16Z PROGRESS Load model  100.0%  1/1 call · done in 0s  [pace:1 s=load-model k=end c=1 t=1 e=0.1 q=2]
+2026-11-03T17:08:16Z STEP     Load model  done in 0s  [pace:2 load-model step e=0.1 n=Load%20model r=a22feb8b]
 ```
 
+A longer call has its start line written once the interval has passed, while it is still
+running, and an end line when it returns, so a ten-minute download shows up while it runs.
+A `phase()` behaves the same way, and a scope opened inside either has its parent's start
+line written first. On a terminal, or with `PACE_MIN_INTERVAL=0`, every call writes a start
+and an end line.
+
 With no description the function's name is used. If the function raises, the scope
-is written as `fail` and the exception propagates. A generator or coroutine function
+is written as `fail` (after its start line) and the exception propagates. A generator or coroutine function
 is timed only until the call returns the generator or coroutine object, not until
 it is exhausted.
 
@@ -174,7 +180,7 @@ for batch in track(val_loader, description="Evaluate", unit="batch"):
 `plan` writes one record that lists the phases and weights:
 
 ```text
-2026-11-03T17:12:54Z PROGRESS Plan  preprocess 5%, train 90%, evaluate 5%  [pace:1 s=plan k=plan e=0 q=1 ph=preprocess:0.05,train:0.9,evaluate:0.05]
+2026-11-03T17:12:54Z PROGRESS Plan  preprocess 5%, train 90%, evaluate 5%  [pace:2 plan plan q=1 ph=preprocess:0.05,train:0.9,evaluate:0.05 r=6bfc3dd5]
 ```
 
 How a reader uses it (see [Specification: plans](design.md#plans)):
@@ -217,7 +223,7 @@ with phase("Export"):
 
 ## Nested scopes
 
-A scope opened while another is open names it as its parent (`p=` in the trailer).
+A scope opened while another is open names it as its parent (`scope<parent` in the trailer) and is indented under it.
 Validation inside an epoch loop is the standard case:
 
 ```python
@@ -233,11 +239,11 @@ with progress(total=3, description="Epochs", unit="epoch", root=True) as epochs:
 ```
 
 ```text
-2026-11-03T17:07:40Z PROGRESS Epochs  0.0%  0/3 epoch · estimating…  [pace:1 s=epochs root=1 k=start c=0 t=3 u=epoch e=0 q=1 run=648e2e0d n=Epochs]
-2026-11-03T17:07:40Z PROGRESS Train  0.0%  0/20 step · estimating…  [pace:1 s=train-0 p=epochs k=start c=0 t=20 u=step e=0 q=1 run=648e2e0d n=Train]
-2026-11-03T17:07:40Z PROGRESS Train  100.0%  20/20 step · 45 step/s · done in 0s  [pace:1 s=train-0 p=epochs k=end c=20 t=20 e=0.4 q=3]
-2026-11-03T17:07:40Z PROGRESS Validate  0.0%  0/5 batch · estimating…  [pace:1 s=val-0 p=epochs k=start c=0 t=5 u=batch e=0 q=1 run=648e2e0d n=Validate]
-2026-11-03T17:07:40Z PROGRESS Epochs  33.3%  1/3 epoch · estimating…  [pace:1 s=epochs root=1 k=upd c=1 t=3 e=0.6 q=2]
+2026-11-03T17:07:40Z PROGRESS Epochs  0/3 epoch  [pace:2 epochs start t=3 u=epoch n=Epochs r=648e2e0d root]
+2026-11-03T17:07:40Z PROGRESS ├ Train   0/20 step  [pace:2 train-0<epochs start t=20 u=step n=Train r=648e2e0d]
+2026-11-03T17:07:40Z PROGRESS ├ Train  20/20  done in 0s · 45 step/s  [pace:2 train-0<epochs end c=20 e=0.4 r=648e2e0d]
+2026-11-03T17:07:40Z PROGRESS ├ Validate  0/5 batch  [pace:2 val-0<epochs start t=5 u=batch n=Validate r=648e2e0d]
+2026-11-03T17:07:40Z PROGRESS Epochs  1/3  33.3%  estimating…  [pace:2 epochs c=1 t=3 e=0.6 q=2 r=648e2e0d root]
 ```
 
 A nested scope is never added on top of its parent's remaining time: the parent's
@@ -275,15 +281,15 @@ with progress(total=total_steps, description="Train", unit="step",
 ```
 
 ```text
-2026-11-03T17:07:44Z PROGRESS Train  96.9%  3100/3200 step · estimating…  [pace:1 s=train k=start c=3100 t=3200 u=step e=0 q=1 res=1 run=6cbe4833 n=Train]
-2026-11-03T17:07:45Z PROGRESS Train  98.1%  3140/3200 step · estimating…  [pace:1 s=train k=upd c=3140 t=3200 e=0.4 q=2]
+2026-11-03T17:07:44Z PROGRESS Train  3100/3200 step  [pace:2 train start c=3100 t=3200 u=step n=Train r=6cbe4833 res]
+2026-11-03T17:07:45Z PROGRESS Train  3140/3200  98.1%  estimating…  [pace:2 train c=3140 t=3200 e=0.4 q=2 r=6cbe4833]
 ```
 
 `completed=` is what matters: it sets the count the scope starts from, and the reader
 measures rates from the work done after that first record. `resumed=True` additionally
-writes `res=1` on the start record, to say that the first count is not zero because of
+writes the `res` flag on the start record, to say that the first count is not zero because of
 earlier work. With the reference estimator in this package the estimate is the same
-with or without `res=1`; set it anyway, so that a reader that wants to show "resumed
+with or without `res`; set it anyway, so that a reader that wants to show "resumed
 from 3100" can. A job that uses `update(global_step)` instead of `advance()` should
 still start the scope with `completed=global_step`. `track` takes the same arguments:
 
@@ -346,7 +352,8 @@ a scope only when **both** hold:
 2. the scope has advanced by at least 1% of its total since the last line, **or**
    `PACE_HEARTBEAT` seconds have passed since it (default 120).
 
-`start`, `end`, `fail` and `plan` are always written at once. The limit is on time,
+`start`, `end`, `fail` and `plan` are always written at once, except the start of a
+one-off step (see [Timing a function](#timing-a-function)). The limit is on time,
 not on step count: a loop of a million steps and a loop of a hundred write the same number of
 lines per minute. A ten-hour run reaches each 1% about every six minutes, so it writes
 about a hundred progress lines plus a heartbeat every two minutes in between.
@@ -408,7 +415,7 @@ for item in track(range(5), description="Body crash"):
 ```
 
 ```text
-2026-11-03T17:08:17Z PROGRESS Body crash  40.0%  2/5 it · done in 0s  [pace:1 s=body k=end c=2 t=5 e=0 q=2]
+2026-11-03T17:08:17Z PROGRESS Body crash  2/5  done in 0s  [pace:2 body end c=2 t=5 r=6bfc3dd5]
 ```
 
 The exception still propagates and your program still crashes as usual. But the

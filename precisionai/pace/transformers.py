@@ -57,7 +57,7 @@ class PaceCallback(TrainerCallback):  # type: ignore[misc,valid-type]
     -----
     Progress is read in optimizer steps (``state.global_step``) against
     ``state.max_steps``, which is unknown when the trainer has no step budget. Training
-    resumed from a checkpoint writes ``res=1`` and starts at the restored step. An
+    resumed from a checkpoint writes the ``res`` flag and starts at the restored step. An
     evaluation pass is a child scope of the training scope that starts with its first
     batch and ends in ``on_evaluate`` (or ``on_predict``); its total is the length of the
     evaluation dataloader when it has one. The ``Trainer`` reports a batch only after it

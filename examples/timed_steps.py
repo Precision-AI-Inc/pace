@@ -11,7 +11,7 @@ when the call begins and ends when it returns (or is written as ``fail`` if it r
 Shows: ``@timed("Load model")``, a bare ``@timed`` (the function's name is the label), and
 ``@timed`` on a step called repeatedly: each call is a new scope (``save_results``,
 ``save_results-2``, ...). The saves run inside the root loop, so they are children of it
-(``p=train``) and never added on top of its estimate. Work that runs after the root ends is
+(``save_results<train``) and never added on top of its estimate. Work that runs after the root ends is
 invisible to a scheduler: if a final step were a large share of the runtime, use a plan
 (see ``phases_and_plan.py``).
 
