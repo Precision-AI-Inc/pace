@@ -73,8 +73,41 @@ def test_a_written_trailer_is_read_back_as_written(record: Record) -> None:
     assert parse_line(f"2026-01-01T00:00:00Z PROGRESS readable text  {trailer}\n") == record
 
 
+# Fragments of the syntax, so that arbitrary text sometimes gets close to a trailer.
+FRAGMENTS = [
+    "[pace:1 ",
+    "[pace:",
+    "]",
+    " ",
+    "s=a ",
+    "k=upd ",
+    "c=1 ",
+    "t=? ",
+    "q=2 ",
+    "e=1",
+    "%",
+    "%4",
+    "=",
+    "\x1b[",
+    "\x1b]",
+    "\x07",
+    "\r",
+    "\n",
+    "\u00e9",
+    "\ud800",
+    "\U0001f600",
+    "0",
+    "-",
+    "ph=a:1,b:2",
+    "root=1",
+    "n=%FF",
+    "u=caf%C3%A9",
+]
+garbage = st.text() | st.lists(st.sampled_from(FRAGMENTS) | st.text(max_size=3), max_size=40).map("".join)
+
+
 @PROFILE
-@hypothesis.given(st.text())
+@hypothesis.given(garbage)
 def test_parse_line_never_raises_on_arbitrary_text(text: str) -> None:
     assert parse_line(text) is None or isinstance(parse_line(text), Record)
 
