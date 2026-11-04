@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-04
+
 ### Fixed
 
 - After a job restarts, its estimate no longer comes from the root scope of the run before when the new run has not written that scope again (its root has another name, or it has not reached its root yet). `JobForecast` now follows the latest run: the scopes and plan of the run before drop out of the estimate and of `scopes`, and until the new run's root appears its own plan and top-level scopes give the estimate. A copy of the old run's lines read late from the other stream is still ignored. Two processes writing progress to one log at the same time now look like restarts to `JobForecast`, which follows the one whose lines it saw begin last; read each process's output on its own.
@@ -64,7 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runnable examples, one per style of logging and progress (plain loops, epochs, concurrent work, phases and a plan, resuming, unknown totals, nested scopes, `logging` capture, distributed ranks, and reading the output).
 - User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Precision-AI-Inc/pace/compare/v0.0.2...v0.1.0
 [0.0.2]: https://github.com/Precision-AI-Inc/pace/compare/v0.0.1...v0.0.2
