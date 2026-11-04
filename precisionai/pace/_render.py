@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import Event, Record
+from precisionai.pace.protocol import ANSI_PATTERN, Event, Record
 
 PROGRESS_LABEL = "PROGRESS"
 LABEL_WIDTH = 8
@@ -46,8 +46,6 @@ _COLOR_CODES: dict[str, str] = {
 }
 _ESCAPE = "\x1b["
 _WHITESPACE = re.compile(r"\s+")
-# The same escape sequences precisionai.pace.protocol strips before parsing.
-_ANSI_SEQUENCE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 _FORGED_MARKER = re.compile(r"\[(?=pace:)")
 
 
@@ -111,7 +109,7 @@ def neutralize(message: str) -> str:
     are removed here first: ``[pa`` + ESC ``[31m`` + ``ce:`` must not survive as a
     marker. Any ESC left over is dropped too.
     """
-    plain = _ANSI_SEQUENCE.sub("", message).replace("\x1b", "")
+    plain = ANSI_PATTERN.sub("", message).replace("\x1b", "")
     return _FORGED_MARKER.sub("[ ", plain)
 
 
