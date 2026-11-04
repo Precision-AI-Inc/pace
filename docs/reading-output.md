@@ -171,6 +171,10 @@ ignore the copies:
 - A record from a run id not seen before begins a new segment: the process restarted.
   Rates are never averaged across a restart. A record from a run that a restart left
   behind is a late copy.
+- The job follows its latest run: once a new run id appears, the scopes and plan of the
+  run before are dropped from the job estimate and from `scopes`, even those the new run
+  never writes again (a root under another name, or not reached yet). Until the new
+  run's root appears, its own plan and top-level scopes give the estimate.
 - One limitation: the reader does not know the order of runs it has not seen. If it first
   sees a later run and only then lines of an earlier run it never saw (it attached to the
   second stream of a restarted job late), it takes the earlier run for a restart and

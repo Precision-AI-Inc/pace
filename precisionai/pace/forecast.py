@@ -543,7 +543,8 @@ class JobForecast:
     ``weight x seconds-per-weight`` where seconds-per-weight is the elapsed plus
     remaining time of the finished and active phases over their weights); otherwise the
     longest remaining time among top-level scopes. Nested scopes (those with a parent)
-    are never added on top of their parent.
+    are never added on top of their parent. Only the current process run counts: a
+    restart drops the scopes and plan of the run before.
 
     Parameters
     ----------
@@ -556,15 +557,23 @@ class JobForecast:
     def __init__(self, *, expected_seconds: float | None = None, config: ForecastConfig = DEFAULT_CONFIG) -> None:
         self._expected = expected_seconds
         self._config = config
-        self._scopes: dict[str, ScopeForecast] = {}
-        self._plan: tuple[tuple[str, float], ...] = ()
-        self._plan_seq: dict[str, int] = {}
-        self._plan_runs: dict[str, _Runs] = {}
+        self._runs = _Runs()
+        self._forget_run()
         self._first_received: float | None = None
         self._ever_live = False
 
+    def _forget_run(self) -> None:
+        self._scopes: dict[str, ScopeForecast] = {}
+        self._plan: tuple[tuple[str, float], ...] = ()
+        self._plan_seq: dict[str, int] = {}
+
     def observe(self, record: Record, received_at: float) -> bool:
         """Route one record to its scope's forecast, creating it on first sight.
+
+        The job follows one process run. A record from a run id not seen before is a
+        restart: every scope and plan of the run before is dropped, including a root the
+        new run has not written again, and a record from a run a restart replaced is a
+        late copy and is ignored. A record without a run id belongs to the current run.
 
         Parameters
         ----------
@@ -581,6 +590,13 @@ class JobForecast:
         """
         if self._first_received is None:
             self._first_received = received_at
+        if record.run is not None and record.run != self._runs.current:
+            if self._runs.ignores(record.run):
+                return False
+            if self._runs.current is not None:
+                self._runs.leave()
+                self._forget_run()
+            self._runs.current = record.run
         if record.event is Event.PLAN:
             return self._take_plan(record)
         scope = self._scopes.get(record.scope)
@@ -591,17 +607,10 @@ class JobForecast:
         return taken
 
     def _take_plan(self, record: Record) -> bool:
-        # A plan read late from the other stream must not replace a newer one of its run,
-        # and a plan from a restarted run replaces any plan of the run before it.
-        runs = self._plan_runs.setdefault(record.scope, _Runs())
-        if not record.phases or runs.ignores(record.run):
+        # A plan read late from the other stream must not replace a newer one of its run;
+        # a restart has already dropped the plans of the run before.
+        if not record.phases or (record.seq or 0) <= self._plan_seq.get(record.scope, 0):
             return False
-        if record.run != runs.current and record.scope in self._plan_seq:
-            runs.leave()
-            del self._plan_seq[record.scope]
-        if (record.seq or 0) <= self._plan_seq.get(record.scope, 0):
-            return False
-        runs.current = record.run
         self._plan_seq[record.scope] = record.seq or 0
         self._plan = record.phases
         return True

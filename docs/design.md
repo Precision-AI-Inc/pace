@@ -256,8 +256,16 @@ read in the order it was written (one stream may be read well behind the other):
   process restarted. It need not be a `start`, so a reader that missed the restarted
   run's `start` still notices.
 - A record from a run that a restart replaced is a late copy, and is ignored.
+- A job estimate follows one process run. A record from a run id the job has not seen
+  is a restart of the whole job: the scopes and plans of the run before no longer
+  count, whether or not the new run writes them again, so a root the new run has not
+  written (yet, or under another name) neither gives the estimate nor ends the job.
+  Until the new run's root appears, its own plan and top-level scopes give the
+  estimate, as for a job without a root.
 - Known limitation: a reader that first sees a later run and only then lines of an
-  earlier run it never saw takes the earlier run for a restart and follows it.
+  earlier run it never saw takes the earlier run for a restart and follows it. Two
+  processes writing progress to one log at the same time look like restarts to each
+  other.
 - A `plan` replaces an earlier plan of the same scope only if its `q` is higher, or it
   comes from a newer run.
 

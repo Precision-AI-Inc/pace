@@ -63,10 +63,10 @@ The tests run in CI on Linux, Python 3.11 through 3.13.
   call `track` or `progress` inside them. A worker inherits its parent's rank variables, so
   a worker of rank 0 writes progress too, under its own run id. Report from the main
   process.
-- **Several jobs in one log.** Records carry no process id, only a per-run `run` id on
-  `start`. A reader should read one process's output at a time, or give scopes distinct
-  ids with `scope=`. Two processes that use the same scope id in one stream look like a
-  restart to a reader.
+- **Several jobs in one log.** Records carry no process id, only a per-run `run` id. A
+  reader should read one process's output at a time: two processes writing progress to
+  one stream at the same time look like restarts to a reader, and `JobForecast` follows
+  only the run whose lines it saw begin last.
 
 ## What if I don't set a total?
 
