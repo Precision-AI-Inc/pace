@@ -236,9 +236,9 @@ class Scope:
         if target is None:
             return
         settings = self._out.settings
-        gap = REDRAW_INTERVAL if target.bar else min(REDRAW_INTERVAL, settings.resolve_min_interval())
+        gap = REDRAW_INTERVAL if target.bar else min(REDRAW_INTERVAL, settings.resolve("min_interval"))
         self._next_check = now + gap
-        if target.bar or self._is_due(now, settings.resolve_min_interval(), settings.resolve_heartbeat()):
+        if target.bar or self._is_due(now, settings.resolve("min_interval"), settings.resolve("heartbeat")):
             self._emit(Event.UPDATE, now, target)
 
     def _is_due(self, now: float, min_interval: float, heartbeat: float) -> bool:

@@ -9,12 +9,14 @@ variables are read each time they are needed, so a scheduler (or a test) can cha
 them without restarting the process.
 """
 
+import contextlib
 import math
 import os
 import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 DEFAULT_MIN_INTERVAL = 15.0
@@ -128,29 +130,70 @@ def _env_text(name: str) -> str | None:
     return value.strip().lower()
 
 
-def _env_seconds(name: str) -> float | None:
-    text = _env_text(name)
-    if text is None:
-        return None
-    try:
-        value = float(text)
-    except ValueError:
-        return None
-    return value if math.isfinite(value) and value >= 0 else None
+def _check_level(value: Any) -> int:
+    parsed = parse_level(value)
+    if parsed is None:
+        raise ValueError(f"unknown level {value!r}; expected one of {', '.join(LEVELS)}")
+    return parsed
 
 
-def _choice(explicit: str | None, variable: str) -> str:
-    for candidate in (explicit, _env_text(variable)):
-        if candidate in _COLOR_MODES:
-            return str(candidate)
-    return "auto"
+def _check_mode(name: str, value: Any) -> str:
+    if value not in _COLOR_MODES:
+        raise ValueError(f"{name} must be 'auto', 'always' or 'never', got {value!r}")
+    return value
+
+
+def _check_seconds(name: str, value: Any) -> float:
+    number = value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    if number is None or not math.isfinite(number) or number < 0:
+        raise ValueError(f"{name} must be a non-negative number of seconds, got {value!r}")
+    return value
+
+
+def _same(value: Any) -> Any:
+    return value
+
+
+def _stream(value: Any) -> Any:
+    """Look up a stream name now, so that a redirected ``sys.stdout`` is honoured; an object is used as is."""
+    if not isinstance(value, str):
+        return value
+    return sys.stderr if value == "stderr" else sys.stdout
+
+
+@dataclass(frozen=True, slots=True)
+class _Option:
+    """One setting: its environment variable, how a value is checked, and its default.
+
+    ``check`` raises ``ValueError`` for a bad explicit value. The environment holds text, which
+    ``convert`` turns into a value before ``check`` sees it; a bad environment value is not an
+    error, the default applies. ``finish`` is the last step, for a value looked up when it is read.
+    """
+
+    env: str
+    check: Callable[[Any], Any]
+    default: Any
+    convert: Callable[[str], Any] = _same
+    finish: Callable[[Any], Any] = _same
+
+
+_OPTIONS: dict[str, _Option] = {
+    "level": _Option("PACE_LEVEL", _check_level, DEFAULT_LEVEL),
+    "stream": _Option("PACE_STREAM", _same, "stdout", finish=_stream),
+    "color": _Option("PACE_COLOR", partial(_check_mode, "color"), "auto"),
+    "bar": _Option("PACE_BAR", partial(_check_mode, "bar"), "auto"),
+    "min_interval": _Option("PACE_MIN_INTERVAL", partial(_check_seconds, "min_interval"), DEFAULT_MIN_INTERVAL, float),
+    "heartbeat": _Option("PACE_HEARTBEAT", partial(_check_seconds, "heartbeat"), DEFAULT_HEARTBEAT, float),
+    "all_ranks": _Option("PACE_ALL_RANKS", bool, False, _TRUE_WORDS.__contains__),
+}
 
 
 @dataclass
 class Settings:
     """Explicit settings, each ``None`` until ``configure`` sets it.
 
-    A ``None`` field defers to the environment variable, then to the default.
+    A ``None`` field defers to the environment variable, then to the default. Read a setting with
+    :meth:`resolve`; the environment is read each time, so a change applies to a running process.
     """
 
     level: int | None = None
@@ -161,47 +204,34 @@ class Settings:
     heartbeat: float | None = None
     all_ranks: bool | None = None
 
-    def resolve_level(self) -> int:
-        """Return the minimum level that is written."""
-        if self.level is not None:
-            return self.level
-        text = _env_text("PACE_LEVEL")
-        parsed = None if text is None else parse_level(text)
-        return DEFAULT_LEVEL if parsed is None else parsed
+    def update(self, **values: Any) -> None:
+        """Set each value that is not ``None``, after checking all of them, so a bad one changes nothing.
 
-    def resolve_stream(self) -> Any:
-        """Return the stream to write to, looked up now so redirection is honoured."""
-        if self.stream is not None and not isinstance(self.stream, str):
-            return self.stream
-        name = self.stream if isinstance(self.stream, str) else _env_text("PACE_STREAM")
-        return sys.stderr if name == "stderr" else sys.stdout
+        Raises
+        ------
+        ValueError
+            If a value is not valid for its setting.
+        """
+        checked = {name: _OPTIONS[name].check(value) for name, value in values.items() if value is not None}
+        for name, value in checked.items():
+            setattr(self, name, value)
 
-    def resolve_color_mode(self) -> str:
-        """Return ``auto``, ``always`` or ``never``."""
-        return _choice(self.color, "PACE_COLOR")
+    def resolve(self, name: str) -> Any:
+        """Return the value of setting ``name``: explicit, else its environment variable, else its default.
 
-    def resolve_bar_mode(self) -> str:
-        """Return whether to draw an in-place bar: ``auto`` (on a terminal), ``always`` or ``never``."""
-        return _choice(self.bar, "PACE_BAR")
-
-    def resolve_min_interval(self) -> float:
-        """Return the minimum seconds between progress lines of one scope."""
-        if self.min_interval is not None:
-            return self.min_interval
-        value = _env_seconds("PACE_MIN_INTERVAL")
-        return DEFAULT_MIN_INTERVAL if value is None else value
-
-    def resolve_heartbeat(self) -> float:
-        """Return the seconds after which a progress line is written whatever the progress."""
-        if self.heartbeat is not None:
-            return self.heartbeat
-        value = _env_seconds("PACE_HEARTBEAT")
-        return DEFAULT_HEARTBEAT if value is None else value
+        A stream is looked up now, so redirection is honoured; a value in the environment that is not
+        valid for its setting is ignored.
+        """
+        option = _OPTIONS[name]
+        value = getattr(self, name)
+        if value is None:
+            value = option.default
+            text = _env_text(option.env)
+            if text is not None:
+                with contextlib.suppress(ValueError):
+                    value = option.check(option.convert(text))
+        return option.finish(value)
 
     def progress_enabled(self) -> bool:
         """Return whether this process writes progress lines (rank 0, or every rank if allowed)."""
-        if self.all_ranks is not None:
-            allowed = self.all_ranks
-        else:
-            allowed = _env_text("PACE_ALL_RANKS") in _TRUE_WORDS
-        return allowed or current_rank() == 0
+        return self.resolve("all_ranks") or current_rank() == 0
