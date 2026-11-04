@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A reader fed both stdout and stderr no longer mistakes a scope's `start` line, read after that scope's updates, for a restart. Before, it threw away the progress already seen, and the copies of earlier updates from the other stream were counted again, which made the completion estimate jump.
 - The Hugging Face Transformers callback no longer shows an absurd speed for an evaluation pass (for example `158 batch/s` on a pass that took six seconds). The Trainer reports a batch only after it has run, so the pass now starts with its first batch already counted, and the speed and "done in" time cover the batches after it.
 
 ## [0.0.1] - 2026-11-03
