@@ -5,6 +5,10 @@
 
 from __future__ import annotations
 
+import json
+import os
+import re
+from pathlib import Path
 from typing import Iterator
 
 import pytest
@@ -27,6 +31,25 @@ CONTROLLED_VARIABLES = (
 )
 
 WALL_START = 1_762_190_202.0
+GOLDEN_DIRECTORY = Path(__file__).parent / "fixtures" / "golden"
+UPDATE_GOLDEN = "PACE_UPDATE_GOLDEN"
+
+
+def assert_golden(name: str, text: str) -> None:
+    """Compare ``text`` with the stored golden output ``name``, one JSON string per line of output.
+
+    Run with ``PACE_UPDATE_GOLDEN=1`` to write the file instead. Each stored line keeps its own line
+    ending, so trailing blanks and carriage returns survive git and the pre-commit hooks.
+    """
+    path = GOLDEN_DIRECTORY / f"{name}.jsonl"
+    chunks = re.findall(r"[^\n]*\n|[^\n]+", text)
+    if os.environ.get(UPDATE_GOLDEN):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(chunk, ensure_ascii=False) + "\n" for chunk in chunks), encoding="utf-8")
+    assert path.exists(), f"no golden file {path.name}; write it with {UPDATE_GOLDEN}=1"
+    with path.open(encoding="utf-8") as handle:
+        expected = [json.loads(line) for line in handle]
+    assert chunks == expected
 
 
 class FakeClock:
