@@ -117,6 +117,9 @@ class Scope:
         Output to use; the module-level logger by default.
     """
 
+    # A one-off step (a phase or a timed call) that ends before its first line is due writes one step line.
+    _ONE_OFF = False
+
     def __init__(
         self,
         description: str = "",
@@ -146,6 +149,7 @@ class Scope:
         self.parent: str | None = None
         self.depth = 0
         self._parent_scope: Scope | None = None
+        self._pending = False
         self._seq = 0
         self._started_at = 0.0
         self._state = "new"
@@ -167,7 +171,13 @@ class Scope:
                 self.parent = self._parent_scope.id
                 self.depth = self._parent_scope.depth + 1
             self._state = "open"
-            self._emit(Event.START, now)
+            delay = self._start_delay()
+            if delay > 0:
+                # A one-off step may end before a line is due; then its start and end are one line.
+                self._pending = True
+                self._out.defer(self, delay, self._write_pending_start)
+            else:
+                self._emit(Event.START, now)
 
     def advance(self, n: float = 1) -> None:
         """Add ``n`` to the completed amount."""
@@ -272,9 +282,40 @@ class Scope:
             self._state = "closed"
             self._emit(event, self._out.clock.monotonic())
 
+    def _start_delay(self) -> float:
+        """Return how long a one-off step may hold back its start line; 0 to write it now."""
+        if not self._ONE_OFF or not self._out.settings.progress_enabled():
+            return 0.0
+        target = self._out.target()
+        if target is None or target.bar:
+            return 0.0
+        return self._out.settings.resolve("min_interval")
+
+    def _write_pending_start(self) -> None:
+        """Write the start held back by a one-off step that is still running, and the starts it must follow."""
+        with contextlib.suppress(Exception), self._out.lock:
+            if self._pending:
+                self._pending = False
+                self._out.cancel(self)
+                self._emit(Event.START, self._out.clock.monotonic())
+
+    def _settle_pending(self, event: Event) -> Event:
+        """Return the event to write: a pending start is written first, or folded into a step."""
+        if self._parent_scope is not None:
+            # A reader meets a parent before its children, and the text indents under it.
+            self._parent_scope._write_pending_start()
+        if not self._pending or event is Event.START:
+            return event
+        if event is Event.END and self.completed == 1 and self.total == 1:
+            self._pending = False
+            self._out.cancel(self)
+            return Event.STEP
+        self._write_pending_start()
+        return event
+
     def _record(self, event: Event, now: float, phases: tuple[tuple[str, float], ...] = ()) -> Record:
         self._seq += 1
-        first = event is Event.START
+        first = event in (Event.START, Event.STEP)
         return Record(
             scope=self.id,
             event=event,
@@ -303,6 +344,7 @@ class Scope:
         target = target or self._out.target()
         if target is None:
             return
+        event = self._settle_pending(event)
         record = self._record(event, now, phases)
         self._last_out = now
         self._last_completed = self.completed
@@ -350,6 +392,8 @@ class Phase(Scope):
     logger : Logger, optional
         Output to use.
     """
+
+    _ONE_OFF = True
 
     def __init__(
         self,

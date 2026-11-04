@@ -29,8 +29,9 @@ import secrets
 import shutil
 import sys
 import threading
+import time
 import traceback
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -97,6 +98,10 @@ class Logger:
         self._next_suffix: dict[str, int] = {}
         self._bar_width = 0
         self._bar_stream: Any = None
+        # Deferred actions by key: (deadline in real monotonic seconds, action). One thread runs them.
+        self._deferred: dict[object, tuple[float, Callable[[], None]]] = {}
+        self._wake = threading.Condition(self.lock)
+        self._timer: threading.Thread | None = None
 
     def configure(
         self,
@@ -257,6 +262,61 @@ class Logger:
     def _put(target: Target, text: str) -> None:
         target.stream.write(encode_safely(text, target.encoding))
         target.stream.flush()
+
+    def defer(self, key: object, delay: float, action: Callable[[], None]) -> None:
+        """Run ``action`` after ``delay`` seconds, from a background thread, unless :meth:`cancel` comes first.
+
+        The delay is real time whatever clock the logger has, so a test's clock never sets it
+        off. One daemon thread, started on first use, serves every deferred action; it holds
+        :attr:`lock` while it runs one.
+
+        Parameters
+        ----------
+        key : object
+            Names the action, for :meth:`cancel`. Deferring under a key again replaces it.
+        delay : float
+            Seconds to wait.
+        action : callable
+            What to run. An exception it raises is dropped.
+        """
+        with self.lock:
+            self._deferred[key] = (time.monotonic() + delay, action)
+            if self._timer is None or not self._timer.is_alive():
+                self._timer = threading.Thread(target=self._run_timer, name="pace-timer", daemon=True)
+                self._timer.start()
+            self._wake.notify()
+
+    def cancel(self, key: object) -> None:
+        """Drop the action deferred under ``key``, if it has not run yet."""
+        with self.lock:
+            self._deferred.pop(key, None)
+
+    def run_due(self, now: float) -> float | None:
+        """Run the deferred actions whose time has come.
+
+        Parameters
+        ----------
+        now : float
+            The current time, in real monotonic seconds (``time.monotonic()``).
+
+        Returns
+        -------
+        float or None
+            Seconds until the next deferred action is due, or ``None`` when none is left.
+        """
+        with self.lock:
+            for key, (deadline, action) in list(self._deferred.items()):
+                if deadline <= now:
+                    del self._deferred[key]
+                    with contextlib.suppress(Exception):
+                        action()
+            deadlines = [deadline for deadline, _ in self._deferred.values()]
+            return max(min(deadlines) - now, 0.0) if deadlines else None
+
+    def _run_timer(self) -> None:
+        with self.lock:
+            while not sys.is_finalizing():
+                self._wake.wait(self.run_due(time.monotonic()))
 
     def claim_scope(self, base: str) -> str:
         """Return ``base`` or ``base`` with a numeric suffix, whichever no earlier scope in this process has used.
