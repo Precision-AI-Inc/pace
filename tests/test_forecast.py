@@ -1255,3 +1255,109 @@ def test_a_job_keeps_nothing_of_a_scope_run_before_its_restart() -> None:
     estimate = job.snapshot(5000.0)
     assert estimate.state is ForecastState.FAILED
     assert estimate.scopes["job"].completed is None
+
+
+def _restarted_job():
+    """Run A: a Live root ``train``; then run B, which has not written ``train`` again."""
+    job = JobForecast()
+    old = Run(job, "train", run_id=RUN_A, root=True)
+    old.start()
+    old.ticks(6, 15.0, 2.0)
+    assert job.snapshot(old.now).source == "root"
+    return job, old
+
+
+def test_a_restart_to_a_differently_named_root_takes_the_new_root() -> None:
+    job, old = _restarted_job()
+    new = Run(job, "finetune", total=500.0, offset=old.now + 30.0, run_id=RUN_B, root=True)
+    new.start()
+    learning = job.snapshot(new.now)
+    assert learning.state is ForecastState.LEARNING
+    assert set(learning.scopes) == {"finetune"}
+    new.ticks(6, 15.0, 2.0)
+    estimate = job.snapshot(new.now)
+    assert estimate.source == "root"
+    assert estimate.remaining_seconds == pytest.approx((500.0 - 180.0) / 2.0)
+
+
+def test_before_the_new_run_writes_its_root_the_job_follows_its_other_scopes() -> None:
+    job, old = _restarted_job()
+    new = Run(job, "download", total=100.0, offset=old.now + 30.0, run_id=RUN_B)
+    new.start()
+    new.ticks(6, 15.0, 1.0)
+    estimate = job.snapshot(new.now)
+    assert estimate.source == "concurrent"
+    assert estimate.partial
+    assert estimate.remaining_seconds == pytest.approx(10.0 / 1.0)
+    assert "train" not in estimate.scopes
+
+
+def test_an_ended_root_of_the_run_before_does_not_end_the_restarted_job() -> None:
+    for end in (Run.end, Run.fail):
+        job, old = _restarted_job()
+        end(old)
+        assert job.snapshot(old.now).state in (ForecastState.COMPLETE, ForecastState.FAILED)
+        job.observe(Record(scope="setup", event=Event.START, total=10.0, unit="step", run=RUN_B), old.now + 30.0)
+        assert job.snapshot(old.now + 30.0).state is ForecastState.UNKNOWN
+
+
+def test_a_late_copy_from_the_run_before_is_ignored_after_a_restart() -> None:
+    sink = Collect()
+    old = Run(sink, "train", run_id=RUN_A, root=True)
+    old.start()
+    old.ticks(6, 15.0, 2.0)
+    job = JobForecast()
+    for record, received in sink.records:
+        job.observe(record, received)
+    job.observe(Record(scope="setup", event=Event.START, total=10.0, unit="step", run=RUN_B), old.now + 30.0)
+    after_restart = job.snapshot(old.now + 30.0)
+    taken = [job.observe(record, old.now + 31.0) for record, _ in sink.records]
+    assert taken == [False] * len(sink.records)
+    assert job.snapshot(old.now + 30.0) == after_restart
+    assert "train" not in after_restart.scopes
+
+
+def test_a_plan_of_the_run_before_does_not_time_the_restarted_run() -> None:
+    job = JobForecast()
+    job.observe(Record(scope="plan", event=Event.PLAN, seq=1, phases=(("prep", 1.0), ("train", 9.0)), run=RUN_A), 0.0)
+    job.observe(Record(scope="prep", event=Event.STEP, elapsed=100.0, completed=1.0, total=1.0, run=RUN_A), 100.0)
+    assert job.snapshot(100.0).source == "plan"
+    restarted = Run(job, "prep", total=100.0, offset=200.0, run_id=RUN_B)
+    restarted.start()
+    restarted.ticks(6, 15.0, 1.0)
+    estimate = job.snapshot(restarted.now)
+    assert estimate.source == "concurrent"
+    assert estimate.remaining_seconds == pytest.approx(10.0)
+    plan = Record(scope="plan", event=Event.PLAN, seq=1, phases=(("prep", 1.0), ("eval", 1.0)), run=RUN_B)
+    assert job.observe(plan, restarted.now)
+    assert job.snapshot(restarted.now).source == "plan"
+
+
+def _two_runs_with_different_roots():
+    sink = Collect()
+    old = Run(sink, "train", run_id=RUN_A, root=True)
+    old.start()
+    old.ticks(6, 15.0, 2.0)
+    new = Run(sink, "finetune", total=500.0, offset=old.now + 30.0, run_id=RUN_B, root=True)
+    new.start()
+    new.ticks(6, 15.0, 2.0)
+    return sink.records, new.now
+
+
+@pytest.mark.parametrize("lag", [0, 3, 7, 100])
+def test_both_streams_across_a_restart_give_the_estimate_of_one(lag) -> None:
+    # pai-orch reads stdout and stderr of a job that mirrors its output; stderr lags by ``lag`` lines.
+    records, now = _two_runs_with_different_roots()
+    one, both = JobForecast(), JobForecast()
+    for record, received in records:
+        one.observe(record, received)
+    stderr = iter(records)
+    for index, (record, received) in enumerate(records):
+        both.observe(record, received)
+        if index >= lag:
+            both.observe(*next(stderr))
+    for record, _ in stderr:
+        assert both.observe(record, now) is False
+    assert both.snapshot(now) == one.snapshot(now)
+    assert set(one.snapshot(now).scopes) == {"finetune"}
+    assert one.snapshot(now).source == "root"

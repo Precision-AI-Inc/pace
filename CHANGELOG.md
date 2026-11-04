@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- After a job restarts, its estimate no longer comes from the root scope of the run before when the new run has not written that scope again (its root has another name, or it has not reached its root yet). `JobForecast` now follows the latest run: the scopes and plan of the run before drop out of the estimate and of `scopes`, and until the new run's root appears its own plan and top-level scopes give the estimate. A copy of the old run's lines read late from the other stream is still ignored. Two processes writing progress to one log at the same time now look like restarts to `JobForecast`, which follows the one whose lines it saw begin last; read each process's output on its own.
+
 ## [0.1.1] - 2026-11-04
 
 ### Changed

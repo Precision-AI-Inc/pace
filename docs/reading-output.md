@@ -171,6 +171,10 @@ ignore the copies:
 - A record from a run id not seen before begins a new segment: the process restarted.
   Rates are never averaged across a restart. A record from a run that a restart left
   behind is a late copy.
+- The job follows its latest run: once a new run id appears, the scopes and plan of the
+  run before are dropped from the job estimate and from `scopes`, even those the new run
+  never writes again (a root under another name, or not reached yet). Until the new
+  run's root appears, its own plan and top-level scopes give the estimate.
 - One limitation: the reader does not know the order of runs it has not seen. If it first
   sees a later run and only then lines of an earlier run it never saw (it attached to the
   second stream of a restarted job late), it takes the earlier run for a restart and
@@ -202,7 +206,8 @@ print(job.snapshot(4.0).scopes["train"].completed)       # 0.0
 If you write your own reader, in any language, keep for each scope its current run id,
 the few run ids a restart left behind, and the position of the latest record taken (0
 for a `start`, `q` for an update, last for an `end`, `fail` or `step`), and apply the same
-rules.
+rules. For a job estimate, also keep the job's current run id and the ones a restart left
+behind, and drop every scope and plan when a new run id appears.
 
 ## From records to an estimate: `JobForecast`
 
