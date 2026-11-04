@@ -1,4 +1,4 @@
-"scope=evaluation event=start seq=1 elapsed=0.0 completed=0.0 total=40.0 unit=request root=True label=Evaluation\n"
+"scope=evaluation event=start elapsed=0.0 completed=0.0 total=40.0 unit=request root=True label=Evaluation\n"
 "scope=evaluation event=upd seq=2 elapsed=0.0 completed=1.0 total=40.0 root=True\n"
 "scope=evaluation event=upd seq=3 elapsed=0.0 completed=2.0 total=40.0 root=True\n"
 "scope=evaluation event=upd seq=4 elapsed=0.0 completed=3.0 total=40.0 root=True\n"
@@ -39,5 +39,5 @@
 "scope=evaluation event=upd seq=39 elapsed=0.0 completed=38.0 total=40.0 root=True\n"
 "scope=evaluation event=upd seq=40 elapsed=0.0 completed=39.0 total=40.0 root=True\n"
 "scope=evaluation event=upd seq=41 elapsed=0.0 completed=40.0 total=40.0 root=True\n"
-"scope=evaluation event=end seq=42 elapsed=0.0 completed=40.0 total=40.0 root=True\n"
+"scope=evaluation event=end elapsed=0.0 completed=40.0 total=40.0 root=True\n"
 "SUCCESS  Mean score 0.500 over 40 requests\n"

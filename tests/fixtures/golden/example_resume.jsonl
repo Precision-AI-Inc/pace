@@ -1,5 +1,5 @@
 "INFO     Checkpoint found, resuming at step 70\n"
-"scope=train event=start seq=1 elapsed=0.0 completed=70.0 total=100.0 unit=step root=True resumed=True label=Train\n"
+"scope=train event=start elapsed=0.0 completed=70.0 total=100.0 unit=step root=True resumed=True label=Train\n"
 "scope=train event=upd seq=2 elapsed=0.0 completed=71.0 total=100.0 root=True\n"
 "scope=train event=upd seq=3 elapsed=0.0 completed=72.0 total=100.0 root=True\n"
 "scope=train event=upd seq=4 elapsed=0.0 completed=73.0 total=100.0 root=True\n"
@@ -30,5 +30,5 @@
 "scope=train event=upd seq=29 elapsed=0.0 completed=98.0 total=100.0 root=True\n"
 "scope=train event=upd seq=30 elapsed=0.0 completed=99.0 total=100.0 root=True\n"
 "scope=train event=upd seq=31 elapsed=0.0 completed=100.0 total=100.0 root=True\n"
-"scope=train event=end seq=32 elapsed=0.0 completed=100.0 total=100.0 root=True\n"
+"scope=train event=end elapsed=0.0 completed=100.0 total=100.0 root=True\n"
 "SUCCESS  Training finished\n"

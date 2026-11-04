@@ -69,15 +69,15 @@ Outside an `except` block it writes the message alone.
 
 ### Text that looks like a trailer
 
-If a message contains `[pace:`, Pace writes `[ pace:` instead, so text from a log
+If a message contains `[pace`, Pace writes `[ pace` instead, so text from a log
 message or a description cannot forge a progress record:
 
 ```python
-logger.info("[pace:1 s=x k=upd c=1 t=2 e=1 q=2]")
+logger.info("[pace x c=1 t=2 e=1 q=2 r=abc]")
 ```
 
 ```text
-2026-11-03T17:04:14Z INFO     [ pace:1 s=x k=upd c=1 t=2 e=1 q=2]
+2026-11-03T17:04:14Z INFO     [ pace x c=1 t=2 e=1 q=2 r=abc]
 ```
 
 ## Configuring
@@ -278,7 +278,7 @@ cause, and `logging.getLogger("name").handlers` and `.propagate` show it.
 ## Colour
 
 Colour is used only on the level label, only when the stream is a terminal, and never
-inside the `[pace:...]` trailer. `PACE_COLOR` (or `configure(color=...)`) decides:
+inside the `[pace ...]` trailer. `PACE_COLOR` (or `configure(color=...)`) decides:
 
 | `PACE_COLOR` | Result |
 |---|---|
@@ -318,14 +318,14 @@ A character the stream cannot encode is written as `?`; it never raises
 ```text
 $ PYTHONIOENCODING=ascii python demo.py
 2026-11-03T17:05:14Z INFO     caf? ? na?ve ???
-2026-11-03T17:05:14Z PROGRESS Donn?es  0.0%  0/3 ?chantillon | estimating...  [pace:1 s=donn-es k=start c=0 t=3 u=%C3%A9chantillon e=0 q=1 run=0fe38035 n=Donn%C3%A9es]
+2026-11-03T17:05:14Z PROGRESS Donn?es  0/3 ?chantillon  [pace donn-es start t=3 u=%C3%A9chantillon n=Donn%C3%A9es r=0fe38035]
 ```
 
 The trailer is always plain ASCII. Non-ASCII text in it (the label and the unit) is
 percent-encoded as UTF-8, so a reader gets the original text back whatever the
 stream's encoding is.
 
-Notice that the scope id (`s=donn-es`) is derived from the description by replacing
+Notice that the scope id (`donn-es`) is derived from the description by replacing
 every character outside `A-Z a-z 0-9 . _ -` with `-`. A description with few ASCII
 characters gives a poor id (a description of only non-ASCII characters becomes `scope`); pass `scope="..."` to
 `track`/`progress` when you need a stable, readable one.
@@ -357,8 +357,8 @@ $ RANK=1 python rank.py
 
 $ RANK=1 PACE_ALL_RANKS=1 python rank.py
 2026-11-03T17:05:32Z INFO     hello from a worker
-2026-11-03T17:05:32Z PROGRESS Train  0.0%  0/3 step · estimating…  [pace:1 s=train k=start c=0 t=3 u=step e=0 q=1 run=71cffa57 n=Train]
-2026-11-03T17:05:32Z PROGRESS Train  100.0%  3/3 step · done in 0s  [pace:1 s=train k=end c=3 t=3 e=0 q=2]
+2026-11-03T17:05:32Z PROGRESS Train  0/3 step  [pace train start t=3 u=step n=Train r=71cffa57]
+2026-11-03T17:05:32Z PROGRESS Train  3/3  done in 0s  [pace train end c=3 r=71cffa57]
 ```
 
 The rank is read when a progress scope is created, so set the variables before the

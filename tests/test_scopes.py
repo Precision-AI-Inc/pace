@@ -4,8 +4,10 @@
 """Tests for progress scopes: events, emission rate, nesting, ids, ranks and the terminal bar."""
 
 import io
+import os
 import re
 import threading
+import time
 
 import pytest
 
@@ -27,13 +29,26 @@ from precisionai.pace.scopes import (
 )
 from tests.conftest import FakeClock, FakeStream
 
-TRAILER = re.compile(r"\[pace:1 [^\]]+\]$")
+TRAILER = re.compile(r"\[pace [^\]]+\]$")
+KINDS = {"start", "end", "fail", "step", "plan"}
 
 
 def fields(line: str) -> dict[str, str]:
+    """Return a trailer as a dict: ``s``, ``p`` and ``k`` (``upd`` when there is no event word), each flag as ``1``, then the fields."""
     match = TRAILER.search(line)
     assert match, f"no trailer on {line!r}"
-    return dict(pair.split("=", 1) for pair in match.group(0)[len("[pace:1 ") : -1].split(" "))
+    head, *items = match.group(0)[len("[pace ") : -1].split(" ")
+    scope, _, parent = head.partition("<")
+    out = {"s": scope, "k": "upd"} | ({"p": parent} if parent else {})
+    for item in items:
+        key, sep, value = item.partition("=")
+        if sep:
+            out[key] = value
+        elif key in KINDS:
+            out["k"] = key
+        else:
+            out[key] = "1"
+    return out
 
 
 def records(stream: FakeStream) -> list[dict[str, str]]:
@@ -42,6 +57,15 @@ def records(stream: FakeStream) -> list[dict[str, str]]:
 
 def kinds(stream: FakeStream) -> list[str]:
     return [item["k"] for item in records(stream)]
+
+
+def records_in(stream: FakeStream) -> list[dict[str, str]]:
+    return [fields(line) for line in stream.lines() if TRAILER.search(line)]
+
+
+def kinds_of(stream: FakeStream) -> list[str]:
+    """Return each line's event, or its level for a log line."""
+    return [fields(line)["k"] if TRAILER.search(line) else line.split()[1] for line in stream.lines()]
 
 
 @pytest.fixture(autouse=True)
@@ -64,21 +88,9 @@ def test_progress_writes_start_update_end(log: Logger, clock: FakeClock, stream:
         run.advance(30)
     assert kinds(stream) == ["start", "upd", "end"]
     start, update, end = records(stream)
-    assert start == {
-        "s": "train",
-        "k": "start",
-        "c": "0",
-        "t": "100",
-        "u": "step",
-        "e": "0",
-        "q": "1",
-        "run": log.run_id,
-        "n": "Train",
-    }
-    assert "run" not in update
-    assert update == {"s": "train", "k": "upd", "c": "30", "t": "100", "e": "20", "q": "2"}
-    assert end["c"] == "30"
-    assert end["q"] == "3"
+    assert start == {"s": "train", "k": "start", "t": "100", "u": "step", "n": "Train", "r": log.run_id}
+    assert update == {"s": "train", "k": "upd", "c": "30", "t": "100", "e": "20", "q": "2", "r": log.run_id}
+    assert end == {"s": "train", "k": "end", "c": "30", "t": "100", "e": "20", "r": log.run_id}
 
 
 def test_every_progress_line_ends_with_a_trailer_format_trailer_produced(
@@ -110,9 +122,7 @@ def test_line_text_shows_percent_count_rate_and_estimate(log: Logger, clock: Fak
     update = stream.lines()[5]
     # Four intervals at 20 step/s, then 12: the weighted average gives 0.7 x 20 + 0.3 x 12 = 17.6,
     # and 3160 steps left / 17.6 = 3m00s.
-    assert update.startswith(
-        "2025-11-03T17:18:22Z PROGRESS Train  36.8%  1840/5000 step · 17.6 step/s · ~3m00s  [pace:1 "
-    )
+    assert update.startswith("2025-11-03T17:18:22Z PROGRESS Train  1840/5000  36.8%  17.6 step/s · ~3m00s  [pace ")
 
 
 def test_failure_writes_fail_and_reraises(log: Logger, stream: FakeStream) -> None:
@@ -180,7 +190,7 @@ def test_invalid_numbers_are_ignored_not_raised(log: Logger, stream: FakeStream)
     handle.end()
     start, end = records(stream)
     assert start["t"] == end["t"] == "?"
-    assert end["c"] == "0"
+    assert "c" not in end
 
 
 def test_set_total_changes_the_total_and_unknown_total_can_become_known(
@@ -203,10 +213,10 @@ def test_update_can_go_backwards(log: Logger, clock: FakeClock, stream: FakeStre
 
 
 def test_description_with_newlines_cannot_break_the_line(log: Logger, stream: FakeStream) -> None:
-    with progress(1, "Bad\nname [pace:1 s=x k=end]", logger=log):
+    with progress(1, "Bad\nname [pace x end c=1 r=ab]", logger=log):
         pass
     for line in stream.lines():
-        assert line.count("[pace:1") == 1
+        assert line.count("[pace ") == 1
     assert len(stream.lines()) == 2
 
 
@@ -358,7 +368,7 @@ def test_track_iterable_error_writes_fail(log: Logger, stream: FakeStream) -> No
         list(track(source(), "Failing", logger=log))
     assert kinds(stream) == ["start", "fail"]
     assert "1/3" not in stream.lines()[-1]
-    assert " 1 it" in stream.lines()[-1]
+    assert "Failing  1  failed after" in stream.lines()[-1]
 
 
 def test_track_scope_is_the_parent_of_scopes_in_the_loop(log: Logger, stream: FakeStream) -> None:
@@ -380,9 +390,149 @@ def test_timed_with_description(log: Logger, clock: FakeClock, stream: FakeStrea
 
     assert load("weights") == "weights"
     assert load.__name__ == "load"
+    # It ended before its first line was due (PACE_MIN_INTERVAL, 15 s), so it is one line.
+    (step,) = records(stream)
+    assert step == {"s": "load-model", "k": "step", "e": "7", "n": "Load%20model", "r": log.run_id}
+    assert stream.lines()[0].startswith("2025-11-03T17:16:49Z STEP     Load model  done in 7s  [pace ")
+
+
+def test_timed_without_a_minimum_interval_writes_start_and_end(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    log.configure(min_interval=0)
+
+    @timed("Load model", logger=log)
+    def load() -> None:
+        clock.advance(7)
+
+    load()
     start, end = records(stream)
-    assert (start["s"], start["t"], start["c"]) == ("load-model", "1", "0")
+    assert (start["s"], start["k"], start["t"]) == ("load-model", "start", "1")
     assert (end["k"], end["c"], end["e"]) == ("end", "1", "7")
+
+
+def test_steps_nest_under_a_running_loop(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    @timed("Save", logger=log)
+    def save() -> None:
+        clock.advance(2)
+
+    for _ in track(range(2), "Train", "step", logger=log):
+        clock.advance(60)
+        save()
+    lines = stream.lines()
+    assert [item["k"] for item in records(stream)] == ["start", "step", "upd", "step", "upd", "end"]
+    assert [item.get("p") for item in records(stream) if item["k"] == "step"] == ["train", "train"]
+    assert " STEP     ├ Save  done in 2s  [pace save<train step e=2 n=Save r=" in lines[1]
+
+
+def test_a_failing_step_writes_its_start_and_fail(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    @timed("Explode", logger=log)
+    def explode() -> None:
+        clock.advance(3)
+        raise KeyError("x")
+
+    with pytest.raises(KeyError, match="x"):
+        explode()
+    start, fail = records(stream)
+    assert start == {"s": "explode", "k": "start", "t": "1", "u": "call", "e": "3", "n": "Explode", "r": log.run_id}
+    assert fail == {"s": "explode", "k": "fail", "t": "1", "e": "3", "r": log.run_id}
+
+
+def test_a_child_line_writes_the_pending_start_of_its_phase_first(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    with phase("Load", logger=log):
+        clock.advance(2)
+        with progress(3, "Shards", "shard", logger=log) as shards:
+            shards.advance(3)
+    assert [(item["s"], item["k"], item.get("e")) for item in records(stream)] == [
+        ("load", "start", "2"),
+        ("shards", "start", None),
+        ("shards", "end", None),
+        ("load", "end", "2"),
+    ]
+
+
+def test_a_step_still_running_when_its_line_is_due_writes_its_start_at_the_next_write(
+    log: Logger, clock: FakeClock, stream: FakeStream
+) -> None:
+    download = Phase("Download", unit="call", logger=log)
+    download.start()
+    clock.advance(10)
+    log.info("not yet due")
+    assert kinds_of(stream) == ["INFO"]
+    clock.advance(6)
+    log.info("now due")
+    clock.advance(4)
+    download.completed = 1
+    download.end()
+    assert kinds_of(stream) == ["INFO", "start", "INFO", "end"]
+    assert [(item["k"], item.get("e")) for item in records_in(stream)] == [("start", "16"), ("end", "20")]
+
+
+def test_another_scope_progress_check_writes_a_due_start(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    download = Phase("Download", logger=log)
+    download.start()
+    loop = Scope("Other", 1000, logger=log)
+    loop.start()
+    clock.advance(16)
+    loop.advance()
+    assert [(item["s"], item["k"]) for item in records(stream)] == [("other", "start"), ("download", "start")]
+    download.end()
+
+
+def test_a_step_written_as_one_line_leaves_nothing_held(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    with phase("Quick", logger=log):
+        pass
+    clock.advance(100)
+    log.info("later")
+    assert kinds_of(stream) == ["step", "INFO"]
+
+
+def test_a_forked_child_does_not_write_its_parent_held_back_line(log: Logger, clock: FakeClock) -> None:
+    download = Phase("Download", logger=log)
+    download.start()
+    log._held[download] = (0.0, download._write_pending_start, -1)  # held by another process
+    log.write_held()
+    assert log._held == {}
+    assert not log.settings.resolve("stream").lines()
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="needs os.fork")
+def test_fork_inside_a_phase_does_not_hang() -> None:
+    log = Logger()
+    log.configure(stream=io.StringIO())
+    with phase("Spawn", logger=log):
+        pid = os.fork()
+        if pid == 0:  # pragma: no cover - the child
+            code = 1
+            try:
+                with phase("Child", logger=log):
+                    log.info("child")
+                code = 0
+            finally:
+                os._exit(code)
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            done, status = os.waitpid(pid, os.WNOHANG)
+            if done:
+                break
+            time.sleep(0.05)
+        else:
+            os.kill(pid, 9)
+            os.waitpid(pid, 0)
+            pytest.fail("the child hung")
+    assert os.waitstatus_to_exitcode(status) == 0
+
+
+def test_a_terminal_writes_a_phase_as_before(clock: FakeClock) -> None:
+    tty = FakeStream(tty=True)
+    out = Logger(clock=clock.clock())
+    out.configure(stream=tty, color="never")
+    with phase("Quick", logger=out):
+        clock.advance(1)
+    (line,) = tty.lines()[-1:]
+    assert fields(line)["k"] == "end"
 
 
 def test_timed_without_arguments_uses_the_function_name(stream: FakeStream) -> None:
@@ -394,7 +544,7 @@ def test_timed_without_arguments_uses_the_function_name(stream: FakeStream) -> N
 
     warm_up()
     assert records(stream)[0]["s"] == "warm_up"
-    assert kinds(stream) == ["start", "end"]
+    assert kinds(stream) == ["step"]
 
 
 def test_timed_fails_and_reraises(log: Logger, stream: FakeStream) -> None:
@@ -414,7 +564,7 @@ def test_timed_second_call_gets_a_new_scope_id(log: Logger, stream: FakeStream) 
 
     twice()
     twice()
-    assert [item["s"] for item in records(stream) if item["k"] == "start"] == ["twice", "twice-2"]
+    assert [item["s"] for item in records(stream) if item["k"] == "step"] == ["twice", "twice-2"]
 
 
 def test_phase_is_the_parent_of_nested_scopes_and_nesting_restores(log: Logger, stream: FakeStream) -> None:
@@ -434,7 +584,7 @@ def test_phase_failure_is_not_marked_complete(log: Logger, stream: FakeStream) -
     with pytest.raises(RuntimeError, match="stop"), phase("Doomed", logger=log):
         raise RuntimeError("stop")
     assert records(stream)[-1]["k"] == "fail"
-    assert "0.0%" in stream.lines()[-1]
+    assert "0/1  failed after" in stream.lines()[-1]
 
 
 def test_scope_opened_in_a_new_thread_has_no_parent(log: Logger, stream: FakeStream) -> None:
@@ -481,7 +631,7 @@ def test_plan_with_repeated_names_matches_the_phase_scopes(log: Logger, stream: 
     with phase("Train", logger=log):
         pass
     planned = [pair.split(":")[0] for pair in fields(stream.lines()[0])["ph"].split(",")]
-    started = [item["s"] for item in records(stream) if item["k"] == "start"]
+    started = [item["s"] for item in records(stream) if item["k"] in ("start", "step")]
     assert planned == started == ["train", "train-2"]
 
 
@@ -578,11 +728,11 @@ def test_advance_from_many_threads_keeps_seq_strictly_increasing(log: Logger, st
     for thread in threads:
         thread.join()
     handle.end()
-    seqs = [int(item["q"]) for item in records(stream)]
-    assert seqs == sorted(set(seqs))
-    assert seqs[0] == 1
-    assert seqs[-1] == len(seqs)
-    assert records(stream)[-1]["c"] == "400"
+    lines = records(stream)
+    seqs = [int(item["q"]) for item in lines[1:-1]]
+    assert (lines[0]["k"], lines[-1]["k"]) == ("start", "end")
+    assert seqs == list(range(2, len(lines)))
+    assert lines[-1]["c"] == "400"
 
 
 # ---- ranks -----------------------------------------------------------------------------------
@@ -645,25 +795,45 @@ def test_non_utf8_stream_gets_ascii_text_and_an_intact_trailer(log: Logger, cloc
     assert len(lines) == 3
     assert "·" not in text
     assert "…" not in text
-    assert "| estimating..." in lines[0]
-    assert "| estimating..." in lines[1]
+    assert "  50/100  50.0%  estimating..." in lines[1]
     assert "Entraînement ?" in lines[0]
     for line in lines:
         assert TRAILER.search(line)
 
 
-def test_utf8_stream_gets_unicode_glyphs(log: Logger, stream: FakeStream) -> None:
-    with progress(10, "Glyphs", logger=log):
-        pass
-    assert "· estimating…" in stream.lines()[0]
+def test_utf8_stream_gets_unicode_glyphs(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    with progress(10, "Glyphs", logger=log), progress(10, "Inner", logger=log) as inner:
+        clock.advance(30)
+        inner.advance()
+    assert "PROGRESS ├ Inner   1/10  10.0%  estimating…" in stream.lines()[2]
 
 
-def test_stream_without_encoding_gets_ascii(log: Logger) -> None:
+def test_stream_without_encoding_gets_ascii(log: Logger, clock: FakeClock) -> None:
     sink = io.StringIO()
     log.configure(stream=sink)
-    with progress(10, "Plain", logger=log):
-        pass
-    assert "| estimating..." in sink.getvalue()
+    with progress(10, "Plain", logger=log), progress(10, "Inner", logger=log) as inner:
+        clock.advance(30)
+        inner.advance()
+    assert "PROGRESS - Inner   1/10  10.0%  estimating..." in sink.getvalue()
+
+
+def test_lines_show_what_each_event_needs(log: Logger, clock: FakeClock, stream: FakeStream) -> None:
+    with progress(128, "Generate", "request", logger=log) as run:
+        with progress(4, "Batch", "prompt", logger=log) as batch:
+            batch.advance(4)
+        clock.advance(20)
+        run.advance(66)
+        clock.advance(20)
+        run.advance(62)
+    texts = [line[len("2025-11-03T17:16:42Z ") : line.index("  [pace ")] for line in stream.lines()]
+    assert texts == [
+        "PROGRESS Generate    0/128 request",
+        "PROGRESS ├ Batch  0/4 prompt",
+        "PROGRESS ├ Batch  4/4  done in 0s",
+        "PROGRESS Generate   66/128  51.6%  estimating…",
+        "PROGRESS Generate  128/128  100.0%  estimating…",
+        "PROGRESS Generate  128/128  done in 40s · 3.2 request/s",
+    ]
 
 
 def test_terminal_redraws_one_bar_line_without_a_trailer(clock: FakeClock) -> None:
@@ -794,9 +964,11 @@ def test_every_forecast_state_has_a_display(
 ) -> None:
     StubForecast.result = forecast
     monkeypatch.setattr(scopes, "ScopeForecast", StubForecast)
+    log.configure(min_interval=0)
     handle = progress(10, "States", "step", logger=log)
     handle.start()
-    assert shown in stream.lines()[0]
+    handle.advance()
+    assert shown in stream.lines()[-1]
 
 
 def test_a_number_passed_as_the_unit_is_an_error(log: Logger) -> None:

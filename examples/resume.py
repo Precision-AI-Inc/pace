@@ -10,16 +10,16 @@ scope starts at the checkpoint's count instead, and the total stays the full tot
 remaining work).
 
 Shows: ``progress(total=..., completed=start_step, resumed=start_step > 0, root=True)``.
-``completed=`` sets the count the scope starts from, and ``resumed=True`` writes ``res=1``
-on the ``start`` record to say the first count is not zero because of earlier work.
+``completed=`` sets the count the scope starts from, and ``resumed=True`` writes the
+``res`` flag on the ``start`` record to say the first count is not zero because of earlier work.
 ``track`` takes the same two arguments; iterate only the items the checkpoint does not
 cover.
 
 Run: ``python examples/resume.py``. Add ``PACE_MIN_INTERVAL=0`` to see every progress line.
 
 Expect: first a ``Checkpoint`` log line saying the run resumes at step 70, then a ``Train``
-scope whose ``start`` line reads ``70/100 step`` and carries ``res=1``, and finishes at
-``100/100 step``.
+scope whose ``start`` line reads ``70/100 step`` and carries ``res``, and finishes at
+``100/100``.
 """
 
 import json

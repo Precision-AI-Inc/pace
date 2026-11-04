@@ -50,7 +50,7 @@ SUBMODULE_NAMES = {
     "capture": "PaceHandler capture_logging",
     "protocol": (
         "Event LineSplitter MARKER MAX_FIELDS MAX_LABEL_CHARS MAX_LINE_BYTES MAX_NUMBER MAX_PHASES MAX_PHASES_CHARS "
-        "MAX_SEQ MAX_UNIT_CHARS MAX_VALUE_CHARS RUN_PATTERN Record SCOPE_PATTERN VERSION decode_value encode_value "
+        "MAX_SEQ MAX_UNIT_CHARS MAX_VALUE_CHARS RUN_PATTERN Record SCOPE_PATTERN decode_value encode_value "
         "format_number format_trailer parse_line"
     ),
     "forecast": "DEFAULT_CONFIG Forecast ForecastConfig ForecastState JobEstimate JobForecast ScopeForecast",

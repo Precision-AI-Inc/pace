@@ -10,11 +10,12 @@ The package ships the reading side, so a Python consumer and the terminal's own
 bytes ──> LineSplitter ──> parse_line ──> Record ──> JobForecast ──> JobEstimate
 ```
 
-Only the `[pace:1 ...]` trailer at the end of a `PROGRESS` line is a contract. The
-text before it is for people and changes between releases. Never parse it, and never infer
-progress from other output such as a `tqdm` bar. The grammar, the fields and the
-forecasting rules are specified in the [specification](design.md#line-format-version-1); this page
-shows how to use them.
+Only the `[pace ...]` trailer at the end of a `PROGRESS` or `STEP` line is a contract.
+The text before it is for people and changes between releases. Never parse it, and never
+infer progress from other output such as a `tqdm` bar. The grammar, the fields and the
+forecasting rules are specified in the [specification](design.md#line-format); this page
+shows how to use them. The `[pace:1 ...]` lines that Pace 0.0.x wrote are not read: they
+are ordinary text to this reader.
 
 ## A complete reader
 
@@ -51,7 +52,7 @@ while True:
         job.observe(record, received_at=now)
         estimate = job.snapshot(now)
         left = "-" if estimate.remaining_seconds is None else f"{estimate.remaining_seconds:.0f}s"
-        print(f"q={record.seq:<2} {record.event.value:<5} {estimate.state.value:<8} remaining={left:<4} source={estimate.source}")
+        print(f"{record.event.value:<5} c={record.completed:<5g} {estimate.state.value:<8} remaining={left:<4} source={estimate.source}")
 
 for line in splitter.flush():
     pass  # a last line with no newline, if any
@@ -59,16 +60,16 @@ print("process exited with", proc.wait())
 ```
 
 ```text
-q=1  start learning remaining=-    source=None
-q=2  upd   learning remaining=-    source=None
+start c=0     learning remaining=-    source=None
+upd   c=25    learning remaining=-    source=None
 ...
-q=12 upd   learning remaining=-    source=None
-q=13 upd   live     remaining=21s  source=root
-q=14 upd   live     remaining=16s  source=root
-q=15 upd   live     remaining=11s  source=root
-q=16 upd   live     remaining=6s   source=root
-q=17 upd   live     remaining=1s   source=root
-q=18 end   complete remaining=0s   source=None
+upd   c=275   learning remaining=-    source=None
+upd   c=300   live     remaining=20s  source=root
+upd   c=325   live     remaining=15s  source=root
+upd   c=350   live     remaining=10s  source=root
+upd   c=375   live     remaining=5s   source=root
+upd   c=400   live     remaining=0s   source=root
+end   c=400   complete remaining=0s   source=None
 process exited with 0
 ```
 
@@ -111,82 +112,94 @@ splitter.feed(b"ne\n")          # ['ne']
 ```python
 from precisionai.pace import parse_line
 
-record = parse_line("2026-11-03T17:36:42Z PROGRESS Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s  "
-                    "[pace:1 s=train root=1 k=upd c=1840 t=5000 e=763.1 q=57]")
+record = parse_line("2026-11-04T02:25:16Z PROGRESS Generate   66/128  51.6%  estimating…  "
+                    "[pace generate c=66 t=128 e=186.7 q=2 r=1b8b7650 root]")
 ```
 
 ```text
-Record(scope='train', event=<Event.UPDATE: 'upd'>, seq=57, elapsed=763.1, completed=1840.0,
-       total=5000.0, unit='step', parent=None, root=True, resumed=False, phases=(), label=None, run=None)
+Record(scope='generate', event=<Event.UPDATE: 'upd'>, seq=2, elapsed=186.7, completed=66.0,
+       total=128.0, unit=None, parent=None, root=True, resumed=False, phases=(), label=None, run='1b8b7650')
 ```
 
 `parse_line` never raises. A line with no trailer, or a trailer that breaks any rule (a
-malformed value, a missing required field, an unknown major version, a line over 4096
+malformed value, a missing required field, a line over 4096
 bytes, a value out of range) returns `None`. Treat every line as untrusted input: a job's
 logs can contain anything.
 
 The `Record` fields:
 
-| Field | Trailer key | Meaning |
+| Field | In the trailer | Meaning |
 |---|---|---|
-| `scope` | `s` | Scope id, unique within one process run. |
-| `event` | `k` | `Event.START`, `UPDATE`, `END`, `FAIL` or `PLAN`. |
-| `seq` | `q` | Sequence number within the scope, from 1. |
-| `elapsed` | `e` | Seconds since the scope started, on the job's monotonic clock. |
-| `completed` | `c` | Amount done, or `None` (a `fail` may omit it, and a `plan` has none). |
-| `total` | `t` | Total, or `None` when written as `?`. |
+| `scope` | the head, `scope<parent` | Scope id, unique within one process run. |
+| `event` | the event word | `Event.START`, `UPDATE` (no word), `END`, `FAIL`, `STEP` or `PLAN`. A `STEP` is a start and an end at once. |
+| `seq` | `q` | Sequence number within the scope, on an update or plan; `None` on the others. |
+| `elapsed` | `e` | Seconds since the scope started, on the job's monotonic clock; 0 when left out. |
+| `completed` | `c` | Amount done (0 when left out, 1 on a `step`), or `None` (a `fail` may not know it, and a `plan` has none). |
+| `total` | `t` | Total, or `None` when written as `?`. An `end` without `t` has its count as total; a `step` has 1. |
 | `unit` | `u` | Unit, on `start` only. |
-| `parent` | `p` | Parent scope id for a nested scope. |
+| `parent` | after `<` in the head | Parent scope id for a nested scope. |
 | `root` | `root` | `True` when the scope stands for the whole job. |
 | `resumed` | `res` | `True` on a `start` that resumes earlier work. |
 | `phases` | `ph` | On `plan`, a tuple of `(scope id, weight)`. |
-| `label` | `n` | Short human label, on `start` only. |
-| `run` | `run` | Id of the process run, on `start` only. |
+| `label` | `n` | Short human label, on `start` and `step`. |
+| `run` | `r` | Id of the process run, on every record. |
 
 Compute rates from `elapsed`, never from the timestamp at the front of the line.
 `elapsed` is on a monotonic clock, so it is unaffected by clock changes. The timestamp
 is UTC and meant for display.
 
-Keys a reader does not know are ignored, so a later minor version stays readable.
-Removing or redefining a key would be `pace:2`, which `parse_line` rejects.
+Keys and words a reader does not know are ignored, so a later minor version stays
+readable. The trailer has no version number, so the format only ever grows.
 
 ## Two streams, duplicate lines
 
 Pace writes to stdout by default, or to stderr with `PACE_STREAM=stderr`. A reader that
-captures both (or a user who mirrors the output to both) sees every line twice. Records
-carry what a reader needs to ignore the copies:
+captures both (or a user who mirrors the output to both) sees every line twice. Each
+stream must be read in the order it was written, but one may be read well behind the
+other, even to its end first. Every record carries what a reader needs to
+ignore the copies:
 
-- **`q`** is a sequence number within each scope. A record whose `q` is not above the
-  highest already seen for that scope is a duplicate.
-- **`run`** appears on every `start` and is the same for every scope in one process run.
-  A `start` with a run id already seen for the scope is the same line read twice. A
-  different run id means the scope restarted: begin a new segment and do not average
-  rates across the restart. Without run ids, a `start` after the scope had reported
-  beyond `q=1` is taken as a restart.
-- A `plan` replaces an earlier one only if its `q` is higher, so a plan read late from the
-  other stream never overrides a newer one.
+- **`r`**, the run id, is on every record and the same for every scope in one process run.
+- Within one run, a scope's records come in a fixed order: the `start`, then the updates
+  by **`q`**, then the `end`, `fail` or `step`. A record that does not come after the
+  latest one taken for its scope and run is a copy, or was read late, and is ignored. So
+  a `start` read after its scope's updates, from the other stream, is a late copy and not
+  a restart, even for a reader that joined mid-run and never saw the first copy.
+- A record from a run id not seen before begins a new segment: the process restarted.
+  Rates are never averaged across a restart. A record from a run that a restart left
+  behind is a late copy.
+- One limitation: the reader does not know the order of runs it has not seen. If it first
+  sees a later run and only then lines of an earlier run it never saw (it attached to the
+  second stream of a restarted job late), it takes the earlier run for a restart and
+  follows that one. Start reading both streams from their beginning.
+- A `plan` replaces an earlier one only if its `q` is higher or it comes from a newer run,
+  so a plan read late from the other stream never overrides a newer one.
 
-`JobForecast` does all three. Feed it both streams without de-duplicating yourself, interleaved in the order they were written (stderr merged into stdout, as with `stderr=subprocess.STDOUT`). A `start` read only after its own scope's updates, from the other stream, is taken as a restart: nothing on an update says which run wrote it.
+`JobForecast` does all of this: feed it both streams as they arrive, without
+de-duplicating yourself. `observe` returns `False` for a record it ignored.
 
 ```python
 log = [
-    "[pace:1 s=train root=1 k=start c=0 t=100 u=step e=0 q=1 run=a1b2c3d4]",
-    "[pace:1 s=train root=1 k=upd c=10 t=100 e=10 q=2]",
-    "[pace:1 s=train root=1 k=upd c=20 t=100 e=20 q=3]",
+    "[pace train start t=100 u=step r=a1b2c3d4 root]",
+    "[pace train c=10 t=100 e=10 q=2 r=a1b2c3d4 root]",
+    "[pace train c=20 t=100 e=20 q=3 r=a1b2c3d4 root]",
 ]
 job = JobForecast()
 for second, line in enumerate(log):
-    for _ in range(2):  # once from stdout, once from stderr
-        job.observe(parse_line(line), received_at=float(second))
-print(job.snapshot(now=2.0).scopes["train"].completed)   # 20.0, not doubled
+    job.observe(parse_line(line), received_at=float(second))   # stdout
+for line in log:
+    job.observe(parse_line(line), received_at=3.0)             # stderr, read later
+print(job.snapshot(now=3.0).scopes["train"].completed)   # 20.0: the late start is a copy
 
-# The same job restarted: a new run id on start begins a new segment.
-job.observe(parse_line("[pace:1 s=train root=1 k=start c=0 t=100 u=step e=0 q=1 run=ffff0000]"), 3.0)
-print(job.snapshot(3.0).scopes["train"].completed)       # 0.0
+# The same job restarted: a new run id begins a new segment.
+job.observe(parse_line("[pace train start t=100 u=step r=ffff0000 root]"), 4.0)
+print(job.snapshot(4.0).scopes["train"].completed)       # 0.0
 ```
 
-If you write your own reader, in any language, keep for each scope the highest `q` and the
-`run` of its latest `start`, and apply the same rules.
+If you write your own reader, in any language, keep for each scope its current run id,
+the few run ids a restart left behind, and the position of the latest record taken (0
+for a `start`, `q` for an update, last for an `end`, `fail` or `step`), and apply the same
+rules.
 
 ## From records to an estimate: `JobForecast`
 
@@ -272,8 +285,9 @@ record. Without new lines nothing else will change the state:
 
 ```python
 job = JobForecast(config=ForecastConfig(heartbeat_seconds=120))
-for i in range(5):
-    job.observe(parse_line(f"[pace:1 s=t root=1 k={'start' if i == 0 else 'upd'} c={i * 20} t=100 e={i * 20} q={i + 1}]"), i * 20.0)
+job.observe(parse_line("[pace t start t=100 r=a1 root]"), 0.0)
+for i in range(1, 5):
+    job.observe(parse_line(f"[pace t c={i * 20} t=100 e={i * 20} q={i + 1} r=a1 root]"), i * 20.0)
 for now in (80.0, 200.0, 500.0):
     estimate = job.snapshot(now)
     print(now, estimate.state.value, estimate.remaining_seconds, estimate.source)
@@ -311,9 +325,10 @@ Two consequences:
 ## Conformance fixtures for other languages
 
 `tests/fixtures/protocol/cases.jsonl` in the repository is the shared specification of
-the line format as test data. It holds 140 cases, one JSON object per line: 38 lines
-that parse and 102 that must be rejected (oversize, bad escapes, wrong version, wrong
-number syntax, trailer not at the end, ANSI colour, CRLF and so on). The Python parser
+the line format as test data. It holds 171 cases, one JSON object per line: 52 lines
+that parse and 119 that must be rejected (oversize, bad escapes, an old `[pace:1 ...]` marker, wrong
+number syntax, a key on the wrong event, trailer not at the end, ANSI colour, CRLF and so
+on). The Python parser
 passes every case in `tests/test_protocol_reading.py`.
 
 Each case has three keys:
@@ -324,10 +339,11 @@ Each case has three keys:
 | `line` | The text of one log line, without its line ending. |
 | `record` | `null` when a reader must ignore the line; otherwise the expected record. |
 
-A record uses the keys `scope`, `event`, `seq`, `elapsed`, `completed`, `total`, `unit`,
-`parent`, `root`, `resumed`, `phases` (a list of `[scope id, weight]` pairs), `label` and
-`run`. A key that is absent has its default: `completed`, `total`, `unit`, `parent`,
-`label` and `run` are none, `root` and `resumed` are false, `phases` is empty. Compare
+A record uses the keys `scope`, `event` (`upd` for an update), `seq`, `elapsed`,
+`completed`, `total`, `unit`, `parent`, `root`, `resumed`, `phases` (a list of
+`[scope id, weight]` pairs), `label` and `run`. A key that is absent has its default:
+`seq`, `completed`, `total`, `unit`, `parent`, `label` and `run` are none, `elapsed` is 0,
+`root` and `resumed` are false, `phases` is empty. Compare
 numbers as numbers (`1` equals `1.0`).
 
 To check a parser in another language, load the file and, for each case, run your parser on

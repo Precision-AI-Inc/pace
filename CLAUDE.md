@@ -16,7 +16,7 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. Read
 ## The rules that matter most
 
 1. **The core has no runtime dependencies.** `precisionai.pace` imports only the standard library. It is installed into users' training images and into other packages, and must never add to them. A framework adapter imports its framework only inside its own module, behind an extra (`[lightning]`, `[transformers]`).
-2. **The line format is a public contract.** Anything a consumer parses (the `[pace:N ...]` trailer) changes only as documented in `docs/design.md`: new optional keys within a major version, anything else is a new major version. A format change updates `docs/design.md` and the fixtures in `tests/fixtures/protocol/` in the same PR. The readable text before the trailer is for people and may change freely; never make a consumer depend on it.
+2. **The line format is a public contract.** Anything a consumer parses (the `[pace ...]` trailer) changes only as documented in `docs/design.md`: it has no version number, so a change may only add optional keys or words, which readers ignore until they know them. A format change updates `docs/design.md` and the fixtures in `tests/fixtures/protocol/` in the same PR. The readable text before the trailer is for people and may change freely; never make a consumer depend on it.
 3. **Python 3.11 is the floor.** Do not use syntax or library calls newer than that. `X | None`, built-in generics, `match`, `Self`, `itertools.pairwise` and `dataclass(slots=True)` are fine.
 4. **Never log secrets on the package's own initiative.** Pace never writes environment variables, configuration or credentials by itself, and labels stay short and are not repeated on every update.
 5. **Parsing is defensive.** Log lines are untrusted input. The parser bounds every size and value, never evaluates anything, and ignores (never raises on) a malformed or unsupported line.
@@ -29,7 +29,7 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. Read
 precisionai/pace/
   core.py, _env.py, _render.py, capture.py   # the logger; _env.py holds Settings, one table of PACE_ variable, check and default per setting
   scopes.py        # track, progress, timed, phase, plan
-  protocol.py      # Record, the [pace:1 ...] trailer, parse_line, LineSplitter
+  protocol.py      # Record, the [pace ...] trailer, parse_line, LineSplitter
   forecast.py      # ScopeForecast, JobForecast
   lightning.py, transformers.py, _adapters.py   # framework callbacks (extras only)
   tqdm.py          # PaceTqdm: stands in for the tqdm class where a library takes one (stdlib only)
@@ -280,8 +280,8 @@ MANIFEST.in                 # sdist packaging — include docs/license/changelog
 | Pattern | Instead |
 |---|---|
 | A new entry in `dependencies` | Put it behind an extra, imported only by the adapter module |
-| Parsing the readable part of a progress line | Parse only the `[pace:N ...]` trailer |
-| Changing or removing a trailer key in place | New optional key, or a new major version (see `docs/design.md`) |
+| Parsing the readable part of a progress line | Parse only the `[pace ...]` trailer |
+| Changing or removing a trailer key in place | A new optional key or word; the trailer has no version number, so nothing is ever removed or redefined (see `docs/design.md`) |
 | Syntax or library calls newer than 3.11 (`type` statements, `def f[T]()`) | `TypeVar` and 3.11 equivalents |
 | `time.time()` for rates or intervals | `time.monotonic()` |
 | `int(len(x))` | `len(x)` |

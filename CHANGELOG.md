@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Progress lines are shorter, in a new line format: the trailer is `[pace ...]`, with no version number. It starts with the scope id (and `<parent` for a nested scope), names the event as a plain word (`start`, `end`, `fail`, `step`, `plan`; an update has none), and leaves out what a reader can work out: zeros, an end's total when it equals the count, the label after the start, and the sequence number except on updates and plans. The process run id (`r=`) is now on every line. The readable part drops the `0.0%` and `estimating…` from start lines, lines up the counts of a scope, and indents a nested scope under its parent. A real Ollama job's progress goes from five lines of 132 to 169 characters to four of 123 to 133. This release does not read the `[pace:1 ...]` lines of Pace 0.0.x, and 0.0.x does not read these, so a job and the program reading its output move to 0.1.0 together. With no version number, the format will from now on only gain keys and words, which older readers ignore.
+- A `@timed` call or a `phase()` that is over before its first line is due (`PACE_MIN_INTERVAL`, 15 seconds by default) now writes one `STEP` line instead of a start line and an end line. One that takes longer has its start line written with the next line Pace writes after the interval, so it shows while it runs if anything else reports meanwhile; a long step with nothing else going on (a lone download) shows only when it ends. Pace starts no threads. A failing one still writes its start and a `fail` line. A terminal, and `PACE_MIN_INTERVAL=0`, write start and end lines as before.
+- For code that uses the reading or writing API directly: `parse_line` reads only the new format, `Record.seq` is `None` on a start, end, fail or step (only updates and plans carry one), `Record` has defaults for `seq` and `elapsed`, `Event.STEP` is new, and `ScopeForecast.observe` and `JobForecast.observe` return whether they took the record. `format_trailer` writes the new format, and needs a run id on every record and a `seq` of at least 2 on an update (1 on a plan).
+
+### Fixed
+
+- A reader that captures both stdout and stderr, and reads a scope's start line from one only after its updates from the other, no longer takes the late start for a restart and resets the estimate. Every line now carries the run id, so a late copy is told apart from a real restart, including when the reader joined the job partway through.
+
 ## [0.0.2] - 2026-11-03
 
 ### Added

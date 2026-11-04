@@ -30,7 +30,7 @@ import shutil
 import sys
 import threading
 import traceback
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -97,6 +97,8 @@ class Logger:
         self._next_suffix: dict[str, int] = {}
         self._bar_width = 0
         self._bar_stream: Any = None
+        # Lines held back by one-off steps, by key: (deadline, how to write it, owning process id).
+        self._held: dict[object, tuple[float, Callable[[], None], int]] = {}
 
     def configure(
         self,
@@ -209,6 +211,7 @@ class Logger:
                 target = self.target()
                 if target is None:
                     return
+                self.write_held()
                 line = log_line(format_timestamp(self.clock.wall()), label, str(message), target.color)
                 self.write_line(line, target)
 
@@ -257,6 +260,42 @@ class Logger:
     def _put(target: Target, text: str) -> None:
         target.stream.write(encode_safely(text, target.encoding))
         target.stream.flush()
+
+    def hold(self, key: object, deadline: float, action: Callable[[], None]) -> None:
+        """Hold back a line: run ``action`` at the first write once ``deadline`` has passed, unless released.
+
+        Pace starts no threads, so a held-back line waits for the next line this logger writes
+        (or the next progress check of any scope). A forked child never writes its parent's.
+
+        Parameters
+        ----------
+        key : object
+            Names the held line, for :meth:`release`.
+        deadline : float
+            When it is due, on :attr:`clock`'s monotonic clock.
+        action : callable
+            Writes the line.
+        """
+        with self.lock:
+            self._held[key] = (deadline, action, os.getpid())
+
+    def release(self, key: object) -> None:
+        """Drop the line held under ``key``, if it has not been written."""
+        with self.lock:
+            self._held.pop(key, None)
+
+    def write_held(self) -> None:
+        """Write the held-back lines that are due; called before each line this logger writes."""
+        if not self._held:
+            return
+        with self.lock:
+            now, pid = self.clock.monotonic(), os.getpid()
+            for key, (deadline, action, owner) in list(self._held.items()):
+                if owner != pid:
+                    self._held.pop(key, None)
+                elif deadline <= now and self._held.pop(key, None) is not None:
+                    with contextlib.suppress(Exception):
+                        action()
 
     def claim_scope(self, base: str) -> str:
         """Return ``base`` or ``base`` with a numeric suffix, whichever no earlier scope in this process has used.

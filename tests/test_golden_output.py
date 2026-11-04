@@ -47,7 +47,8 @@ def levels(log: Logger, clock: FakeClock) -> None:
     log.info("plain")
     log.success("done")
     log.warning("two\nlines")
-    log.error("a [pace:1 s=x k=end c=1 t=1 e=1 q=1] forged marker")
+    log.error("a [pace:1 s=x k=end c=1 t=1 e=1 q=1] old marker")
+    log.error("a forged [pace x end c=1 r=abc]")
     log.critical("[pa\x1b[31mce:1 s=x k=end c=1 t=1 e=1 q=1] hidden by escapes")
     log.log(35, "numeric level")
     log.log("nonsense", "unknown level")
@@ -114,6 +115,35 @@ def phases_and_plan(log: Logger, clock: FakeClock) -> None:
     cleanup()
 
 
+def one_off_steps(log: Logger, clock: FakeClock) -> None:
+    """The default PACE_MIN_INTERVAL: a step that ends before its first line is due is one line."""
+    plan([("Load", 0.1), ("Generate", 0.9)], logger=log)
+
+    @timed("Start server", logger=log)
+    def start_server() -> None:
+        clock.advance(12.0)
+
+    @timed("Save batch", logger=log)
+    def save() -> None:
+        clock.advance(2.0)
+
+    @timed("Upload", logger=log)
+    def upload() -> None:
+        clock.advance(3.0)
+        raise OSError("disk full")
+
+    with phase("Load", logger=log):
+        start_server()
+        with progress(4, "Shards", "shard", logger=log) as shards:
+            clock.advance(5.0)
+            shards.advance(4)
+    with phase("Generate", logger=log):
+        for _ in track(steps(clock, 3, 40.0), "Requests", "request", total=3, logger=log):
+            save()
+    with contextlib.suppress(OSError):
+        upload()
+
+
 def long_labels(log: Logger, clock: FakeClock) -> None:
     log.configure(min_interval=0)
     description = "A very long description with percent 100% and [brackets] " * 6
@@ -122,7 +152,7 @@ def long_labels(log: Logger, clock: FakeClock) -> None:
         clock.advance(1.0)
     with progress(2, "日本語 label ✓", "步", logger=log) as scope:
         scope.advance()
-    with progress(1, "\x1b[31mred\x1b[0m [pace:1 s=x k=end c=1 t=1 e=1 q=1]", logger=log):
+    with progress(1, "\x1b[31mred\x1b[0m [pace x end c=1 r=abc]", logger=log):
         pass
     with progress(4, "x" * 5000, logger=log):
         pass
@@ -177,6 +207,7 @@ SCENARIOS: dict[str, Scenario] = {
     "throttled_loop": throttled_loop,
     "manual_progress": manual_progress,
     "phases_and_plan": phases_and_plan,
+    "one_off_steps": one_off_steps,
     "long_labels": long_labels,
     "adapter_scopes": adapter_scopes,
     "tqdm_and_capture": tqdm_and_capture,
@@ -271,7 +302,9 @@ def describe(job: JobForecast, now: float) -> str:
     return f"{now:.0f} {estimate.state.value} {remaining} {estimate.source} {estimate.partial} | {scopes}"
 
 
-@pytest.mark.parametrize("name", ["throttled_loop", "phases_and_plan", "adapter_scopes", "manual_progress"])
+@pytest.mark.parametrize(
+    "name", ["throttled_loop", "phases_and_plan", "one_off_steps", "adapter_scopes", "manual_progress"]
+)
 def test_estimates_replayed_from_the_output_are_unchanged(name: str) -> None:
     log, clock, stream = make_logger(color="never", bar="never")
     SCENARIOS[name](log, clock)

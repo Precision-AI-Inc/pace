@@ -4,7 +4,7 @@
 """Turn log messages and progress records into the readable part of an output line.
 
 Nothing here writes; it only builds strings. The text is for people and may change
-between releases. Only the ``[pace:1 ...]`` trailer that follows it is a contract.
+between releases. Only the ``[pace ...]`` trailer that follows it is a contract.
 """
 
 import codecs
@@ -17,6 +17,7 @@ from precisionai.pace.forecast import Forecast, ForecastState
 from precisionai.pace.protocol import ANSI_PATTERN, Event, Record
 
 PROGRESS_LABEL = "PROGRESS"
+STEP_LABEL = "STEP"
 LABEL_WIDTH = 8
 BAR_WIDTH = 20
 MAX_DESCRIPTION_CHARS = 80
@@ -31,10 +32,11 @@ class Charset:
     ellipsis: str
     bar_full: str
     bar_empty: str
+    branch: str
 
 
-UNICODE = Charset(dot="·", ellipsis="…", bar_full="━", bar_empty="─")
-ASCII = Charset(dot="|", ellipsis="...", bar_full="#", bar_empty="-")
+UNICODE = Charset(dot="·", ellipsis="…", bar_full="━", bar_empty="─", branch="├ ")
+ASCII = Charset(dot="|", ellipsis="...", bar_full="#", bar_empty="-", branch="- ")
 
 _COLOR_CODES: dict[str, str] = {
     "DEBUG": "2",
@@ -43,10 +45,11 @@ _COLOR_CODES: dict[str, str] = {
     "ERROR": "31",
     "CRITICAL": "1;31",
     PROGRESS_LABEL: "36",
+    STEP_LABEL: "36",
 }
 _ESCAPE = "\x1b["
 _WHITESPACE = re.compile(r"\s+")
-_FORGED_MARKER = re.compile(r"\[(?=pace:)")
+_FORGED_MARKER = re.compile(r"\[(?=pace)")
 
 
 def is_utf8(encoding: str) -> bool:
@@ -103,7 +106,7 @@ def log_line(timestamp: str, label: str, message: str, color: bool) -> str:
 
 
 def neutralize(message: str) -> str:
-    """Break up any ``[pace:`` in a user message so it cannot pass for a progress trailer.
+    """Break up any ``[pace`` in a user message so it cannot pass for a progress trailer.
 
     A reader removes terminal escape sequences before it looks for a trailer, so they
     are removed here first: ``[pa`` + ESC ``[31m`` + ``ce:`` must not survive as a
@@ -155,7 +158,7 @@ def format_bar(fraction: float, charset: Charset) -> str:
 
 def estimate_text(record: Record, forecast: Forecast, charset: Charset) -> str:
     """Describe the outcome of a finished scope, or its time remaining, or why there is no estimate."""
-    if record.event is Event.END:
+    if record.event in (Event.END, Event.STEP):
         return f"done in {format_duration(record.elapsed)}"
     if record.event is Event.FAIL:
         return f"failed after {format_duration(record.elapsed)}"
@@ -176,8 +179,13 @@ def progress_text(
     unit: str,
     charset: Charset,
     bar: bool = False,
+    depth: int = 0,
 ) -> str:
-    """Return the readable part of a progress line, for example ``Train  36.8%  1840/5000 step · 2.4 step/s · ~21m57s``.
+    """Return the readable part of a progress line, for example ``Train  1840/5000  36.8%  2.4 step/s · ~21m57s``.
+
+    A ``start`` shows the count and unit, an update the count, percentage, rate and time
+    left, an ``end`` or ``fail`` the count, outcome and rate, a ``step`` only its outcome.
+    The count is right-aligned to the width of the total, so a scope's lines line up.
 
     Parameters
     ----------
@@ -192,24 +200,52 @@ def progress_text(
     charset : Charset
         Unicode or ASCII glyphs.
     bar : bool
-        Whether to include a bar after the description (the in-place terminal line).
+        Whether this is the in-place terminal line, which has a bar after the description.
+    depth : int
+        How many scopes this one is nested in; a nested scope is indented under its parent.
 
     Returns
     -------
     str
         One line of text with no timestamp, level or trailer.
     """
+    name = clean_text(description) or record.scope
+    shown_unit = clean_text(unit, 32)
+    if bar:
+        return _bar_text(record, forecast, name, shown_unit, charset)
+    parts = [("  " * (depth - 1) + charset.branch if depth else "") + name]
+    event = record.event
+    if event is Event.START:
+        parts.append(f"{_count_text(record)} {shown_unit}".rstrip())
+    elif event is not Event.STEP:
+        parts.append(_count_text(record))
+    if event is Event.UPDATE and record.total:
+        parts.append(f"{100 * (record.completed or 0.0) / record.total:.1f}%")
+    rate = None if forecast.rate is None or event is Event.STEP else format_rate(forecast.rate, shown_unit or "it")
+    outcome = estimate_text(record, forecast, charset)
+    if event is not Event.START:
+        details = [rate, outcome] if event is Event.UPDATE else [outcome, rate]
+        parts.append(f" {charset.dot} ".join(detail for detail in details if detail))
+    return SEPARATOR.join(parts)
+
+
+def _count_text(record: Record) -> str:
+    completed = format_count(record.completed or 0.0)
+    if record.total is None:
+        return completed
+    total = format_count(record.total)
+    return f"{completed:>{len(total)}}/{total}"
+
+
+def _bar_text(record: Record, forecast: Forecast, name: str, unit: str, charset: Charset) -> str:
     completed = record.completed or 0.0
-    total = record.total
-    parts: list[str] = [clean_text(description) or record.scope]
-    if total is not None:
-        if bar:
-            parts.append(format_bar(completed / total, charset))
-        parts.append(f"{100 * completed / total:.1f}%")
-    count = format_count(completed) if total is None else f"{format_count(completed)}/{format_count(total)}"
-    details = [f"{count} {clean_text(unit, 32)}".rstrip()]
+    parts = [name]
+    if record.total is not None:
+        parts.append(format_bar(completed / record.total, charset))
+        parts.append(f"{100 * completed / record.total:.1f}%")
+    details = [f"{_count_text(record).lstrip()} {unit}".rstrip()]
     if forecast.rate is not None:
-        details.append(format_rate(forecast.rate, clean_text(unit, 32) or "it"))
+        details.append(format_rate(forecast.rate, unit or "it"))
     details.append(estimate_text(record, forecast, charset))
     parts.append(f" {charset.dot} ".join(details))
     return SEPARATOR.join(parts)

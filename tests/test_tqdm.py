@@ -233,4 +233,4 @@ def test_a_scope_opened_inside_a_phase_names_it_as_its_parent(quiet: Logger, str
 
 def test_the_default_logger_is_used_when_none_is_given(capsys: pytest.CaptureFixture[str]) -> None:
     PaceTqdm(total=1, desc="Default").close()
-    assert "[pace:1 s=default" in capsys.readouterr().out
+    assert "[pace default start" in capsys.readouterr().out

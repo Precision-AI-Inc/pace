@@ -68,6 +68,7 @@ def test_timestamp_is_iso_utc_to_the_second() -> None:
 def test_clean_text_makes_one_line_and_cuts() -> None:
     assert render.clean_text("a\n\tb\x00c  d") == "a b c d"
     assert render.clean_text("x" * 200) == "x" * render.MAX_DESCRIPTION_CHARS
+    assert render.clean_text("see [pace a r=x]") == "see [ pace a r=x]"
     assert render.clean_text("see [pace:1 s=a]") == "see [ pace:1 s=a]"
 
 
@@ -119,19 +120,19 @@ def test_estimate_text(event: Event, forecast: Forecast, expected: str) -> None:
 def test_progress_text_with_a_known_total() -> None:
     forecast = Forecast(ForecastState.LIVE, 30.0, 5.0)
     text = render.progress_text(record(Event.UPDATE), forecast, "Train", "step", render.UNICODE)
-    assert text == "Train  50.0%  50/100 step · 5 step/s · ~30s"
+    assert text == "Train   50/100  50.0%  5 step/s · ~30s"
 
 
 def test_progress_text_with_an_unknown_total_has_no_percent() -> None:
     item = record(Event.UPDATE, completed=7, total=None)
     text = render.progress_text(item, Forecast(ForecastState.UNKNOWN), "Rows", "row", render.ASCII)
-    assert text == "Rows  7 row | no estimate"
+    assert text == "Rows  7  no estimate"
 
 
 def test_progress_text_falls_back_to_the_scope_id_and_a_default_unit() -> None:
     forecast = Forecast(ForecastState.LIVE, 1.0, 2.0)
     text = render.progress_text(record(Event.UPDATE), forecast, " ", "", render.ASCII)
-    assert text.startswith("job  50.0%  50/100 | 2 it/s")
+    assert text == "job   50/100  50.0%  2 it/s | ~1s"
 
 
 def test_progress_text_with_a_bar() -> None:
@@ -145,3 +146,17 @@ def test_neutralize_sees_through_escape_sequences() -> None:
     forged = "done [pa\x1b[31mce:1 s=x k=end c=1 t=1 e=1 q=1]"
     assert parse_line(render.neutralize(forged)) is None
     assert "\x1b" not in render.neutralize(forged)
+
+
+def test_progress_text_of_a_step_indented_two_levels() -> None:
+    item = record(Event.STEP, completed=1, total=1)
+    text = render.progress_text(
+        item, Forecast(ForecastState.COMPLETE, 0.0, 0.1), "Load", "call", render.UNICODE, depth=2
+    )
+    assert text == "  ├ Load  done in 10s"
+
+
+def test_progress_text_of_a_start_shows_the_count_and_unit_only() -> None:
+    item = record(Event.START, completed=0, total=1000)
+    text = render.progress_text(item, Forecast(ForecastState.LEARNING), "Train", "step", render.ASCII, depth=1)
+    assert text == "- Train     0/1000 step"

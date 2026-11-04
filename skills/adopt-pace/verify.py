@@ -28,7 +28,7 @@ from typing import TextIO
 
 from precisionai.pace import Event, ForecastState, JobEstimate, JobForecast, Record, parse_line
 
-TRAILER_MARK = "[pace:"
+TRAILER_MARK = "[pace "
 MAX_LISTED_LINES = 5
 LABEL_LIMIT = 64
 _TIMESTAMP = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z\b")
@@ -131,11 +131,6 @@ class _Reader:
         self.report = report
         self.forecast = JobForecast()
         self.now = 0.0
-        self._segment: dict[str, int] = {}
-        self._run: dict[str, str | None] = {}
-        self._last_seq: dict[str, int] = {}
-        self._seen: set[tuple[str, int, int, str]] = set()
-        self._order_errors: set[str] = set()
 
     def read(self, index: int, line: str) -> None:
         """Take one line: parse it, and count it against the report."""
@@ -147,7 +142,8 @@ class _Reader:
             if TRAILER_MARK in line:
                 self.report.malformed.append(index)
             return
-        if self._is_duplicate(record):
+        # The estimator ignores a copy read from the other stream and a line read late.
+        if not self.forecast.observe(record, self.now):
             self.report.duplicates += 1
             return
         self.report.records += 1
@@ -155,28 +151,7 @@ class _Reader:
             self.report.plans.append(record.phases)
         else:
             self._summarise(index, record)
-        self.forecast.observe(record, self.now)
         self._watch_estimate()
-
-    def _is_duplicate(self, record: Record) -> bool:
-        scope = record.scope
-        restart = record.event is Event.START and (
-            record.run != self._run.get(scope)
-            if record.run is not None and self._run.get(scope) is not None
-            else self._last_seq.get(scope, 0) > 1
-        )
-        if restart or (record.event is Event.START and scope not in self._run):
-            self._segment[scope] = self._segment.get(scope, 0) + 1
-            self._run[scope] = record.run
-            self._last_seq[scope] = 0
-        key = (scope, self._segment.get(scope, 0), record.seq, record.event.value)
-        if key in self._seen:
-            return True
-        self._seen.add(key)
-        if record.event is not Event.PLAN and record.seq <= self._last_seq.get(scope, 0):
-            self._order_errors.add(scope)
-        self._last_seq[scope] = max(record.seq, self._last_seq.get(scope, 0))
-        return False
 
     def _summarise(self, index: int, record: Record) -> None:
         scope = self.report.scopes.get(record.scope)
@@ -186,7 +161,7 @@ class _Reader:
         scope.last_index = index
         scope.root = scope.root or record.root
         scope.parent = record.parent or scope.parent
-        if record.event is Event.START:
+        if record.event in (Event.START, Event.STEP):
             scope.starts += 1
             scope.label = record.label or scope.label
             scope.unit = record.unit or scope.unit
@@ -196,8 +171,8 @@ class _Reader:
             scope.completed = record.completed
         if record.total is not None:
             scope.total = record.total
-        if record.event in (Event.END, Event.FAIL):
-            scope.status = record.event.value
+        if record.event in (Event.END, Event.FAIL, Event.STEP):
+            scope.status = "fail" if record.event is Event.FAIL else "end"
             scope.closed_index = index
 
     def _watch_estimate(self) -> None:
@@ -210,23 +185,21 @@ class _Reader:
     def finish(self) -> None:
         """Take the estimator's final view and run the checks."""
         self.report.estimate = self.forecast.snapshot(self.now)
-        _check(self.report, self._order_errors)
+        _check(self.report)
 
 
-def _check(report: Report, order_errors: set[str]) -> None:
+def _check(report: Report) -> None:
     add = report.findings.append
     if report.malformed:
         listed = ", ".join(str(n) for n in report.malformed[:MAX_LISTED_LINES])
         add(
             Finding(
-                "error", f"{len(report.malformed)} line(s) carry a [pace: trailer that does not parse (lines {listed})"
+                "error", f"{len(report.malformed)} line(s) carry a [pace trailer that does not parse (lines {listed})"
             )
         )
     if not report.scopes and not report.plans:
         add(Finding("error", "no progress records found: Pace never wrote to this output"))
         return
-    for scope in sorted(order_errors):
-        add(Finding("error", f"scope {scope!r}: sequence numbers go backwards"))
     _check_roots(report)
     for scope in report.scopes.values():
         _check_scope(report, scope)
@@ -386,7 +359,9 @@ def format_report(report: Report) -> str:
     """
     out = [f"read {report.lines} lines: {report.records} Pace records, {len(report.scopes)} scopes"]
     if report.duplicates:
-        out.append(f"  ({report.duplicates} duplicate record(s) ignored, as a consumer reading both streams would)")
+        out.append(
+            f"  ({report.duplicates} record(s) ignored as copies or late lines, as a consumer reading both streams would)"
+        )
     out.extend(_scope_row(scope) for scope in report.scopes.values())
     if report.plans:
         out.append("plan: " + ", ".join(f"{name}:{weight:g}" for name, weight in report.plans[-1]))

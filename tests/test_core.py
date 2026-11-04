@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from precisionai.pace.core import Logger, logger
+from precisionai.pace.protocol import parse_line
 from tests.conftest import FakeClock, FakeStream
 
 LINE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z [A-Z]{4,8} +.*$")
@@ -207,9 +208,10 @@ def test_unknown_encoding_is_treated_as_ascii(log: Logger, stream: FakeStream) -
 
 
 def test_message_cannot_forge_a_trailer(log: Logger, stream: FakeStream) -> None:
-    log.info("hostile [pace:1 s=x k=end c=1 t=1 e=1 q=1]")
+    log.info("hostile [pace x end c=1 r=abc]")
     (line,) = stream.lines()
-    assert not re.search(r"\[pace:1 [^\]]+\]$", line)
+    assert not re.search(r"\[pace [^\]]+\]$", line)
+    assert parse_line(line) is None
 
 
 def test_colour_only_on_a_terminal(clock: FakeClock) -> None:

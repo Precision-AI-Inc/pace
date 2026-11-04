@@ -4,7 +4,7 @@
 """Progress scopes: ``progress``, ``track``, ``timed``, ``phase`` and ``plan``.
 
 A scope is one piece of work with a start, a completed amount, an optional total and
-an end. Each progress line it writes carries the ``[pace:1 ...]`` trailer built by
+an end. Each progress line it writes carries the ``[pace ...]`` trailer built by
 :func:`precisionai.pace.protocol.format_trailer`; the text before it is for people.
 
 Output rules (see ``docs/design.md``):
@@ -30,7 +30,14 @@ from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar, Token
 from typing import Any, Self, TypeVar
 
-from precisionai.pace._render import PROGRESS_LABEL, colorize, format_timestamp, plan_text, progress_text
+from precisionai.pace._render import (
+    PROGRESS_LABEL,
+    STEP_LABEL,
+    colorize,
+    format_timestamp,
+    plan_text,
+    progress_text,
+)
 from precisionai.pace.core import Logger, Target
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import ScopeForecast
@@ -43,7 +50,7 @@ FALLBACK_ID = "scope"
 UPDATE_FRACTION = 0.01
 
 _UNSAFE_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
-_PARENT: ContextVar[str | None] = ContextVar("pace_parent_scope", default=None)
+_PARENT: ContextVar["Scope | None"] = ContextVar("pace_parent_scope", default=None)
 
 T = TypeVar("T")
 
@@ -110,6 +117,9 @@ class Scope:
         Output to use; the module-level logger by default.
     """
 
+    # A one-off step (a phase or a timed call) that ends before its first line is due writes one step line.
+    _ONE_OFF = False
+
     def __init__(
         self,
         description: str = "",
@@ -137,6 +147,9 @@ class Scope:
         self.completed = _count(completed)
         self.total = _total(total)
         self.parent: str | None = None
+        self.depth = 0
+        self._parent_scope: Scope | None = None
+        self._pending = False
         self._seq = 0
         self._started_at = 0.0
         self._state = "new"
@@ -144,7 +157,7 @@ class Scope:
         self._last_completed = 0.0
         self._next_check = 0.0
         self._forecast = ScopeForecast(self.id)
-        self._token: Token[str | None] | None = None
+        self._token: Token[Scope | None] | None = None
 
     def start(self) -> None:
         """Write the ``start`` record. Does nothing if the scope already started."""
@@ -153,9 +166,18 @@ class Scope:
                 return
             now = self._out.clock.monotonic()
             self._started_at = now
-            self.parent = _PARENT.get()
+            self._parent_scope = _PARENT.get()
+            if self._parent_scope is not None:
+                self.parent = self._parent_scope.id
+                self.depth = self._parent_scope.depth + 1
             self._state = "open"
-            self._emit(Event.START, now)
+            delay = self._start_delay()
+            if delay > 0:
+                # A one-off step may end before a line is due; then its start and end are one line.
+                self._pending = True
+                self._out.hold(self, now + delay, self._write_pending_start)
+            else:
+                self._emit(Event.START, now)
 
     def advance(self, n: float = 1) -> None:
         """Add ``n`` to the completed amount."""
@@ -207,7 +229,7 @@ class Scope:
 
     def bind(self) -> None:
         """Make this scope the parent of scopes opened from now on in this context."""
-        self._token = _PARENT.set(self.id)
+        self._token = _PARENT.set(self)
 
     def unbind(self) -> None:
         """Restore the parent that was in place before :meth:`bind`."""
@@ -217,7 +239,7 @@ class Scope:
         try:
             _PARENT.reset(token)
         except ValueError:
-            _PARENT.set(self.parent)
+            _PARENT.set(self._parent_scope)
 
     def _set_completed(self, completed: float) -> None:
         self.completed = min(completed, MAX_NUMBER)
@@ -228,6 +250,7 @@ class Scope:
             self.start()
         if self._state != "open":
             return
+        self._out.write_held()
         now = self._out.clock.monotonic()
         # The rank check reads the environment, so it comes after the cheap time gate.
         if now < self._next_check or not self._out.settings.progress_enabled():
@@ -260,13 +283,44 @@ class Scope:
             self._state = "closed"
             self._emit(event, self._out.clock.monotonic())
 
+    def _start_delay(self) -> float:
+        """Return how long a one-off step may hold back its start line; 0 to write it now."""
+        if not self._ONE_OFF or not self._out.settings.progress_enabled():
+            return 0.0
+        target = self._out.target()
+        if target is None or target.bar:
+            return 0.0
+        return self._out.settings.resolve("min_interval")
+
+    def _write_pending_start(self) -> None:
+        """Write the start held back by a one-off step that is still running, and the starts it must follow."""
+        with contextlib.suppress(Exception), self._out.lock:
+            if self._pending:
+                self._pending = False
+                self._out.release(self)
+                self._emit(Event.START, self._out.clock.monotonic())
+
+    def _settle_pending(self, event: Event) -> Event:
+        """Return the event to write: a pending start is written first, or folded into a step."""
+        if self._parent_scope is not None:
+            # A reader meets a parent before its children, and the text indents under it.
+            self._parent_scope._write_pending_start()
+        if not self._pending or event is Event.START:
+            return event
+        if event is Event.END and self.completed == 1 and self.total == 1:
+            self._pending = False
+            self._out.release(self)
+            return Event.STEP
+        self._write_pending_start()
+        return event
+
     def _record(self, event: Event, now: float, phases: tuple[tuple[str, float], ...] = ()) -> Record:
         self._seq += 1
-        first = event is Event.START
+        first = event in (Event.START, Event.STEP)
         return Record(
             scope=self.id,
             event=event,
-            seq=self._seq,
+            seq=self._seq if event in (Event.UPDATE, Event.PLAN) else None,
             elapsed=max(now - self._started_at, 0.0),
             completed=None if event is Event.PLAN else self.completed,
             total=self.total,
@@ -276,7 +330,7 @@ class Scope:
             resumed=first and self.resumed,
             phases=phases,
             label=(self.description.strip() or None) if first else None,
-            run=self._out.run_id if first else None,
+            run=self._out.run_id,
         )
 
     def _emit(
@@ -291,6 +345,8 @@ class Scope:
         target = target or self._out.target()
         if target is None:
             return
+        self._out.write_held()
+        event = self._settle_pending(event)
         record = self._record(event, now, phases)
         self._last_out = now
         self._last_completed = self.completed
@@ -300,7 +356,9 @@ class Scope:
             self._forecast.observe(record, now)
             forecast = self._forecast.snapshot(now)
             drawing = target.bar and event in (Event.START, Event.UPDATE)
-            text = progress_text(record, forecast, self.description, self.unit, target.charset, bar=drawing)
+            text = progress_text(
+                record, forecast, self.description, self.unit, target.charset, bar=drawing, depth=self.depth
+            )
             if drawing:
                 self._out.draw_bar(text, target)
                 return
@@ -308,7 +366,8 @@ class Scope:
 
     def _progress_line(self, text: str, record: Record, target: Target) -> str:
         stamp = format_timestamp(self._out.clock.wall())
-        label = colorize(PROGRESS_LABEL, target.color)
+        name = STEP_LABEL if record.event is Event.STEP else PROGRESS_LABEL
+        label = colorize(name, target.color) + " " * (len(PROGRESS_LABEL) - len(name))
         prefix = f"{stamp} {label} "
         trailer = f"  {format_trailer(record)}"
         # A reader rejects lines over MAX_LINE_BYTES, so the readable text gives way.
@@ -335,6 +394,8 @@ class Phase(Scope):
     logger : Logger, optional
         Output to use.
     """
+
+    _ONE_OFF = True
 
     def __init__(
         self,

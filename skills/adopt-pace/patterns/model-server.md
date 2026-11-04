@@ -51,6 +51,9 @@ with progress(total=len(requests), description="Generate", unit="request", root=
   collecting thread. The rest follows `concurrent.md`.
 - Open the root **before** starting the server, so startup counts as part of the job and
   the `@timed` steps are its children. The total is the request count; startup has no count.
+  A step over within `PACE_MIN_INTERVAL` is one `STEP` line under the root; a slower one
+  writes its start with the next line once the interval has passed (Pace starts no threads,
+  so a slow import with nothing else reporting shows only when it ends).
 - The server's own log is per-request chatter. Send it to a temporary file and name that
   file only if the server fails to start. Do not put it in the job's outputs or stdout.
 - Pass `check=True` or check the return code for the model import, and always stop the

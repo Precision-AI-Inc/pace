@@ -22,14 +22,14 @@ There is no ``root=True`` here: the plan covers the whole job, which counts as c
 once every planned stage has ended. Plan weights are a guess at each stage's share of the
 **runtime** (not of the item counts) and only matter for stages that have not started.
 Each plan entry must match the id of the scope that does that stage's work: ``"Train"``
-becomes ``train``, which is the phase. The loop inside it has its own id and a ``p=train``
-parent.
+becomes ``train``, which is the phase. The loop inside it has its own id and ``train`` as
+its parent (``train-steps<train`` in the trailer).
 
 Run: ``python examples/phases_and_plan.py``. Add ``PACE_MIN_INTERVAL=0`` to see every
 progress line.
 
 Expect: a ``Plan`` line listing ``preprocess 10%, train 80%, evaluate 10%``, then each stage
-in order. The ``Train steps`` scope carries ``p=train``.
+in order. The ``Train steps`` scope is nested in ``train``.
 """
 
 import time

@@ -23,7 +23,8 @@ from precisionai.pace.protocol import (
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "protocol" / "cases.jsonl"
-VALID = "text [pace:1 s=a k=upd c=1 t=2 e=1 q=2]"
+VALID = "text [pace a c=1 t=2 e=1 q=2 r=1b8b7650]"
+RUN = "1b8b7650"
 
 
 def _load_cases() -> list[dict[str, Any]]:
@@ -88,13 +89,11 @@ def test_fixture_records_cover_every_event_kind() -> None:
 # --- parse_line, beyond the fixtures ---
 
 
-def test_parse_line_returns_record_fields() -> None:
-    record = parse_line("[pace:1 s=val p=train root=1 k=start c=0 t=? u=batch e=0 q=1 res=1 n=Val]")
+def test_parse_line_reads_a_trailer() -> None:
+    record = parse_line("[pace val<train start t=? u=batch n=Val r=1b8b7650 root res]")
     assert record == Record(
         scope="val",
         event=Event.START,
-        seq=1,
-        elapsed=0.0,
         completed=0.0,
         total=None,
         unit="batch",
@@ -102,10 +101,17 @@ def test_parse_line_returns_record_fields() -> None:
         root=True,
         resumed=True,
         label="Val",
+        run=RUN,
     )
 
 
-@pytest.mark.parametrize("value", [None, 5, b"[pace:1 s=a k=upd c=1 t=2 e=1 q=2]", ["x"]])
+def test_an_old_or_versioned_marker_is_ordinary_text() -> None:
+    assert parse_line("[pace:1 s=a k=upd c=1 t=2 e=1 q=2]") is None
+    assert parse_line("[pace:2 a c=1 t=2 e=1 q=2 r=ab]") is None
+    assert parse_line("[pace  a c=1 t=2 e=1 q=2 r=ab]") is None
+
+
+@pytest.mark.parametrize("value", [None, 5, b"[pace a c=1 t=2 e=1 q=2 r=ab]", ["x"]])
 def test_parse_line_ignores_non_strings(value: Any) -> None:
     assert parse_line(value) is None
 
@@ -124,8 +130,8 @@ def test_parse_line_size_limit_is_in_bytes() -> None:
 
 def test_parse_line_does_not_accept_non_ascii_digits() -> None:
     arabic_one, arabic_two = chr(0x661), chr(0x662)
-    assert parse_line(f"[pace:1 s=a k=upd c={arabic_one} t=2 e=1 q=2]") is None
-    assert parse_line(f"[pace:1 s=a k=upd c=1 t=2 e=1 q={arabic_two}]") is None
+    assert parse_line(f"[pace a c={arabic_one} t=2 e=1 q=2 r=ab]") is None
+    assert parse_line(f"[pace a c=1 t=2 e=1 q={arabic_two} r=ab]") is None
 
 
 # --- round trips ---
@@ -138,17 +144,18 @@ def _expected_after_write(record: Record) -> Record:
 
 def _handwritten_records() -> list[Record]:
     return [
-        Record("train", Event.START, 1, 0.0, 0.0, 5000.0, unit="step", root=True, label="Fine-tune 7B"),
-        Record("train", Event.START, 1, 0.0, 3100.0, 5000.0, unit="step", resumed=True),
-        Record("train", Event.UPDATE, 57, 763.12, 1840.0, 5000.0, root=True),
-        Record("read", Event.UPDATE, 2, 3.04, 12.5, None),
-        Record("val", Event.UPDATE, 3, 0.0, 0.000001, 0.5, parent="train"),
-        Record("train", Event.END, 90, 2075.46, 5000.0, 5000.0),
-        Record("train", Event.FAIL, 9, 12.5),
-        Record("job", Event.PLAN, 1, 0.0, phases=(("prep", 0.05), ("train", 0.9), ("eval", 0.05))),
-        Record("job", Event.START, 1, 0.0, 0.0, None, unit="café", label="日本語 " * 5),
-        Record("job", Event.START, 1, 0.0, 0.0, 1.0, label="x" * 100),
-        Record("a.b-c_D", Event.UPDATE, 10**12, 1e14, 1e15, 1e15),
+        Record("train", Event.START, None, 0.0, 0.0, 5000.0, unit="step", root=True, label="Fine-tune 7B", run=RUN),
+        Record("train", Event.START, None, 0.0, 3100.0, 5000.0, unit="step", resumed=True, run=RUN),
+        Record("train", Event.UPDATE, 57, 763.12, 1840.0, 5000.0, root=True, run=RUN),
+        Record("read", Event.UPDATE, 2, 3.04, 12.5, None, run=RUN),
+        Record("val", Event.UPDATE, 3, 0.0, 0.000001, 0.5, parent="train", run=RUN),
+        Record("train", Event.END, None, 2075.46, 5000.0, 5000.0, run=RUN),
+        Record("train", Event.FAIL, None, 12.5, run=RUN),
+        Record("load", Event.STEP, None, 12.04, 1.0, 1.0, parent="prep", label="Load", run=RUN),
+        Record("job", Event.PLAN, 1, 0.0, phases=(("prep", 0.05), ("train", 0.9), ("eval", 0.05)), run=RUN),
+        Record("job", Event.START, None, 0.0, 0.0, None, unit="café", label="日本語 " * 5, run=RUN),
+        Record("job", Event.START, None, 0.0, 0.0, 1.0, label="x" * 100, run=RUN),
+        Record("a.b-c_D", Event.UPDATE, 10**12, 1e14, 1e15, 1e15, run=RUN),
     ]
 
 
@@ -160,7 +167,8 @@ def test_trailer_round_trips(record: Record) -> None:
 def test_parse_line_handles_pathological_input() -> None:
     assert parse_line("\x1b[" * 2000) is None
     assert parse_line("\x1b]" * 2000) is None
-    assert parse_line("[pace:1 " * 500 + "]") is None
+    assert parse_line("[pace " * 500 + "]") is None
+    assert parse_line("[pace a" + " root" * 2000 + "]") is None
     assert parse_line(" " * 4000 + "]") is None
 
 
@@ -275,8 +283,8 @@ def test_splitter_flush_after_oversize_tail_returns_nothing() -> None:
 def test_splitter_feeds_parse_line() -> None:
     log = (
         b"2026-11-03T17:23:59Z INFO     Loading\r\n"
-        b"Train [pace:1 s=train k=upd c=1 t=2 e=1 q=2]\r\n"
-        b"Train [pace:1 s=train k=upd c=2 t=2 e=2 q=3]"
+        b"Train [pace train c=1 t=2 e=1 q=2 r=ab]\r\n"
+        b"Train [pace train c=2 t=2 e=2 q=3 r=ab]"
     )
     splitter = LineSplitter()
     lines = []
@@ -288,7 +296,7 @@ def test_splitter_feeds_parse_line() -> None:
 
 
 def test_parse_line_counts_replacement_characters_as_one_byte() -> None:
-    trailer = "[pace:1 s=a k=upd c=1 t=2 e=1 q=2]"
+    trailer = "[pace a c=1 t=2 e=1 q=2 r=ab]"
     # 3000 undecodable source bytes become 3000 U+FFFD characters (9000 UTF-8 bytes).
     line = "�" * 3000 + " " + trailer
     assert parse_line(line) is not None
@@ -302,7 +310,7 @@ def test_line_splitter_drops_huge_line_in_one_chunk_without_buffering() -> None:
 
 
 def test_a_line_of_exactly_the_limit_parses_with_its_line_ending() -> None:
-    trailer = "[pace:1 s=a k=upd c=1 t=2 e=1 q=2]"
+    trailer = "[pace a c=1 t=2 e=1 q=2 r=ab]"
     line = "x" * (MAX_LINE_BYTES - len(trailer) - 1) + " " + trailer
     assert len(line.encode("utf-8")) == MAX_LINE_BYTES
     assert parse_line(line) is not None

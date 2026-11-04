@@ -39,18 +39,23 @@ run_ids = st.from_regex(r"[a-z0-9]{1,16}", fullmatch=True)
 
 @st.composite
 def records(draw: Any) -> Record:
+    """Draw a record as the writer produces it, so that writing and reading it back gives it unchanged."""
     event = draw(st.sampled_from(list(Event)))
     common: dict[str, Any] = {
         "scope": draw(scope_ids),
         "event": event,
-        "seq": draw(st.integers(1, MAX_SEQ)),
         "elapsed": draw(tenths_safe),
         "parent": draw(st.none() | scope_ids),
         "root": draw(st.booleans()),
+        "run": draw(run_ids),
     }
+    if event in (Event.UPDATE, Event.PLAN):
+        common["seq"] = draw(st.integers(2 if event is Event.UPDATE else 1, MAX_SEQ))
     if event is Event.PLAN:
         phases = draw(st.lists(st.tuples(scope_ids, quarters), max_size=MAX_PHASES))
         return Record(phases=tuple(phases), **common)
+    if event is Event.STEP:
+        return Record(completed=1.0, total=1.0, label=draw(st.none() | printable_text), **common)
     if event is Event.FAIL and draw(st.booleans()):
         return Record(**common)
     common["completed"] = draw(quarters)
@@ -59,7 +64,6 @@ def records(draw: Any) -> Record:
         common["unit"] = draw(st.none() | printable_text)
         common["resumed"] = draw(st.booleans())
         common["label"] = draw(st.none() | printable_text)
-        common["run"] = draw(st.none() | run_ids)
     return Record(**common)
 
 
@@ -75,8 +79,15 @@ def test_a_written_trailer_is_read_back_as_written(record: Record) -> None:
 
 # Fragments of the syntax, so that arbitrary text sometimes gets close to a trailer.
 FRAGMENTS = [
+    "[pace ",
     "[pace:1 ",
     "[pace:",
+    "a<b ",
+    "start ",
+    "step ",
+    "r=a1 ",
+    " root",
+    " res",
     "]",
     " ",
     "s=a ",
@@ -123,12 +134,13 @@ def test_a_damaged_trailer_is_a_record_or_nothing_and_never_an_error(
     if found is None:
         return
     assert SCOPE_PATTERN.fullmatch(found.scope)
-    assert 1 <= found.seq <= MAX_SEQ
+    assert found.seq is None or 1 <= found.seq <= MAX_SEQ
     for number in (found.elapsed, found.completed or 0.0, found.total or 0.0):
         assert math.isfinite(number)
         assert 0 <= number <= MAX_NUMBER
     assert found.total is None or found.total > 0
-    format_trailer(found)
+    if found.run is not None and (found.event not in (Event.UPDATE, Event.PLAN) or found.seq is not None):
+        format_trailer(found)
 
 
 def reference_lines(data: bytes) -> list[str]:
@@ -182,6 +194,8 @@ def estimator_streams(draw: Any) -> list[tuple[float, Record]]:
     names = ["a", "b", "c"]
     parents = {"a": None, "b": draw(st.sampled_from([None, "a"])), "c": draw(st.sampled_from([None, "a", "b"]))}
     is_root = draw(st.booleans())
+    # Records carry a run id, and a sequence number only on an update or plan.
+    run = draw(st.sampled_from([None, "r1"]))
     state: dict[str, dict[str, Any]] = {}
     now = 0.0
     out: list[tuple[float, Record]] = []
@@ -189,7 +203,7 @@ def estimator_streams(draw: Any) -> list[tuple[float, Record]]:
         name = draw(st.sampled_from(names))
         now += draw(st.sampled_from([0.5, 1.0, 2.0, 30.0, 90.0, 300.0]))
         if draw(st.integers(0, 15)) == 0:
-            out.append((now, Record("plan", Event.PLAN, len(out) + 1, 0.0, phases=(("a", 0.5), ("b", 0.5)))))
+            out.append((now, Record("plan", Event.PLAN, len(out) + 1, 0.0, phases=(("a", 0.5), ("b", 0.5)), run=run)))
             continue
         scope = state.get(name)
         if scope is None:
@@ -198,21 +212,26 @@ def estimator_streams(draw: Any) -> list[tuple[float, Record]]:
         if scope["closed"]:
             continue
         scope["seq"] += 1
-        if scope["seq"] == 1:
+        if scope["seq"] == 1 and run is not None and draw(st.integers(0, 4)) == 0:
+            event = Event.STEP
+            scope["closed"] = True
+        elif scope["seq"] == 1:
             event = Event.START
         else:
             event = draw(st.sampled_from([Event.UPDATE] * 6 + [Event.END, Event.FAIL]))
             scope["done"] += draw(st.sampled_from([0.0, 1.0, 5.0]))
             scope["closed"] = event is not Event.UPDATE
+        step = event is Event.STEP
         record = Record(
             name,
             event,
-            scope["seq"],
+            scope["seq"] if run is None or event is Event.UPDATE else None,
             now - scope["started"],
-            completed=scope["done"],
-            total=scope["total"],
+            completed=1.0 if step else scope["done"],
+            total=1.0 if step else scope["total"],
             parent=parents[name],
             root=name == "a" and is_root,
+            run=run,
         )
         out.append((now, record))
     return out
