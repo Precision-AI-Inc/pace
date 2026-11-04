@@ -29,8 +29,6 @@ Expect: an ``Epochs`` scope marked ``root=1`` and, inside it, ``Train`` and ``Va
 scopes whose trailers carry ``p=epochs``.
 """
 
-from __future__ import annotations
-
 import time
 
 from precisionai.pace import logger, progress, track

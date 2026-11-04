@@ -3,8 +3,6 @@
 
 """Tests for configuration resolution, levels and rank detection."""
 
-from __future__ import annotations
-
 import sys
 import time
 

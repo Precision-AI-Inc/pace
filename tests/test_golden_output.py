@@ -9,13 +9,11 @@ A deliberate format change rewrites the files with ``PACE_UPDATE_GOLDEN=1``, in 
 ``docs/design.md``.
 """
 
-from __future__ import annotations
-
 import calendar
 import contextlib
 import logging
 import time
-from typing import Callable, Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 

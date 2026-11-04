@@ -12,11 +12,9 @@ It is written against the ``tqdm`` calls such libraries make, not as a subclass 
 ``tqdm``, so it needs no dependency and never draws or writes anything itself.
 """
 
-from __future__ import annotations
-
 import contextlib
-from collections.abc import Sized
-from typing import Any, Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sized
+from typing import Any, Self
 
 from precisionai.pace.core import Logger
 from precisionai.pace.core import logger as default_logger
@@ -142,7 +140,7 @@ class PaceTqdm:
         """Return true: an object that reports progress is never 'empty'."""
         return True
 
-    def __enter__(self) -> PaceTqdm:
+    def __enter__(self) -> Self:
         """Return the object, so it can be used in a ``with`` block."""
         return self
 

@@ -3,10 +3,9 @@
 
 """Tests for the tqdm-compatible class, including the calls vLLM makes with one."""
 
-from __future__ import annotations
-
 import functools
-from typing import Any, Callable, Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 

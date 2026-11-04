@@ -11,14 +11,13 @@ job's logs, so the two never disagree. The rules are specified in
 scope of one process run into a single :class:`JobEstimate`.
 """
 
-from __future__ import annotations
-
 import math
 import statistics
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from itertools import pairwise
 
 from precisionai.pace.protocol import Event, Record
 
@@ -35,7 +34,7 @@ class ForecastState(str, Enum):
     FAILED = "failed"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ForecastConfig:
     """Thresholds and smoothing parameters of the estimator.
 
@@ -85,7 +84,7 @@ class ForecastConfig:
 DEFAULT_CONFIG = ForecastConfig()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Forecast:
     """A point-in-time estimate for one scope.
 
@@ -423,7 +422,7 @@ class ScopeForecast:
             twice the heartbeat.
         """
         receipts = list(self._receipts)
-        gaps = [later - earlier for earlier, later in zip(receipts, receipts[1:])]
+        gaps = [later - earlier for earlier, later in pairwise(receipts)]
         median_gap = statistics.median(gaps) if gaps else 0.0
         return max(self._config.stale_factor * median_gap, 2 * self._config.heartbeat_seconds)
 
@@ -444,7 +443,7 @@ _ENDED_STATES = (ForecastState.COMPLETE, ForecastState.FAILED)
 _EVERY_ADVANCE_WRITTEN = 100
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class JobEstimate:
     """A point-in-time estimate for one job (one process run).
 
@@ -473,7 +472,7 @@ class JobEstimate:
     scopes: dict[str, Forecast] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class _PlanTally:
     """Running totals while walking a plan."""
 

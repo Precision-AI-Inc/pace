@@ -3,8 +3,6 @@
 
 """Tests for the logger: line format, levels, output stream, characters and colour."""
 
-from __future__ import annotations
-
 import io
 import re
 import sys

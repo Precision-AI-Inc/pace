@@ -20,8 +20,6 @@ Expect: an ``Evaluation`` scope counting ``0/40 request`` to ``40/40 request``, 
 with the mean score.
 """
 
-from __future__ import annotations
-
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -39,9 +37,10 @@ def main() -> None:
     requests = list(range(40))
     scores = []
 
-    with ThreadPoolExecutor(max_workers=4) as pool, progress(
-        total=len(requests), description="Evaluation", unit="request", root=True
-    ) as run:
+    with (
+        ThreadPoolExecutor(max_workers=4) as pool,
+        progress(total=len(requests), description="Evaluation", unit="request", root=True) as run,
+    ):
         futures = [pool.submit(evaluate, request) for request in requests]
         for future in as_completed(futures):
             scores.append(future.result())

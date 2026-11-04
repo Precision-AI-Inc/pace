@@ -20,8 +20,6 @@ trailers carry ``p=train``, and the ``end`` of the root. Every progress line end
 ``[pace:1 ...]`` trailer a scheduler reads.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 import lightning.pytorch as pl

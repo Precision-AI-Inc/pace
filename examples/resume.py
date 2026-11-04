@@ -22,8 +22,6 @@ scope whose ``start`` line reads ``70/100 step`` and carries ``res=1``, and fini
 ``100/100 step``.
 """
 
-from __future__ import annotations
-
 import json
 import tempfile
 import time

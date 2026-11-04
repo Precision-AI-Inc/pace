@@ -26,8 +26,6 @@ stdout, with the traceback of the logged exception, the warning from ``warnings.
 ``Load shards`` progress scope. The ``debug`` record does not appear.
 """
 
-from __future__ import annotations
-
 import logging
 import time
 import warnings

@@ -3,8 +3,6 @@
 
 """Tests for progress scopes: events, emission rate, nesting, ids, ranks and the terminal bar."""
 
-from __future__ import annotations
-
 import io
 import re
 import threading
@@ -94,7 +92,7 @@ def test_every_progress_line_ends_with_a_trailer_format_trailer_produced(
     plan(["a", "b"], logger=log)
     lines = stream.lines()
     assert len(lines) == len(spy_on_trailers) > 5
-    for line, trailer in zip(lines, spy_on_trailers):
+    for line, trailer in zip(lines, spy_on_trailers, strict=True):
         assert TRAILER.search(line)
         assert line.endswith(trailer)
         assert trailer.isascii()

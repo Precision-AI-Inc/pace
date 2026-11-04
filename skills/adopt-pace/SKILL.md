@@ -141,7 +141,7 @@ Make the smallest change that is correct.
    an adapter is used) in **every** place the repo declares dependencies, in the pinning
    style of its neighbours. That includes each explicit `pip install` line in a Dockerfile
    or script. Do not hand-edit lock files: say they need re-locking. Table in pattern 11.
-   Pace needs Python 3.8 or later.
+   Pace needs Python 3.11 or later.
 2. **Frameworks**: add `PaceCallback()` to the trainer's callbacks. Do not also
    instrument the loop.
 3. **Custom loops**: wrap the main loop with `track(...)` or `progress(...)` with a real

@@ -23,8 +23,6 @@ write time, so they apply to a running process.
 Progress lines are not filtered by level: a scheduler depends on them.
 """
 
-from __future__ import annotations
-
 import contextlib
 import math
 import os
@@ -33,8 +31,9 @@ import shutil
 import sys
 import threading
 import traceback
+from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Any, Collection
+from typing import Any
 
 from precisionai.pace._env import LEVELS, Clock, Settings, level_name, parse_level
 from precisionai.pace._render import Charset, charset_for, encode_safely, fit, format_timestamp, log_line
@@ -42,7 +41,7 @@ from precisionai.pace._render import Charset, charset_for, encode_safely, fit, f
 DEFAULT_TERMINAL_COLUMNS = 80
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Target:
     """Where one line is going and what that stream can show.
 

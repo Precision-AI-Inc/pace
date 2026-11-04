@@ -9,14 +9,13 @@ variables are read each time they are needed, so a scheduler (or a test) can cha
 them without restarting the process.
 """
 
-from __future__ import annotations
-
 import math
 import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 DEFAULT_MIN_INTERVAL = 15.0
 DEFAULT_HEARTBEAT = 120.0
@@ -36,7 +35,7 @@ _COLOR_MODES = ("auto", "always", "never")
 _TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Clock:
     """The two clocks the package reads.
 

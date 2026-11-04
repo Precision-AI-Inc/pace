@@ -5,20 +5,18 @@ adapter tests. Everything else runs here as a subprocess, so an example that sto
 working, or stops following the practice the docs describe, fails the suite.
 """
 
-from __future__ import annotations
-
 import dataclasses
 import importlib.util
 import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, Iterator
 
 import pytest
 
@@ -32,7 +30,7 @@ EXAMPLES = REPOSITORY / "examples"
 VERIFY_PATH = REPOSITORY / "skills" / "adopt-pace" / "verify.py"
 FRAMEWORK_EXAMPLES = {"lightning_example.py", "transformers_example.py"}
 TIMEOUT_SECONDS = 60
-Results = Dict[str, "subprocess.CompletedProcess[str]"]
+Results = dict[str, "subprocess.CompletedProcess[str]"]
 
 
 @dataclass(frozen=True)
@@ -152,7 +150,7 @@ def normalize(output: str) -> str:
         record = parse_line(line)
         if record is None:
             plain = re.sub(r"^(\[rank \d+\] )?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ ", r"\1", line)
-            lines.append(plain.replace(str(REPOSITORY), "<repo>"))
+            lines.append(re.sub(r"\.py:\d+:", ".py:", plain.replace(str(REPOSITORY), "<repo>")))
         else:
             fields = dataclasses.asdict(dataclasses.replace(record, elapsed=0.0, run=None))
             fields["event"] = record.event.value

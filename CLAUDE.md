@@ -6,10 +6,10 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. Read
 
 ## Environment
 
-- Python 3.8+ is supported; develop on 3.9+ (pre-commit needs it), managed with `python -m venv .venv` (never conda)
+- Python 3.11+ is supported (the oldest release that is not end-of-life), managed with `python -m venv .venv` (never conda)
 - Install: `pip install -e ".[dev]"` → installs all deps including pre-commit
 - Register hooks once: `pre-commit install`
-- CI runs the tests on 3.8 through 3.13. 3.8 runs on `ubuntu-22.04`, because `actions/setup-python` has no 3.8 build for `ubuntu-latest`.
+- CI runs the tests on 3.11 through 3.13. Release 0.0.1 still covers 3.8 to 3.10.
 
 ---
 
@@ -17,7 +17,7 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. Read
 
 1. **The core has no runtime dependencies.** `precisionai.pace` imports only the standard library. It is installed into users' training images and into other packages, and must never add to them. A framework adapter imports its framework only inside its own module, behind an extra (`[lightning]`, `[transformers]`).
 2. **The line format is a public contract.** Anything a consumer parses (the `[pace:N ...]` trailer) changes only as documented in `docs/design.md`: new optional keys within a major version, anything else is a new major version. A format change updates `docs/design.md` and the fixtures in `tests/fixtures/protocol/` in the same PR. The readable text before the trailer is for people and may change freely; never make a consumer depend on it.
-3. **Python 3.8 compatible.** See [Type hints](#type-hints) for what that rules out.
+3. **Python 3.11 is the floor.** Do not use syntax or library calls newer than that. `X | None`, built-in generics, `match`, `Self`, `itertools.pairwise` and `dataclass(slots=True)` are fine.
 4. **Never log secrets on the package's own initiative.** Pace never writes environment variables, configuration or credentials by itself, and labels stay short and are not repeated on every update.
 5. **Parsing is defensive.** Log lines are untrusted input. The parser bounds every size and value, never evaluates anything, and ignores (never raises on) a malformed or unsupported line.
 
@@ -50,7 +50,7 @@ tests/             # mirrors package structure; fixtures/protocol/ holds format 
 ```toml
 [project]
 dynamic = ["version"]   # version comes from the git tag via setuptools-scm, never hardcoded
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = []       # see "The rules that matter most"
 
 [tool.setuptools_scm]
@@ -60,10 +60,10 @@ fallback_version = "0.0.0"
 
 [tool.ruff]
 line-length = 120
-target-version = "py38"
+target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E","W","F","I","UP","B","SIM","N","C90","D","PT","RUF","PL","ANN","PERF","S","FA"]
+select = ["E","W","F","I","UP","B","SIM","N","C90","D","PT","RUF","PL","ANN","PERF","S"]
 ignore = [
     "E501",    # enforced by ruff-format
     "SIM108",  # ternary readability
@@ -75,7 +75,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
 "tests/**"       = ["D","PLR","ANN","S"]
-"docs/conf.py"   = ["E402","UP031","ANN","S","FA"]
+"docs/conf.py"   = ["E402","UP031","ANN","S"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"          # enforces NumPy docstring style
@@ -100,7 +100,7 @@ exclude_lines = ["pragma: no cover","if __name__ == .__main__.:",
                  "raise ImportError","except ImportError","if TYPE_CHECKING:"]
 
 [tool.pyright]
-pythonVersion = "3.8"
+pythonVersion = "3.11"
 typeCheckingMode = "standard"
 reportMissingImports = false
 reportMissingModuleSource = false
@@ -181,8 +181,8 @@ if not _LIGHTNING_AVAILABLE:
 
 ### Type hints
 - Required on **all** function signatures (public and private) — enforced by ruff (`ANN`) and pyright
-- Every module with annotations starts with `from __future__ import annotations` (enforced by ruff `FA`). With it, `X | Y` and `list[int]` are fine **in annotations** on 3.8.
-- **Outside annotations**, code runs on 3.8: no `X | Y` in `isinstance`, casts or type aliases evaluated at runtime, no `match`, no `str.removeprefix`, no parenthesised context managers, no `dataclass(slots=True)` or `kw_only`. Use `isinstance(x, (A, B))`, `typing.Union`/`Optional` in runtime aliases, and `typing.TYPE_CHECKING` for import-only types.
+- No `from __future__ import annotations`: write `X | None`, `list[int]` and `dict[str, int]` directly. A method that returns its own class is annotated `Self` (`typing.Self`), not the class name.
+- Frozen value types are `@dataclass(frozen=True, slots=True)`. Do not turn `Event` or `ForecastState` into `StrEnum`: `str()` and f-string output of the public enums would change.
 - Use `Any` from `typing` for genuinely dynamic types — don't use `object` when methods will be called on it
 - pyright config lives in `[tool.pyright]` in `pyproject.toml` — never pass type-checker flags inline
 
@@ -280,7 +280,7 @@ MANIFEST.in                 # sdist packaging — include docs/license/changelog
 | A new entry in `dependencies` | Put it behind an extra, imported only by the adapter module |
 | Parsing the readable part of a progress line | Parse only the `[pace:N ...]` trailer |
 | Changing or removing a trailer key in place | New optional key, or a new major version (see `docs/design.md`) |
-| `isinstance(x, A \| B)`, `match`, other 3.10+ runtime syntax | `isinstance(x, (A, B))` and 3.8-compatible equivalents |
+| Syntax or library calls newer than 3.11 (`type` statements, `def f[T]()`) | `TypeVar` and 3.11 equivalents |
 | `time.time()` for rates or intervals | `time.monotonic()` |
 | `int(len(x))` | `len(x)` |
 | `assert a and b` (tests) | two separate asserts |

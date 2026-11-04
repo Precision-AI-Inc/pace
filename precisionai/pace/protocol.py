@@ -9,17 +9,13 @@ format is specified in ``docs/design.md``; a change here is a change to that
 specification.
 """
 
-from __future__ import annotations
-
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 from urllib.parse import unquote_to_bytes
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 MARKER = "pace"
 VERSION = 1
@@ -56,7 +52,7 @@ class Event(str, Enum):
     PLAN = "plan"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Record:
     """One progress record, as carried by one trailer.
 

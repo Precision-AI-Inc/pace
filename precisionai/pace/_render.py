@@ -7,13 +7,11 @@ Nothing here writes; it only builds strings. The text is for people and may chan
 between releases. Only the ``[pace:1 ...]`` trailer that follows it is a contract.
 """
 
-from __future__ import annotations
-
 import codecs
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from precisionai.pace.forecast import Forecast, ForecastState
 from precisionai.pace.protocol import Event, Record
@@ -25,7 +23,7 @@ MAX_DESCRIPTION_CHARS = 80
 SEPARATOR = "  "
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Charset:
     """The glyphs used in the readable part of a line."""
 

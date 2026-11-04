@@ -3,8 +3,6 @@
 
 """End-to-end: what the logger writes, the parser reads and the estimator understands."""
 
-from __future__ import annotations
-
 import importlib
 
 import pytest

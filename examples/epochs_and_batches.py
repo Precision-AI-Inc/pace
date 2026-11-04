@@ -21,8 +21,6 @@ Expect: one ``Train`` scope counting ``0/100 step`` to ``100/100 step``, with an
 at the end of each epoch.
 """
 
-from __future__ import annotations
-
 import time
 
 from precisionai.pace import logger, progress

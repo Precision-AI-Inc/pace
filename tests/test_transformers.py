@@ -3,11 +3,10 @@
 
 """Tests for the Transformers callback, driven by real tiny CPU runs of a model built from a config."""
 
-from __future__ import annotations
-
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
 

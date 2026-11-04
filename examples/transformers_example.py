@@ -22,8 +22,6 @@ trailers carry ``p=train``, and the ``end`` of the root. Every progress line end
 ``[pace:1 ...]`` trailer a scheduler reads.
 """
 
-from __future__ import annotations
-
 import tempfile
 from typing import Any
 

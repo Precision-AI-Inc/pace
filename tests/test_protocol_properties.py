@@ -8,8 +8,6 @@ and check that what the writer produces is always read back as written. The runs
 the same examples on every machine, so a failure is reproducible rather than flaky.
 """
 
-from __future__ import annotations
-
 import math
 from typing import Any
 

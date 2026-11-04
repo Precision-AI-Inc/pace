@@ -1,6 +1,6 @@
 "INFO     Found 6 shards\n"
 "WARNING  Slow disk: 41.7 MB/s\n"
-"WARNING  <repo>/examples/stdlib_logging.py:68: UserWarning: tf32 is disabled\n"
+"WARNING  <repo>/examples/stdlib_logging.py: UserWarning: tf32 is disabled\n"
 "\n"
 "scope=load-shards event=start seq=1 elapsed=0.0 completed=0.0 total=6.0 unit=shard root=True label=Load shards\n"
 "scope=load-shards event=upd seq=2 elapsed=0.0 completed=1.0 total=6.0 root=True\n"

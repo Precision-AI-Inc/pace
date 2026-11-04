@@ -22,8 +22,6 @@ Expect: ``Load model`` start and end lines, the ``Train`` scope, and a start and
 for each of the three ``Save results`` calls, nested in it.
 """
 
-from __future__ import annotations
-
 import time
 
 from precisionai.pace import logger, progress, timed

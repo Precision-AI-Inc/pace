@@ -32,8 +32,6 @@ Expect: a few lines, each a state change or a second-ish update: ``learning`` fi
 root scope ends. The last line is the child's exit code.
 """
 
-from __future__ import annotations
-
 import os
 import subprocess
 import sys

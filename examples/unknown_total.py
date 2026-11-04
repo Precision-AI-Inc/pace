@@ -21,10 +21,9 @@ Expect: a ``start`` line that reads ``0 record · no estimate`` and carries ``t=
 with a percentage once the first page has been read, then ``end``.
 """
 
-from __future__ import annotations
-
 import time
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from precisionai.pace import logger, progress
 

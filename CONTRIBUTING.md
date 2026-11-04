@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Pace.
 
 ## Setup
 
-Requires Python 3.8+ to use, and Python 3.9+ to run the pre-commit hooks.
+Requires Python 3.11+.
 
 ```bash
 git clone <repo-url>
@@ -23,7 +23,7 @@ pre-commit install
 
 1. Create a branch from `main`.
 2. Make your changes.
-3. Add or update tests — coverage must remain at or above 90%. Code must run on Python 3.8, and the core package must not gain a runtime dependency.
+3. Add or update tests — coverage must remain at or above 90%. Code must run on Python 3.11, and the core package must not gain a runtime dependency.
 4. Commit. Pre-commit hooks run automatically and will block the commit if any check fails.
 
 If a hook auto-fixes files (ruff lint/format), stage the changes and commit again.
@@ -46,7 +46,7 @@ pre-commit run --all-files
 
 ## Code style
 
-- **Formatter / linter:** ruff (`line-length = 120`, Python 3.8 target).
+- **Formatter / linter:** ruff (`line-length = 120`, Python 3.11 target).
 - **Type hints:** all functions (public and private) must have complete PEP 484 type annotations. Enforced at lint time by ruff (`ANN` rules) and statically by pyright. `Any` is allowed for genuinely dynamic types; explicit `Any` is preferred over `object` when methods will be called on a value.
 - **Docstrings:** NumPy style for all public functions, classes, and modules.
 - **Comments:** only where the _why_ is non-obvious. No inline narration of what the code does.

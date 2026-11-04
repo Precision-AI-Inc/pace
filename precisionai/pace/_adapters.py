@@ -9,8 +9,6 @@ holds that bookkeeping with the standard library only, so it is tested without a
 framework installed.
 """
 
-from __future__ import annotations
-
 from precisionai.pace.core import Logger
 from precisionai.pace.scopes import Scope
 

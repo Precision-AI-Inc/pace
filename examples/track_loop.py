@@ -19,8 +19,6 @@ Expect: a ``start`` line, ``upd`` lines when ``PACE_MIN_INTERVAL=0``, an ``end``
 progress line ends with the ``[pace:1 s=inference root=1 ...]`` trailer a scheduler reads.
 """
 
-from __future__ import annotations
-
 import time
 
 from precisionai.pace import logger, track

@@ -7,8 +7,6 @@ Every test injects its clock: records carry ``elapsed`` and are delivered with a
 explicit ``received_at``; nothing sleeps.
 """
 
-from __future__ import annotations
-
 import dataclasses
 import random
 

@@ -3,12 +3,11 @@
 
 """Tests for the Lightning callback, driven by real tiny CPU runs."""
 
-from __future__ import annotations
-
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
 
@@ -244,7 +243,7 @@ def lightning_loggers_as_in_a_fresh_process() -> Iterator[None]:
         each.handlers[:] = [logging.StreamHandler()]
         each.propagate = False
     yield
-    for each, (handlers, propagate) in zip(loggers, saved):
+    for each, (handlers, propagate) in zip(loggers, saved, strict=True):
         each.handlers[:] = handlers
         each.propagate = propagate
     root.handlers[:] = root_saved[0]

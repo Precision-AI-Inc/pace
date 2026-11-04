@@ -14,7 +14,7 @@ pip install "precisionai-pace[all]"            # both
 ```
 
 Each extra inherits its framework's own Python minimum, which may be higher than
-the core's 3.8. The callbacks are tested with Lightning 2.6, Transformers 5.22 and
+the core's 3.11. The callbacks are tested with Lightning 2.6, Transformers 5.22 and
 TRL 1. The lower bounds in
 the extras are what the callbacks import; behaviour on older versions is untested.17 on CPU.
 

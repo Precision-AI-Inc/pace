@@ -3,8 +3,6 @@
 
 """Unit tests for precisionai.pace.protocol (reading side)."""
 
-from __future__ import annotations
-
 import dataclasses
 import json
 import random

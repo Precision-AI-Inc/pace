@@ -11,7 +11,7 @@ You do not have to do anything extra for that.
 pip install precisionai-pace
 ```
 
-Python 3.8 or later. The core package has no dependencies, so it adds nothing to
+Python 3.11 or later. The core package has no dependencies, so it adds nothing to
 your training image. Framework callbacks are optional extras, see
 [Framework integrations](frameworks.md).
 
