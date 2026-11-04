@@ -23,7 +23,8 @@ from precisionai.pace.protocol import (
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "protocol" / "cases.jsonl"
-VALID = "text [pace:1 s=a k=upd c=1 t=2 e=1 q=2]"
+VALID = "text [pace:2 a c=1 t=2 e=1 q=2 r=1b8b7650]"
+RUN = "1b8b7650"
 
 
 def _load_cases() -> list[dict[str, Any]]:
@@ -105,6 +106,38 @@ def test_parse_line_returns_record_fields() -> None:
     )
 
 
+def test_parse_line_reads_a_pace2_trailer() -> None:
+    record = parse_line("[pace:2 val<train start t=? u=batch n=Val r=1b8b7650 root res]")
+    assert record == Record(
+        scope="val",
+        event=Event.START,
+        completed=0.0,
+        total=None,
+        unit="batch",
+        parent="train",
+        root=True,
+        resumed=True,
+        label="Val",
+        run=RUN,
+    )
+
+
+def test_parse_line_reads_pace1_and_pace2_lines_of_one_stream() -> None:
+    lines = [
+        "[pace:1 s=old k=start c=0 t=2 u=it e=0 q=1 run=aaaa]",
+        "[pace:2 new start t=2 r=bbbb]",
+        "[pace:1 s=old k=upd c=1 t=2 e=1 q=2]",
+        "[pace:2 new c=1 t=2 e=1 q=2 r=bbbb]",
+    ]
+    records = [parse_line(line) for line in lines]
+    assert [(record.scope, record.event, record.seq) for record in records if record is not None] == [
+        ("old", Event.START, 1),
+        ("new", Event.START, None),
+        ("old", Event.UPDATE, 2),
+        ("new", Event.UPDATE, 2),
+    ]
+
+
 @pytest.mark.parametrize("value", [None, 5, b"[pace:1 s=a k=upd c=1 t=2 e=1 q=2]", ["x"]])
 def test_parse_line_ignores_non_strings(value: Any) -> None:
     assert parse_line(value) is None
@@ -138,17 +171,18 @@ def _expected_after_write(record: Record) -> Record:
 
 def _handwritten_records() -> list[Record]:
     return [
-        Record("train", Event.START, 1, 0.0, 0.0, 5000.0, unit="step", root=True, label="Fine-tune 7B"),
-        Record("train", Event.START, 1, 0.0, 3100.0, 5000.0, unit="step", resumed=True),
-        Record("train", Event.UPDATE, 57, 763.12, 1840.0, 5000.0, root=True),
-        Record("read", Event.UPDATE, 2, 3.04, 12.5, None),
-        Record("val", Event.UPDATE, 3, 0.0, 0.000001, 0.5, parent="train"),
-        Record("train", Event.END, 90, 2075.46, 5000.0, 5000.0),
-        Record("train", Event.FAIL, 9, 12.5),
-        Record("job", Event.PLAN, 1, 0.0, phases=(("prep", 0.05), ("train", 0.9), ("eval", 0.05))),
-        Record("job", Event.START, 1, 0.0, 0.0, None, unit="café", label="日本語 " * 5),
-        Record("job", Event.START, 1, 0.0, 0.0, 1.0, label="x" * 100),
-        Record("a.b-c_D", Event.UPDATE, 10**12, 1e14, 1e15, 1e15),
+        Record("train", Event.START, None, 0.0, 0.0, 5000.0, unit="step", root=True, label="Fine-tune 7B", run=RUN),
+        Record("train", Event.START, None, 0.0, 3100.0, 5000.0, unit="step", resumed=True, run=RUN),
+        Record("train", Event.UPDATE, 57, 763.12, 1840.0, 5000.0, root=True, run=RUN),
+        Record("read", Event.UPDATE, 2, 3.04, 12.5, None, run=RUN),
+        Record("val", Event.UPDATE, 3, 0.0, 0.000001, 0.5, parent="train", run=RUN),
+        Record("train", Event.END, None, 2075.46, 5000.0, 5000.0, run=RUN),
+        Record("train", Event.FAIL, None, 12.5, run=RUN),
+        Record("load", Event.STEP, None, 12.04, 1.0, 1.0, parent="prep", label="Load", run=RUN),
+        Record("job", Event.PLAN, 1, 0.0, phases=(("prep", 0.05), ("train", 0.9), ("eval", 0.05)), run=RUN),
+        Record("job", Event.START, None, 0.0, 0.0, None, unit="café", label="日本語 " * 5, run=RUN),
+        Record("job", Event.START, None, 0.0, 0.0, 1.0, label="x" * 100, run=RUN),
+        Record("a.b-c_D", Event.UPDATE, 10**12, 1e14, 1e15, 1e15, run=RUN),
     ]
 
 
@@ -161,6 +195,8 @@ def test_parse_line_handles_pathological_input() -> None:
     assert parse_line("\x1b[" * 2000) is None
     assert parse_line("\x1b]" * 2000) is None
     assert parse_line("[pace:1 " * 500 + "]") is None
+    assert parse_line("[pace:2 " * 500 + "]") is None
+    assert parse_line("[pace:2 a" + " root" * 2000 + "]") is None
     assert parse_line(" " * 4000 + "]") is None
 
 

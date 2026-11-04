@@ -4,7 +4,7 @@
 """Turn log messages and progress records into the readable part of an output line.
 
 Nothing here writes; it only builds strings. The text is for people and may change
-between releases. Only the ``[pace:1 ...]`` trailer that follows it is a contract.
+between releases. Only the ``[pace:2 ...]`` trailer that follows it is a contract.
 """
 
 import codecs

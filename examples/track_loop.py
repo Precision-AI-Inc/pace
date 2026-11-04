@@ -14,9 +14,9 @@ The total comes from ``len(samples)``; pass ``total=`` for an iterable with no l
 Run: ``python examples/track_loop.py``. Add ``PACE_MIN_INTERVAL=0`` to see every progress
 line (a real job writes one at most every 15 seconds).
 
-Expect: a ``start`` line, ``upd`` lines when ``PACE_MIN_INTERVAL=0``, an ``end`` line, then
+Expect: a ``start`` line, update lines when ``PACE_MIN_INTERVAL=0``, an ``end`` line, then
 ``SUCCESS``. On a terminal the lines are replaced by one bar that redraws in place. Every
-progress line ends with the ``[pace:1 s=inference root=1 ...]`` trailer a scheduler reads.
+progress line ends with the ``[pace:2 inference ... root]`` trailer a scheduler reads.
 """
 
 import time

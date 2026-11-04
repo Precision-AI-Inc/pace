@@ -1,4 +1,4 @@
-"scope=train event=start seq=1 elapsed=0.0 completed=0.0 total=100.0 unit=step root=True label=Train\n"
+"scope=train event=start elapsed=0.0 completed=0.0 total=100.0 unit=step root=True label=Train\n"
 "scope=train event=upd seq=2 elapsed=0.0 completed=1.0 total=100.0 root=True\n"
 "scope=train event=upd seq=3 elapsed=0.0 completed=2.0 total=100.0 root=True\n"
 "scope=train event=upd seq=4 elapsed=0.0 completed=3.0 total=100.0 root=True\n"
@@ -103,5 +103,5 @@
 "scope=train event=upd seq=100 elapsed=0.0 completed=99.0 total=100.0 root=True\n"
 "scope=train event=upd seq=101 elapsed=0.0 completed=100.0 total=100.0 root=True\n"
 "INFO     epoch 4/4 done, last loss 0.040\n"
-"scope=train event=end seq=102 elapsed=0.0 completed=100.0 total=100.0 root=True\n"
+"scope=train event=end elapsed=0.0 completed=100.0 total=100.0 root=True\n"
 "SUCCESS  Training finished\n"

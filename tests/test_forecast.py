@@ -25,8 +25,10 @@ from precisionai.pace.protocol import Event, Record
 class Run:
     """Drive one scope's records into a forecast; ``received_at`` is ``offset + elapsed``."""
 
-    def __init__(self, sink, scope="train", total=1000.0, *, offset=1000.0, twice=False, **fields):
+    def __init__(self, sink, scope="train", total=1000.0, *, offset=1000.0, twice=False, run_id=None, **fields):
+        """With ``run_id``, the records are pace:2 ones: the run id on each, a sequence number only on an update."""
         self.sink = sink
+        self.run_id = run_id
         self.scope = scope
         self.total: float | None = total
         self.offset = offset
@@ -45,10 +47,11 @@ class Run:
         record = Record(
             scope=self.scope,
             event=event,
-            seq=self.seq,
+            seq=None if self.run_id and event is not Event.UPDATE else self.seq,
             elapsed=self.t,
             completed=completed,
             total=None if event is Event.FAIL else self.total,
+            **({"run": self.run_id} if self.run_id else {}),
             **self.fields,
             **extra,
         )
@@ -1065,3 +1068,133 @@ def test_seconds_per_unit_restarts_when_the_count_goes_backwards() -> None:
     run.mark(301.0, 1.0)
     run.mark(401.0, 2.0)
     assert fc.seconds_per_unit() == pytest.approx(100.0)
+
+
+# --- pace:2 records: a run id on every record, ordered by elapsed time ---
+
+RUN_A = "aaaa1111"
+RUN_B = "bbbb2222"
+
+
+class Collect:
+    """A sink that keeps the records, to replay them as a reader would."""
+
+    def __init__(self):
+        self.records = []
+
+    def observe(self, record, received_at):
+        self.records.append((record, received_at))
+
+
+def test_pace2_records_read_twice_change_nothing() -> None:
+    once, twice = ScopeForecast("train"), ScopeForecast("train")
+    for fc, double in ((once, False), (twice, True)):
+        run = Run(fc, run_id=RUN_A, twice=double)
+        run.start()
+        run.ticks(6, 15.0, 2.0)
+    assert twice.snapshot(run.now) == once.snapshot(run.now)
+    assert twice.snapshot(run.now).state is ForecastState.LIVE
+
+
+def test_two_streams_read_one_after_the_other_give_the_estimate_of_one() -> None:
+    # A reader that drains stdout before stderr sees every start again after the updates.
+    sink = Collect()
+    run = Run(sink, run_id=RUN_A, root=True)
+    run.start()
+    run.ticks(8, 15.0, 2.0)
+    one, two = JobForecast(), JobForecast()
+    for record, received in sink.records:
+        one.observe(record, received)
+        two.observe(record, received)
+    taken = [two.observe(record, run.now) for record, _ in sink.records]
+    assert taken == [False] * len(sink.records)
+    assert two.snapshot(run.now) == one.snapshot(run.now)
+    assert one.snapshot(run.now).state is ForecastState.LIVE
+
+
+def test_a_late_start_of_the_run_already_seen_is_not_a_restart() -> None:
+    # The reader joined mid-run: it read updates first, then the start from the other stream.
+    fc = ScopeForecast("train")
+    run = Run(fc, run_id=RUN_A)
+    late_start = Record(scope="train", event=Event.START, completed=0.0, total=1000.0, unit="step", run=RUN_A)
+    run.ticks(6, 15.0, 2.0)
+    live = fc.snapshot(run.now)
+    assert live.state is ForecastState.LIVE
+    assert fc.observe(late_start, run.now) is False
+    assert fc.snapshot(run.now) == live
+
+
+def test_a_new_run_after_joining_mid_run_is_a_restart() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc, run_id=RUN_A)
+    run.ticks(6, 15.0, 2.0)
+    old_update = run.tick(15.0, 2.0)
+    run.run_id = RUN_B
+    run.restart(completed=40.0, resumed=True)
+    restarted = fc.snapshot(run.now)
+    assert restarted.state is ForecastState.LEARNING
+    assert restarted.completed == 40.0
+    assert fc.elapsed == 0.0
+    # A copy of the earlier run's update, read late from the other stream, changes nothing.
+    assert fc.observe(old_update, run.now) is False
+    assert fc.snapshot(run.now) == restarted
+
+
+def test_a_new_run_id_on_an_update_also_begins_a_new_segment() -> None:
+    # The reader may miss the restarted run's start altogether.
+    fc, run = _live_run(run_id=RUN_A)
+    run.run_id = RUN_B
+    run.offset, run.t = run.now + 30.0, 10.0
+    run.mark(10.0, 5.0)
+    assert fc.snapshot(run.now).state is ForecastState.LEARNING
+    assert fc.snapshot(run.now).completed == 5.0
+
+
+def test_within_a_run_a_start_comes_first_and_an_end_last() -> None:
+    fc = ScopeForecast("train")
+    for event, seq in ((Event.START, None), (Event.UPDATE, 2), (Event.UPDATE, 3), (Event.END, None)):
+        record = Record(scope="train", event=event, seq=seq, completed=1.0, total=1.0, run=RUN_A)
+        assert fc.observe(record, 0.0)
+    assert fc.snapshot(0.0).state is ForecastState.COMPLETE
+    late_update = Record(scope="train", event=Event.UPDATE, seq=4, completed=1.0, total=1.0, run=RUN_A)
+    assert fc.observe(late_update, 0.0) is False
+
+
+def test_a_step_is_a_start_and_an_end_at_once() -> None:
+    job = JobForecast()
+    step = Record(scope="load", event=Event.STEP, elapsed=12.0, completed=1.0, total=1.0, parent="job", run=RUN_A)
+    assert job.observe(step, 1000.0)
+    assert job.observe(step, 1000.0) is False
+    forecast = job.snapshot(1000.0).scopes["load"]
+    assert forecast.state is ForecastState.COMPLETE
+    assert (forecast.completed, forecast.total) == (1.0, 1.0)
+
+
+def test_a_plan_times_unstarted_phases_from_a_step() -> None:
+    job = JobForecast()
+    job.observe(Record(scope="plan", event=Event.PLAN, seq=1, phases=(("prep", 0.5), ("train", 0.5)), run=RUN_A), 0.0)
+    job.observe(Record(scope="prep", event=Event.STEP, elapsed=100.0, completed=1.0, total=1.0, run=RUN_A), 100.0)
+    estimate = job.snapshot(100.0)
+    assert estimate.source == "plan"
+    assert estimate.remaining_seconds == pytest.approx(100.0)
+
+
+def test_a_plan_from_a_restarted_run_replaces_the_one_before_it() -> None:
+    job = JobForecast()
+    older = Record(scope="plan", event=Event.PLAN, seq=3, phases=(("a", 1.0),), run=RUN_A)
+    newer = Record(scope="plan", event=Event.PLAN, seq=1, phases=(("b", 1.0),), run=RUN_B)
+    assert job.observe(older, 0.0)
+    assert job.observe(newer, 1.0)
+    assert job.observe(older, 2.0) is False
+    assert job.observe(newer, 2.0) is False
+    job.observe(Record(scope="b", event=Event.STEP, elapsed=5.0, completed=1.0, total=1.0, run=RUN_B), 3.0)
+    assert job.snapshot(3.0).state is ForecastState.COMPLETE
+
+
+def test_observe_says_whether_a_record_was_taken() -> None:
+    fc = ScopeForecast("train")
+    assert (
+        fc.observe(Record(scope="other", event=Event.UPDATE, seq=2, completed=1.0, total=2.0, run=RUN_A), 0.0) is False
+    )
+    assert fc.observe(Record(scope="train", event=Event.PLAN, seq=1, phases=(("a", 1.0),), run=RUN_A), 0.0) is False
+    assert JobForecast().observe(Record(scope="plan", event=Event.PLAN, seq=1, run=RUN_A), 0.0) is False

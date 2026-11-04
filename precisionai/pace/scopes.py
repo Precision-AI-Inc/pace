@@ -4,7 +4,7 @@
 """Progress scopes: ``progress``, ``track``, ``timed``, ``phase`` and ``plan``.
 
 A scope is one piece of work with a start, a completed amount, an optional total and
-an end. Each progress line it writes carries the ``[pace:1 ...]`` trailer built by
+an end. Each progress line it writes carries the ``[pace:2 ...]`` trailer built by
 :func:`precisionai.pace.protocol.format_trailer`; the text before it is for people.
 
 Output rules (see ``docs/design.md``):
@@ -266,7 +266,7 @@ class Scope:
         return Record(
             scope=self.id,
             event=event,
-            seq=self._seq,
+            seq=self._seq if event in (Event.UPDATE, Event.PLAN) else None,
             elapsed=max(now - self._started_at, 0.0),
             completed=None if event is Event.PLAN else self.completed,
             total=self.total,
@@ -276,7 +276,7 @@ class Scope:
             resumed=first and self.resumed,
             phases=phases,
             label=(self.description.strip() or None) if first else None,
-            run=self._out.run_id if first else None,
+            run=self._out.run_id,
         )
 
     def _emit(

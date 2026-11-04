@@ -179,6 +179,35 @@ class _RateEstimator:
             self._blend(rate)
 
 
+# Enough for any real run of restarts; bounded because run ids come from untrusted lines.
+_RUNS_REMEMBERED = 16
+
+
+def _order(record: Record) -> float:
+    """Return where ``record`` falls among its run's records: by ``seq``, or first for a start and last for an end without one."""
+    if record.seq is not None:
+        return record.seq
+    return 0 if record.event is Event.START else math.inf
+
+
+class _Runs:
+    """The run id records come from now, and the ones left behind by a restart."""
+
+    def __init__(self) -> None:
+        self.current: str | None = None
+        self._left: deque[str] = deque(maxlen=_RUNS_REMEMBERED)
+
+    def left_behind(self, run: str | None) -> bool:
+        """Return whether ``run`` is one a restart has replaced, so its records are late copies."""
+        return run is not None and run != self.current and run in self._left
+
+    def leave(self) -> None:
+        """Leave the current run behind; the next record's run becomes current."""
+        if self.current is not None:
+            self._left.append(self.current)
+        self.current = None
+
+
 class ScopeForecast:
     """Track one scope's records and estimate its remaining time.
 
@@ -201,7 +230,7 @@ class ScopeForecast:
         self._elapsed = 0.0
         self._ended: Event | None = None
         self._reached_live = False
-        self._run: str | None = None
+        self._runs = _Runs()
         self._begin_segment()
 
     @property
@@ -272,12 +301,16 @@ class ScopeForecast:
             return None
         return seconds / units
 
-    def observe(self, record: Record, received_at: float) -> None:
+    def observe(self, record: Record, received_at: float) -> bool:
         """Take one record into account.
 
-        A record whose ``seq`` is not above the highest seen in the current segment is
-        ignored (a duplicate from the other stream). A ``start`` after the scope has
-        reported beyond ``q=1`` begins a new segment.
+        A record from a run id not seen before begins a new segment (the process
+        restarted); one from a run this scope has left behind is ignored. Within a run, a
+        record that does not come after the latest one taken is ignored: a copy read from
+        the other stream, or a ``start`` read late. Records are ordered by ``seq``; a
+        ``pace:2`` start, which has none, comes first and an end, fail or step last. A
+        ``pace:1`` ``start`` without a run id after the scope reported beyond ``q=1`` also
+        begins a new segment.
 
         Parameters
         ----------
@@ -286,18 +319,26 @@ class ScopeForecast:
         received_at : float
             When the record was received, in seconds on the caller's clock. Used
             to decide staleness; must be the same clock passed to :meth:`snapshot`.
+
+        Returns
+        -------
+        bool
+            Whether the record was taken, rather than ignored.
         """
-        if record.scope != self.scope or record.event is Event.PLAN:
-            return
-        if record.event is Event.START and self._is_restart(record):
+        if record.scope != self.scope or record.event is Event.PLAN or self._runs.left_behind(record.run):
+            return False
+        if self._is_restart(record):
+            self._runs.leave()
             self._begin_segment()
-        elif record.seq <= self._max_seq:
-            return
+        key = _order(record)
+        if self._last_key is not None and key <= self._last_key:
+            return False
         if self._ended is not None and record.event is not Event.START:
-            return
-        self._max_seq = record.seq
+            return False
+        self._last_key = key
         self._receipts.append(received_at)
         self._take(record)
+        return True
 
     def snapshot(self, now: float) -> Forecast:
         """Return the estimate as of ``now``.
@@ -334,7 +375,7 @@ class ScopeForecast:
 
     def _begin_segment(self) -> None:
         self._estimator = _RateEstimator(self._config)
-        self._max_seq = 0
+        self._last_key: float | None = None
         self._receipts: deque[float] = deque(maxlen=self._config.reference_window + 1)
         self._baseline_elapsed = 0.0
         self._baseline_completed = 0.0
@@ -348,28 +389,28 @@ class ScopeForecast:
         self._root = False
 
     def _is_restart(self, record: Record) -> bool:
-        # With run ids, a start from another run is a restart and one from the same run is
-        # the same line read twice. Without them, a start after q=1 is taken as a restart.
-        if record.run is not None and self._run is not None:
-            return record.run != self._run
-        return self._max_seq > 1
+        if self._last_key is None:
+            return False
+        if record.run is not None:
+            return record.run != self._runs.current
+        # A pace:1 start without a run id: after q=1 it can only be a restart.
+        return record.event is Event.START and self._last_key > 1
 
     def _take(self, record: Record) -> None:
-        if record.event is Event.START and record.run is not None:
-            self._run = record.run
+        self._runs.current = record.run or self._runs.current
         self._parent = record.parent or self._parent
         self._root = self._root or record.root
         self._unit = record.unit or self._unit
         self._elapsed = record.elapsed
-        if record.event is Event.START:
+        if record.event in (Event.START, Event.STEP):
             self._ended = None
-        if record.event in (Event.START, Event.UPDATE, Event.END):
+        if record.event in (Event.START, Event.UPDATE, Event.END, Event.STEP):
             self._total = record.total
         if record.completed is not None:
             self._completed = record.completed
             self._measure(record)
-        if record.event in (Event.END, Event.FAIL):
-            self._ended = record.event
+        if record.event in (Event.END, Event.FAIL, Event.STEP):
+            self._ended = Event.FAIL if record.event is Event.FAIL else Event.END
         elif self._ready():
             self._live = True
             self._reached_live = True
@@ -528,10 +569,11 @@ class JobForecast:
         self._scopes: dict[str, ScopeForecast] = {}
         self._plan: tuple[tuple[str, float], ...] = ()
         self._plan_seq: dict[str, int] = {}
+        self._plan_runs: dict[str, _Runs] = {}
         self._first_received: float | None = None
         self._ever_live = False
 
-    def observe(self, record: Record, received_at: float) -> None:
+    def observe(self, record: Record, received_at: float) -> bool:
         """Route one record to its scope's forecast, creating it on first sight.
 
         Parameters
@@ -540,20 +582,39 @@ class JobForecast:
             Any record of the job.
         received_at : float
             When the record was received, on the clock passed to :meth:`snapshot`.
+
+        Returns
+        -------
+        bool
+            Whether the record was taken; ``False`` for a copy read from the other stream,
+            a record read late, or a plan that replaces nothing.
         """
         if self._first_received is None:
             self._first_received = received_at
         if record.event is Event.PLAN:
-            # A plan read late from the other stream must not replace a newer one.
-            if record.phases and record.seq > self._plan_seq.get(record.scope, 0):
-                self._plan_seq[record.scope] = record.seq
-                self._plan = record.phases
-            return
+            return self._take_plan(record)
         scope = self._scopes.get(record.scope)
         if scope is None:
             scope = self._scopes[record.scope] = ScopeForecast(record.scope, config=self._config)
-        scope.observe(record, received_at)
+        taken = scope.observe(record, received_at)
         self._ever_live = self._ever_live or scope.reached_live
+        return taken
+
+    def _take_plan(self, record: Record) -> bool:
+        # A plan read late from the other stream must not replace a newer one of its run,
+        # and a plan from a restarted run replaces any plan of the run before it.
+        runs = self._plan_runs.setdefault(record.scope, _Runs())
+        if not record.phases or runs.left_behind(record.run):
+            return False
+        if record.run != runs.current and record.scope in self._plan_seq:
+            runs.leave()
+            del self._plan_seq[record.scope]
+        if (record.seq or 0) <= self._plan_seq.get(record.scope, 0):
+            return False
+        runs.current = record.run
+        self._plan_seq[record.scope] = record.seq or 0
+        self._plan = record.phases
+        return True
 
     def snapshot(self, now: float) -> JobEstimate:
         """Return the job's estimate as of ``now``.

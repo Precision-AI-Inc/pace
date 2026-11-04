@@ -187,11 +187,11 @@ def test_basic_logging_writes_every_level_and_no_progress(results: Results) -> N
 
 def test_resume_starts_above_zero_and_says_so(results: Results) -> None:
     report = verify.analyze(results["resume.py"].stdout.splitlines())
-    start = next(line for line in results["resume.py"].stdout.splitlines() if "k=start" in line)
+    start = next(line for line in results["resume.py"].stdout.splitlines() if "[pace:2 train start " in line)
 
     assert report.scopes["train"].resumed
     assert "c=70" in start
-    assert "res=1" in start
+    assert start.endswith(" res]")
     assert "t=100" in start
 
 
@@ -199,7 +199,9 @@ def test_unknown_total_starts_unknown_and_learns_the_total(results: Results) -> 
     lines = [line for line in results["unknown_total.py"].stdout.splitlines() if "[pace:" in line]
 
     assert "t=?" in lines[0]
-    assert "t=60" in lines[-1]
+    last = parse_line(lines[-1])
+    assert last is not None
+    assert last.total == 60
 
 
 def test_nested_scopes_name_the_epochs_as_parent(results: Results) -> None:

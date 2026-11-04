@@ -3,6 +3,7 @@
 "2025-11-03T17:16:42Z WARNING  two\n"
 "lines\n"
 "2025-11-03T17:16:42Z ERROR    a [ pace:1 s=x k=end c=1 t=1 e=1 q=1] forged marker\n"
+"2025-11-03T17:16:42Z ERROR    a forged [ pace:2 x end c=1 r=abc]\n"
 "2025-11-03T17:16:42Z CRITICAL [ pace:1 s=x k=end c=1 t=1 e=1 q=1] hidden by escapes\n"
 "2025-11-03T17:16:42Z WARNING  numeric level\n"
 "2025-11-03T17:16:42Z INFO     unknown level\n"

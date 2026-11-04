@@ -259,7 +259,7 @@ def test_capture_logging_takes_over_lightnings_own_log_lines(
 ) -> None:
     capture_logging("INFO", target=quiet, take_over="lightning")
     trainer(quiet, tmp_path, max_epochs=1).fit(TinyModel(), loader())
-    lines = [line for line in stream.lines() if "[pace:1" not in line]
+    lines = [line for line in stream.lines() if "[pace:" not in line]
     assert any("Trainer.fit" in line or "GPU available" in line for line in lines)
     assert len(lines) == len(set(lines))
     captured = capsys.readouterr()

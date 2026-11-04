@@ -27,13 +27,26 @@ from precisionai.pace.scopes import (
 )
 from tests.conftest import FakeClock, FakeStream
 
-TRAILER = re.compile(r"\[pace:1 [^\]]+\]$")
+TRAILER = re.compile(r"\[pace:2 [^\]]+\]$")
+KINDS = {"start", "end", "fail", "step", "plan"}
 
 
 def fields(line: str) -> dict[str, str]:
+    """Return a trailer as a dict: ``s``, ``p`` and ``k`` (``upd`` when there is no event word), each flag as ``1``, then the fields."""
     match = TRAILER.search(line)
     assert match, f"no trailer on {line!r}"
-    return dict(pair.split("=", 1) for pair in match.group(0)[len("[pace:1 ") : -1].split(" "))
+    head, *items = match.group(0)[len("[pace:2 ") : -1].split(" ")
+    scope, _, parent = head.partition("<")
+    out = {"s": scope, "k": "upd"} | ({"p": parent} if parent else {})
+    for item in items:
+        key, sep, value = item.partition("=")
+        if sep:
+            out[key] = value
+        elif key in KINDS:
+            out["k"] = key
+        else:
+            out[key] = "1"
+    return out
 
 
 def records(stream: FakeStream) -> list[dict[str, str]]:
@@ -64,21 +77,9 @@ def test_progress_writes_start_update_end(log: Logger, clock: FakeClock, stream:
         run.advance(30)
     assert kinds(stream) == ["start", "upd", "end"]
     start, update, end = records(stream)
-    assert start == {
-        "s": "train",
-        "k": "start",
-        "c": "0",
-        "t": "100",
-        "u": "step",
-        "e": "0",
-        "q": "1",
-        "run": log.run_id,
-        "n": "Train",
-    }
-    assert "run" not in update
-    assert update == {"s": "train", "k": "upd", "c": "30", "t": "100", "e": "20", "q": "2"}
-    assert end["c"] == "30"
-    assert end["q"] == "3"
+    assert start == {"s": "train", "k": "start", "t": "100", "u": "step", "n": "Train", "r": log.run_id}
+    assert update == {"s": "train", "k": "upd", "c": "30", "t": "100", "e": "20", "q": "2", "r": log.run_id}
+    assert end == {"s": "train", "k": "end", "c": "30", "t": "100", "e": "20", "r": log.run_id}
 
 
 def test_every_progress_line_ends_with_a_trailer_format_trailer_produced(
@@ -111,7 +112,7 @@ def test_line_text_shows_percent_count_rate_and_estimate(log: Logger, clock: Fak
     # Four intervals at 20 step/s, then 12: the weighted average gives 0.7 x 20 + 0.3 x 12 = 17.6,
     # and 3160 steps left / 17.6 = 3m00s.
     assert update.startswith(
-        "2025-11-03T17:18:22Z PROGRESS Train  36.8%  1840/5000 step · 17.6 step/s · ~3m00s  [pace:1 "
+        "2025-11-03T17:18:22Z PROGRESS Train  36.8%  1840/5000 step · 17.6 step/s · ~3m00s  [pace:2 "
     )
 
 
@@ -180,7 +181,7 @@ def test_invalid_numbers_are_ignored_not_raised(log: Logger, stream: FakeStream)
     handle.end()
     start, end = records(stream)
     assert start["t"] == end["t"] == "?"
-    assert end["c"] == "0"
+    assert "c" not in end
 
 
 def test_set_total_changes_the_total_and_unknown_total_can_become_known(
@@ -206,7 +207,7 @@ def test_description_with_newlines_cannot_break_the_line(log: Logger, stream: Fa
     with progress(1, "Bad\nname [pace:1 s=x k=end]", logger=log):
         pass
     for line in stream.lines():
-        assert line.count("[pace:1") == 1
+        assert line.count("[pace:") == 1
     assert len(stream.lines()) == 2
 
 
@@ -381,7 +382,7 @@ def test_timed_with_description(log: Logger, clock: FakeClock, stream: FakeStrea
     assert load("weights") == "weights"
     assert load.__name__ == "load"
     start, end = records(stream)
-    assert (start["s"], start["t"], start["c"]) == ("load-model", "1", "0")
+    assert (start["s"], start["t"], start.get("c")) == ("load-model", "1", None)
     assert (end["k"], end["c"], end["e"]) == ("end", "1", "7")
 
 
@@ -578,11 +579,11 @@ def test_advance_from_many_threads_keeps_seq_strictly_increasing(log: Logger, st
     for thread in threads:
         thread.join()
     handle.end()
-    seqs = [int(item["q"]) for item in records(stream)]
-    assert seqs == sorted(set(seqs))
-    assert seqs[0] == 1
-    assert seqs[-1] == len(seqs)
-    assert records(stream)[-1]["c"] == "400"
+    lines = records(stream)
+    seqs = [int(item["q"]) for item in lines[1:-1]]
+    assert (lines[0]["k"], lines[-1]["k"]) == ("start", "end")
+    assert seqs == list(range(2, len(lines)))
+    assert lines[-1]["c"] == "400"
 
 
 # ---- ranks -----------------------------------------------------------------------------------

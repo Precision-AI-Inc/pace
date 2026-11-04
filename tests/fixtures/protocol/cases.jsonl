@@ -35,7 +35,7 @@
 {"name": "line_of_exactly_4096_bytes", "line": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx [pace:1 s=a k=upd c=1 t=2 e=1 q=2]", "record": {"scope": "a", "event": "upd", "seq": 2, "elapsed": 1, "completed": 1, "total": 2}}
 {"name": "empty_line", "line": "", "record": null}
 {"name": "no_trailer", "line": "2026-11-03T17:23:59Z INFO     Loading model Qwen2.5-7B", "record": null}
-{"name": "major_version_2", "line": "[pace:2 s=a k=upd c=1 t=2 e=1 q=2]", "record": null}
+{"name": "pace1_fields_under_major_2", "line": "[pace:2 s=a k=upd c=1 t=2 e=1 q=2]", "record": null}
 {"name": "major_version_0", "line": "[pace:0 s=a k=upd c=1 t=2 e=1 q=2]", "record": null}
 {"name": "major_version_not_a_number", "line": "[pace:x s=a k=upd c=1 t=2 e=1 q=2]", "record": null}
 {"name": "major_version_missing", "line": "[pace: s=a k=upd c=1 t=2 e=1 q=2]", "record": null}
@@ -138,3 +138,54 @@
 {"name": "reject: unit on an update", "line": "x [pace:1 s=a k=upd c=1 t=2 u=step e=1 q=2]", "record": null}
 {"name": "reject: fail with c but no t", "line": "x [pace:1 s=a k=fail c=1 e=1 q=2]", "record": null}
 {"name": "reject: fail with t but no c", "line": "x [pace:1 s=a k=fail t=2 e=1 q=2]", "record": null}
+{"name": "v2_start", "line": "2026-11-04T02:22:10Z PROGRESS Generate  0/128 request  [pace:2 generate start t=128 u=request n=Generate r=1b8b7650 root]", "record": {"scope": "generate", "event": "start", "elapsed": 0, "completed": 0, "total": 128, "unit": "request", "root": true, "label": "Generate", "run": "1b8b7650"}}
+{"name": "v2_update", "line": "2026-11-04T02:25:16Z PROGRESS Generate   66/128  51.6%  estimating…  [pace:2 generate c=66 t=128 e=186.7 q=57 r=1b8b7650 root]", "record": {"scope": "generate", "event": "upd", "seq": 57, "elapsed": 186.7, "completed": 66, "total": 128, "root": true, "run": "1b8b7650"}}
+{"name": "v2_update_without_count_is_at_zero", "line": "[pace:2 load t=? e=120 q=2 r=1b8b7650]", "record": {"scope": "load", "event": "upd", "seq": 2, "elapsed": 120, "completed": 0, "run": "1b8b7650"}}
+{"name": "v2_end_without_total_has_its_count_as_total", "line": "[pace:2 generate end c=128 e=197.4 r=1b8b7650 root]", "record": {"scope": "generate", "event": "end", "elapsed": 197.4, "completed": 128, "total": 128, "root": true, "run": "1b8b7650"}}
+{"name": "v2_end_short_of_its_total", "line": "[pace:2 generate end c=40 t=128 e=30 r=1b8b7650]", "record": {"scope": "generate", "event": "end", "elapsed": 30, "completed": 40, "total": 128, "run": "1b8b7650"}}
+{"name": "v2_end_of_unknown_total", "line": "[pace:2 read end c=12 t=? e=3 r=1b8b7650]", "record": {"scope": "read", "event": "end", "elapsed": 3, "completed": 12, "run": "1b8b7650"}}
+{"name": "v2_step_is_one_unit_done", "line": "2026-11-04T02:22:22Z STEP       ├ Start Ollama  done in 12s  [pace:2 start-ollama<generate step e=12 n=Start%20Ollama r=1b8b7650]", "record": {"scope": "start-ollama", "event": "step", "elapsed": 12, "completed": 1, "total": 1, "parent": "generate", "label": "Start Ollama", "run": "1b8b7650"}}
+{"name": "v2_fail_without_counts", "line": "[pace:2 train fail e=12.5 r=1b8b7650]", "record": {"scope": "train", "event": "fail", "elapsed": 12.5, "run": "1b8b7650"}}
+{"name": "v2_fail_with_counts", "line": "[pace:2 train fail c=10 t=20 e=12.5 r=1b8b7650]", "record": {"scope": "train", "event": "fail", "elapsed": 12.5, "completed": 10, "total": 20, "run": "1b8b7650"}}
+{"name": "v2_fail_with_a_total_and_no_count_is_at_zero", "line": "[pace:2 train fail t=20 e=1 r=1b8b7650]", "record": {"scope": "train", "event": "fail", "elapsed": 1, "completed": 0, "total": 20, "run": "1b8b7650"}}
+{"name": "v2_plan", "line": "Plan  prep 5%, train 95%  [pace:2 plan plan q=2 ph=prep:0.05,train:0.95 r=1b8b7650]", "record": {"scope": "plan", "event": "plan", "seq": 2, "elapsed": 0, "phases": [["prep", 0.05], ["train", 0.95]], "run": "1b8b7650"}}
+{"name": "v2_resumed_nested_start", "line": "[pace:2 train<job start c=3100 t=5000 u=step n=Fine-tune%207B r=1b8b7650 res]", "record": {"scope": "train", "event": "start", "elapsed": 0, "completed": 3100, "total": 5000, "unit": "step", "parent": "job", "resumed": true, "label": "Fine-tune 7B", "run": "1b8b7650"}}
+{"name": "v2_start_written_late_carries_its_elapsed_time", "line": "[pace:2 download<prep start t=1 u=call e=15 n=Download r=1b8b7650]", "record": {"scope": "download", "event": "start", "elapsed": 15, "completed": 0, "total": 1, "unit": "call", "parent": "prep", "label": "Download", "run": "1b8b7650"}}
+{"name": "v2_items_in_any_order", "line": "[pace:2 a root r=1b8b7650 e=1 q=3 t=2 c=1]", "record": {"scope": "a", "event": "upd", "seq": 3, "elapsed": 1, "completed": 1, "total": 2, "root": true, "run": "1b8b7650"}}
+{"name": "v2_unknown_word_and_key_are_ignored", "line": "[pace:2 a c=1 t=2 e=1 q=3 r=1b8b7650 shiny zz=1]", "record": {"scope": "a", "event": "upd", "seq": 3, "elapsed": 1, "completed": 1, "total": 2, "run": "1b8b7650"}}
+{"name": "v2_ansi_colour_and_trailing_space", "line": "\u001b[36mPROGRESS\u001b[0m a  [pace:2 a c=1 t=2 e=1 q=3 r=1b8b7650]  ", "record": {"scope": "a", "event": "upd", "seq": 3, "elapsed": 1, "completed": 1, "total": 2, "run": "1b8b7650"}}
+{"name": "v2_mixed_stream_v1_still_reads", "line": "[pace:1 s=a k=upd c=1 t=2 e=1 q=2]", "record": {"scope": "a", "event": "upd", "seq": 2, "elapsed": 1, "completed": 1, "total": 2}}
+{"name": "v2_missing_run", "line": "[pace:2 a c=1 t=2 e=1 q=2]", "record": null}
+{"name": "v2_bad_run", "line": "[pace:2 a c=1 t=2 e=1 q=2 r=ABC]", "record": null}
+{"name": "v2_update_missing_total", "line": "[pace:2 a c=1 e=1 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_update_missing_q", "line": "[pace:2 a c=1 t=2 e=1 r=1b8b7650]", "record": null}
+{"name": "v2_start_missing_total", "line": "[pace:2 a start r=1b8b7650]", "record": null}
+{"name": "v2_plan_missing_q", "line": "[pace:2 p plan ph=a:1 r=1b8b7650]", "record": null}
+{"name": "v2_q_on_start", "line": "[pace:2 a start t=2 q=1 r=1b8b7650]", "record": null}
+{"name": "v2_q_on_end", "line": "[pace:2 a end c=2 q=3 r=1b8b7650]", "record": null}
+{"name": "v2_q_zero", "line": "[pace:2 a c=1 t=2 q=0 r=1b8b7650]", "record": null}
+{"name": "v2_two_events", "line": "[pace:2 a start end t=2 r=1b8b7650]", "record": null}
+{"name": "v2_repeated_flag", "line": "[pace:2 a start t=2 r=1b8b7650 root root]", "record": null}
+{"name": "v2_flag_in_capitals", "line": "[pace:2 a start t=2 r=1b8b7650 Root]", "record": null}
+{"name": "v2_res_on_update", "line": "[pace:2 a c=1 t=2 q=2 r=1b8b7650 res]", "record": null}
+{"name": "v2_unit_on_update", "line": "[pace:2 a c=1 t=2 q=2 u=step r=1b8b7650]", "record": null}
+{"name": "v2_label_on_end", "line": "[pace:2 a end c=2 n=x r=1b8b7650]", "record": null}
+{"name": "v2_count_on_step", "line": "[pace:2 a step c=1 r=1b8b7650]", "record": null}
+{"name": "v2_total_on_step", "line": "[pace:2 a step t=1 r=1b8b7650]", "record": null}
+{"name": "v2_count_on_plan", "line": "[pace:2 p plan c=1 q=1 r=1b8b7650]", "record": null}
+{"name": "v2_phases_on_start", "line": "[pace:2 a start t=1 ph=a:1 r=1b8b7650]", "record": null}
+{"name": "v2_fail_count_without_total", "line": "[pace:2 a fail c=3 r=1b8b7650]", "record": null}
+{"name": "v2_end_without_count_or_total", "line": "[pace:2 a end e=3 r=1b8b7650]", "record": null}
+{"name": "v2_zero_total", "line": "[pace:2 a c=0 t=0 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_empty_parent", "line": "[pace:2 a< c=1 t=2 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_two_parents", "line": "[pace:2 a<b<c c=1 t=2 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_bad_scope", "line": "[pace:2 a/b c=1 t=2 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_scope_written_as_a_field", "line": "[pace:2 s=a c=1 t=2 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_double_space", "line": "[pace:2 a  c=1 t=2 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_duplicate_key", "line": "[pace:2 a c=1 t=2 t=3 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_negative_elapsed", "line": "[pace:2 a c=1 t=2 e=-1 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_nothing_after_marker", "line": "[pace:2]", "record": null}
+{"name": "v2_unknown_major", "line": "[pace:3 a c=1 t=2 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_not_at_end_of_line", "line": "[pace:2 a c=1 t=2 q=2 r=1b8b7650] trailing", "record": null}
+{"name": "v2_neutralised_marker", "line": "[ pace:2 a c=1 t=2 q=2 r=1b8b7650]", "record": null}
+{"name": "v2_step_in_pace1", "line": "[pace:1 s=a k=step e=1 q=1]", "record": null}

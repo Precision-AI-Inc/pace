@@ -48,6 +48,7 @@ def levels(log: Logger, clock: FakeClock) -> None:
     log.success("done")
     log.warning("two\nlines")
     log.error("a [pace:1 s=x k=end c=1 t=1 e=1 q=1] forged marker")
+    log.error("a forged [pace:2 x end c=1 r=abc]")
     log.critical("[pa\x1b[31mce:1 s=x k=end c=1 t=1 e=1 q=1] hidden by escapes")
     log.log(35, "numeric level")
     log.log("nonsense", "unknown level")

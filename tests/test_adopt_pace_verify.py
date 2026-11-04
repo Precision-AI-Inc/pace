@@ -35,7 +35,7 @@ def line(record: Record, stamp: str = "2026-11-03T10:00:00Z") -> str:
 
 
 def start(scope: str = "train", **kwargs: object) -> Record:
-    values: dict = {"scope": scope, "event": Event.START, "seq": 1, "elapsed": 0.0, "completed": 0, "total": 10}
+    values: dict = {"scope": scope, "event": Event.START, "elapsed": 0.0, "completed": 0, "total": 10}
     values.update({"unit": "step", "label": "Train", "run": "abc"})
     values.update(kwargs)
     return Record(**values)
@@ -43,13 +43,13 @@ def start(scope: str = "train", **kwargs: object) -> Record:
 
 def update(scope: str = "train", seq: int = 2, completed: float = 5, **kwargs: object) -> Record:
     values: dict = {"scope": scope, "event": Event.UPDATE, "seq": seq, "elapsed": float(seq), "completed": completed}
-    values.update({"total": 10})
+    values.update({"total": 10, "run": "abc"})
     values.update(kwargs)
     return Record(**values)
 
 
 def end(scope: str = "train", seq: int = 9, event: Event = Event.END, **kwargs: object) -> Record:
-    values: dict = {"scope": scope, "event": event, "seq": seq, "elapsed": 9.0, "completed": 10, "total": 10}
+    values: dict = {"scope": scope, "event": event, "elapsed": float(seq), "completed": 10, "total": 10, "run": "abc"}
     values.update(kwargs)
     return Record(**values)
 
@@ -164,7 +164,7 @@ def test_a_secret_looking_or_long_label_is_a_warning() -> None:
 def test_a_plan_whose_names_match_the_scopes_is_clean() -> None:
     phases = (("prep", 0.5), ("train", 0.5))
     lines = run_lines(
-        Record(scope="plan", event=Event.PLAN, seq=1, elapsed=0.0, phases=phases),
+        Record(scope="plan", event=Event.PLAN, seq=1, phases=phases, run="abc"),
         start("prep"),
         end("prep"),
         start("train"),
@@ -182,7 +182,7 @@ def test_a_plan_whose_names_match_the_scopes_is_clean() -> None:
 def test_a_plan_name_with_no_scope_is_an_error() -> None:
     phases = (("prep", 0.5), ("trian", 0.5))
     lines = run_lines(
-        Record(scope="plan", event=Event.PLAN, seq=1, elapsed=0.0, phases=phases),
+        Record(scope="plan", event=Event.PLAN, seq=1, phases=phases, run="abc"),
         start("prep"),
         end("prep"),
     )
@@ -195,7 +195,7 @@ def test_a_plan_name_with_no_scope_is_an_error() -> None:
 def test_unplanned_work_after_the_last_planned_phase_is_a_warning() -> None:
     phases = (("train", 1.0),)
     lines = run_lines(
-        Record(scope="plan", event=Event.PLAN, seq=1, elapsed=0.0, phases=phases),
+        Record(scope="plan", event=Event.PLAN, seq=1, phases=phases, run="abc"),
         start("train"),
         end("train"),
         start("export"),
@@ -239,20 +239,32 @@ def test_duplicate_records_are_ignored() -> None:
     assert "1 duplicate record(s) ignored" in verify.format_report(report)
 
 
-def test_sequence_numbers_that_go_backwards_are_an_error() -> None:
+def test_a_record_read_late_is_ignored() -> None:
     report = verify.analyze(
         run_lines(start(root=True), update(seq=5, root=True), update(seq=3, root=True), end(root=True))
     )
 
-    assert any("sequence numbers go backwards" in text for text in messages(report, "error"))
+    assert report.duplicates == 1
+    assert not report.errors
+
+
+def test_a_late_start_after_the_updates_is_a_duplicate_not_a_restart() -> None:
+    # Read from both streams, one after the other: every line comes twice, the start late.
+    lines = run_lines(start(root=True), update(root=True), end(root=True))
+
+    report = verify.analyze(lines + lines)
+
+    assert report.duplicates == 3
+    assert report.scopes["train"].starts == 1
+    assert report.estimate.state is ForecastState.COMPLETE
 
 
 def test_a_restart_with_a_new_run_id_is_not_a_duplicate_or_disorder() -> None:
     lines = run_lines(
         start(root=True, run="first"),
-        end(root=True, event=Event.FAIL),
+        end(root=True, event=Event.FAIL, run="first"),
         start(root=True, run="second", resumed=True, completed=5),
-        end(root=True),
+        end(root=True, run="second"),
     )
 
     report = verify.analyze(lines)
@@ -387,13 +399,13 @@ def test_main_returns_two_for_a_missing_file_or_empty_input(tmp_path: Path) -> N
 
 
 def test_a_restart_without_run_ids_is_not_hidden_as_a_duplicate() -> None:
-    lines = run_lines(
-        start(run=None, root=True),
-        update(seq=2, root=True),
-        start(run=None, root=True),
-        update(seq=2, root=True),
-        end(seq=3, root=True),
-    )
+    lines = [
+        "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
+        "[pace:1 s=train root=1 k=upd c=5 t=10 e=2 q=2]",
+        "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
+        "[pace:1 s=train root=1 k=upd c=5 t=10 e=2 q=2]",
+        "[pace:1 s=train root=1 k=end c=10 t=10 e=3 q=3]",
+    ]
 
     report = verify.analyze(lines)
 
@@ -402,6 +414,12 @@ def test_a_restart_without_run_ids_is_not_hidden_as_a_duplicate() -> None:
 
 
 def test_the_same_start_read_twice_without_run_ids_is_a_duplicate() -> None:
-    report = verify.analyze(run_lines(start(run=None, root=True), start(run=None, root=True), end(seq=2, root=True)))
+    report = verify.analyze(
+        [
+            "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
+            "[pace:1 s=train root=1 k=start c=0 t=10 u=step e=0 q=1]",
+            "[pace:1 s=train root=1 k=end c=10 t=10 e=2 q=2]",
+        ]
+    )
 
     assert report.duplicates == 1
