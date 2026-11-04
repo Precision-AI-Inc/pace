@@ -1226,3 +1226,31 @@ def test_a_job_keeps_nothing_of_a_scope_run_before_its_restart() -> None:
     estimate = job.snapshot(5000.0)
     assert estimate.state is ForecastState.FAILED
     assert estimate.scopes["job"].completed is None
+
+
+def test_a_run_less_pace1_record_is_ignored_once_the_run_is_known_from_pace2() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc, run_id=RUN_A)
+    run.start()
+    run.ticks(2, 15.0, 2.0)
+    late_v1 = Record(scope="train", event=Event.UPDATE, seq=5, elapsed=60.0, completed=40.0, total=1000.0)
+    assert fc.observe(late_v1, run.now) is False
+    assert run.tick(15.0, 2.0) is not None
+    assert fc.snapshot(run.now).completed == 90.0
+
+
+def test_a_pace1_run_still_reads_its_run_less_updates() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.start(run=RUN_A)
+    run.ticks(2, 15.0, 2.0)
+    assert fc.snapshot(run.now).completed == 60.0
+
+
+def test_a_run_less_plan_does_not_replace_a_pace2_plan_or_block_its_later_plans() -> None:
+    job = JobForecast()
+    assert job.observe(Record(scope="plan", event=Event.PLAN, seq=1, phases=(("a", 1.0),), run=RUN_A), 0.0)
+    assert job.observe(Record(scope="plan", event=Event.PLAN, seq=5, phases=(("x", 1.0),)), 1.0) is False
+    assert job.observe(Record(scope="plan", event=Event.PLAN, seq=2, phases=(("b", 1.0),), run=RUN_A), 2.0)
+    job.observe(Record(scope="b", event=Event.STEP, elapsed=5.0, completed=1.0, total=1.0, run=RUN_A), 3.0)
+    assert job.snapshot(3.0).state is ForecastState.COMPLETE

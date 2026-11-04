@@ -195,17 +195,22 @@ class _Runs:
 
     def __init__(self) -> None:
         self.current: str | None = None
+        # Whether the current run writes its id on every record (pace:2), so a record without one is not of it.
+        self.stamped = False
         self._left: deque[str] = deque(maxlen=_RUNS_REMEMBERED)
 
-    def left_behind(self, run: str | None) -> bool:
-        """Return whether ``run`` is one a restart has replaced, so its records are late copies."""
-        return run is not None and run != self.current and run in self._left
+    def ignores(self, run: str | None) -> bool:
+        """Return whether a record of ``run`` is a late copy: from a run a restart replaced, or run-less in a pace:2 run."""
+        if run is None:
+            return self.stamped
+        return run != self.current and run in self._left
 
     def leave(self) -> None:
         """Leave the current run behind; the next record's run becomes current."""
         if self.current is not None:
             self._left.append(self.current)
         self.current = None
+        self.stamped = False
 
 
 class ScopeForecast:
@@ -318,7 +323,7 @@ class ScopeForecast:
         bool
             Whether the record was taken, rather than ignored.
         """
-        if record.scope != self.scope or record.event is Event.PLAN or self._runs.left_behind(record.run):
+        if record.scope != self.scope or record.event is Event.PLAN or self._runs.ignores(record.run):
             return False
         if self._is_restart(record):
             self._runs.leave()
@@ -395,6 +400,8 @@ class ScopeForecast:
 
     def _take(self, record: Record) -> None:
         self._runs.current = record.run or self._runs.current
+        # A pace:1 record carries a run id only on a start, which also has a sequence number.
+        self._runs.stamped |= record.run is not None and (record.event is not Event.START or record.seq is None)
         self._parent = record.parent or self._parent
         self._root = self._root or record.root
         self._unit = record.unit or self._unit
@@ -601,14 +608,15 @@ class JobForecast:
         # A plan read late from the other stream must not replace a newer one of its run,
         # and a plan from a restarted run replaces any plan of the run before it.
         runs = self._plan_runs.setdefault(record.scope, _Runs())
-        if not record.phases or runs.left_behind(record.run):
+        if not record.phases or runs.ignores(record.run):
             return False
-        if record.run != runs.current and record.scope in self._plan_seq:
+        if record.run is not None and record.run != runs.current and record.scope in self._plan_seq:
             runs.leave()
             del self._plan_seq[record.scope]
         if (record.seq or 0) <= self._plan_seq.get(record.scope, 0):
             return False
         runs.current = record.run
+        runs.stamped = record.run is not None
         self._plan_seq[record.scope] = record.seq or 0
         self._plan = record.phases
         return True

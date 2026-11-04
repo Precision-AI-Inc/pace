@@ -236,7 +236,7 @@ def test_duplicate_records_are_ignored() -> None:
 
     assert report.duplicates == 1
     assert report.records == 2
-    assert "1 duplicate record(s) ignored" in verify.format_report(report)
+    assert "1 record(s) ignored as copies or late lines" in verify.format_report(report)
 
 
 def test_a_record_read_late_is_ignored() -> None:

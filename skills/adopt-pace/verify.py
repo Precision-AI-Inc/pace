@@ -359,7 +359,9 @@ def format_report(report: Report) -> str:
     """
     out = [f"read {report.lines} lines: {report.records} Pace records, {len(report.scopes)} scopes"]
     if report.duplicates:
-        out.append(f"  ({report.duplicates} duplicate record(s) ignored, as a consumer reading both streams would)")
+        out.append(
+            f"  ({report.duplicates} record(s) ignored as copies or late lines, as a consumer reading both streams would)"
+        )
     out.extend(_scope_row(scope) for scope in report.scopes.values())
     if report.plans:
         out.append("plan: " + ", ".join(f"{name}:{weight:g}" for name, weight in report.plans[-1]))

@@ -157,9 +157,10 @@ readable. Removing or redefining one would be `pace:3`, which `parse_line` rejec
 ## Two streams, duplicate lines
 
 Pace writes to stdout by default, or to stderr with `PACE_STREAM=stderr`. A reader that
-captures both (or a user who mirrors the output to both) sees every line twice, in any
-interleaving: one stream may be read to the end before the other. Every `pace:2` record
-carries what a reader needs to ignore the copies:
+captures both (or a user who mirrors the output to both) sees every line twice. Each
+stream must be read in the order it was written, but one may be read well behind the
+other, even to its end first. Every `pace:2` record carries what a reader needs to
+ignore the copies:
 
 - **`r`**, the run id, is on every record and the same for every scope in one process run.
 - Within one run, a scope's records come in a fixed order: the `start`, then the updates
@@ -169,7 +170,12 @@ carries what a reader needs to ignore the copies:
   a restart, even for a reader that joined mid-run and never saw the first copy.
 - A record from a run id not seen before begins a new segment: the process restarted.
   Rates are never averaged across a restart. A record from a run that a restart left
-  behind is a late copy.
+  behind is a late copy, and so is a `pace:1` record without a run id once the scope's
+  run is known from `pace:2` records.
+- One limitation: the reader does not know the order of runs it has not seen. If it first
+  sees a later run and only then lines of an earlier run it never saw (it attached to the
+  second stream of a restarted job late), it takes the earlier run for a restart and
+  follows that one. Start reading both streams from their beginning.
 - A `plan` replaces an earlier one only if its `q` is higher or it comes from a newer run,
   so a plan read late from the other stream never overrides a newer one.
 
