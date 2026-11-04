@@ -206,7 +206,8 @@ print(job.snapshot(4.0).scopes["train"].completed)       # 0.0
 If you write your own reader, in any language, keep for each scope its current run id,
 the few run ids a restart left behind, and the position of the latest record taken (0
 for a `start`, `q` for an update, last for an `end`, `fail` or `step`), and apply the same
-rules.
+rules. For a job estimate, also keep the job's current run id and the ones a restart left
+behind, and drop every scope and plan when a new run id appears.
 
 ## From records to an estimate: `JobForecast`
 
