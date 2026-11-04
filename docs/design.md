@@ -268,8 +268,8 @@ scope holds back its `start`:
   with its parent, elapsed time, label and run id.
 - If it is still running when the interval has passed, a timer writes its `start` then
   (with `e` the time held back), and its `end` follows as usual, so a long step such as
-  a download is visible while it runs. The timer is one daemon thread per logger,
-  started on first use.
+  a download is visible while it runs. The timer is one daemon thread per logger, running
+  only while a step is held back.
 - Before any line of a scope nested in it, its `start` is written first, so a reader
   always meets a parent before its children and the text indents under it.
 - If it fails, it writes its `start` and then `fail`, so a failure is never folded away.

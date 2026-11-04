@@ -267,8 +267,8 @@ class Logger:
         """Run ``action`` after ``delay`` seconds, from a background thread, unless :meth:`cancel` comes first.
 
         The delay is real time whatever clock the logger has, so a test's clock never sets it
-        off. One daemon thread, started on first use, serves every deferred action; it holds
-        :attr:`lock` while it runs one.
+        off. One daemon thread serves every deferred action, holding :attr:`lock` while it
+        runs one; it ends when none is left, and the next call starts another.
 
         Parameters
         ----------
@@ -289,7 +289,9 @@ class Logger:
     def cancel(self, key: object) -> None:
         """Drop the action deferred under ``key``, if it has not run yet."""
         with self.lock:
-            self._deferred.pop(key, None)
+            if self._deferred.pop(key, None) is not None:
+                # Wake the timer, so it ends now if nothing else is deferred.
+                self._wake.notify()
 
     def run_due(self, now: float) -> float | None:
         """Run the deferred actions whose time has come.
@@ -314,9 +316,15 @@ class Logger:
             return max(min(deadlines) - now, 0.0) if deadlines else None
 
     def _run_timer(self) -> None:
+        # Ends once nothing is deferred, so an idle logger holds no thread; defer() starts a new
+        # one. Both check and clear self._timer under the lock, so neither can miss the other.
         with self.lock:
             while not sys.is_finalizing():
-                self._wake.wait(self.run_due(time.monotonic()))
+                wait = self.run_due(time.monotonic())
+                if wait is None:
+                    break
+                self._wake.wait(wait)
+            self._timer = None
 
     def claim_scope(self, base: str) -> str:
         """Return ``base`` or ``base`` with a numeric suffix, whichever no earlier scope in this process has used.

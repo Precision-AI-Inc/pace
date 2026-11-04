@@ -164,6 +164,8 @@
 {"name": "v2_q_on_start", "line": "[pace:2 a start t=2 q=1 r=1b8b7650]", "record": null}
 {"name": "v2_q_on_end", "line": "[pace:2 a end c=2 q=3 r=1b8b7650]", "record": null}
 {"name": "v2_q_zero", "line": "[pace:2 a c=1 t=2 q=0 r=1b8b7650]", "record": null}
+{"name": "v2_update_q_1_is_the_start", "line": "[pace:2 a t=1 q=1 r=1b8b7650]", "record": null}
+{"name": "v2_plan_q_zero", "line": "[pace:2 p plan q=0 ph=a:1 r=1b8b7650]", "record": null}
 {"name": "v2_two_events", "line": "[pace:2 a start end t=2 r=1b8b7650]", "record": null}
 {"name": "v2_repeated_flag", "line": "[pace:2 a start t=2 r=1b8b7650 root root]", "record": null}
 {"name": "v2_flag_in_capitals", "line": "[pace:2 a start t=2 r=1b8b7650 Root]", "record": null}

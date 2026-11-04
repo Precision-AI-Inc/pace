@@ -50,7 +50,7 @@ def records(draw: Any) -> Record:
         "run": draw(run_ids),
     }
     if event in (Event.UPDATE, Event.PLAN):
-        common["seq"] = draw(st.integers(1, MAX_SEQ))
+        common["seq"] = draw(st.integers(2 if event is Event.UPDATE else 1, MAX_SEQ))
     if event is Event.PLAN:
         phases = draw(st.lists(st.tuples(scope_ids, quarters), max_size=MAX_PHASES))
         return Record(phases=tuple(phases), **common)

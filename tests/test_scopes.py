@@ -476,6 +476,32 @@ def test_the_logger_timer_writes_a_pending_start_on_its_own(clock: FakeClock) ->
     assert kinds(stream) == ["start", "end"]
 
 
+def test_the_logger_timer_ends_when_nothing_is_deferred_and_restarts_on_demand() -> None:
+    log = Logger()
+    log.configure(stream=FakeStream())
+    log.defer("a", 0.0, lambda: None)
+    first = log._timer
+    assert first is not None
+    first.join(timeout=10)
+    assert not first.is_alive()
+    assert log._timer is None
+    ran = threading.Event()
+    log.defer("b", 0.0, ran.set)
+    assert ran.wait(timeout=10)
+    assert log._timer is not first
+    log.cancel("b")
+
+
+def test_a_cancelled_action_lets_the_timer_end() -> None:
+    log = Logger()
+    log.defer("a", 3600.0, lambda: None)
+    thread = log._timer
+    assert thread is not None
+    log.cancel("a")
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+
+
 def test_a_step_cancelled_before_its_timer_writes_nothing_twice(log: Logger, stream: FakeStream) -> None:
     with phase("Quick", logger=log):
         pass

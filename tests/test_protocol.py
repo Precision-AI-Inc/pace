@@ -96,8 +96,9 @@ def test_format_trailer_truncates_label() -> None:
         ({"scope": "a<b"}, "invalid scope id"),
         ({"parent": "bad/parent"}, "invalid parent scope id"),
         ({"run": None}, "invalid run id"),
-        ({"seq": None}, "an update or plan needs a seq"),
-        ({"event": Event.PLAN, "seq": 0}, "an update or plan needs a seq"),
+        ({"seq": None}, "upd needs a seq of at least 2"),
+        ({"seq": 1}, "upd needs a seq of at least 2"),
+        ({"event": Event.PLAN, "seq": 0}, "plan needs a seq of at least 1"),
     ],
 )
 def test_format_trailer_rejects_invalid_ids(kwargs: dict, message: str) -> None:

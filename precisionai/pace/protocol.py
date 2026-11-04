@@ -222,8 +222,8 @@ def _validate_ids(record: Record) -> None:
     if record.parent is not None:
         check_id(SCOPE_PATTERN, record.parent, "parent scope id")
     check_id(RUN_PATTERN, record.run or "", "run id")
-    if record.event in (Event.UPDATE, Event.PLAN) and (record.seq or 0) < 1:
-        raise ValueError(f"an update or plan needs a seq of at least 1, got {record.seq}")
+    if (record.seq or 0) < _FIRST_SEQ.get(record.event, 0):
+        raise ValueError(f"{record.event.value} needs a seq of at least {_FIRST_SEQ[record.event]}, got {record.seq}")
     if len(record.phases) > MAX_PHASES:
         raise ValueError(f"at most {MAX_PHASES} phases, got {len(record.phases)}")
     for name, _ in record.phases:
@@ -283,6 +283,8 @@ _INTEGER_PATTERN = re.compile(r"[0-9]+")
 _BAD_ESCAPE_PATTERN = re.compile(r"%(?![0-9A-Fa-f]{2})")
 _COUNTED_EVENTS = (Event.START, Event.UPDATE, Event.END)
 _MAJORS = {f"{MARKER}:1": 1, f"{MARKER}:{VERSION}": VERSION}
+# In pace:2, the lowest q an event may carry: a start counts as 1, so updates begin at 2.
+_FIRST_SEQ = {Event.UPDATE: 2, Event.PLAN: 1}
 # In pace:2 the event is a bare word, and an update has none.
 _KINDS = {event.value: event for event in Event if event is not Event.UPDATE}
 # The pace:2 keys that only some events may carry.
@@ -387,10 +389,13 @@ def _build_v2(tokens: list[str]) -> Record:
     event = kinds[0] if kinds else Event.UPDATE
     _check_v2_fields(event, fields, words)
     completed, total = _v2_counts(event, fields)
+    seq = _optional(fields, "q", _parse_seq)
+    if seq is not None and seq < _FIRST_SEQ[event]:
+        raise ValueError(f"q on {event.value} starts at {_FIRST_SEQ[event]}")
     return Record(
         scope=_parse_scope(scope),
         event=event,
-        seq=_optional(fields, "q", _parse_seq),
+        seq=seq,
         elapsed=_parse_number(fields.get("e", "0")),
         completed=completed,
         total=total,
