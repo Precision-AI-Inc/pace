@@ -69,6 +69,7 @@ tested ones in OrchAI's [example repo](https://github.com/Precision-AI-Inc/orcha
 | A library call that takes a `tqdm` class (vLLM `generate(use_tqdm=)`), or vLLM in chunks | `patterns/tqdm-class.md` |
 | Standard `logging`, a library's own log lines | `patterns/logging.md` |
 | Any dependency edit (always) | `patterns/dependencies.md` |
+| The job runs on OrchAI (`orch_starter/` in the repo, or the user says so) | `patterns/orchai.md` |
 
 **Choosing the root.** Ask: "when this scope ends, is the job really done?" If more than a few
 percent of the runtime comes after the loop (evaluation, export, upload), the loop alone is
@@ -116,7 +117,7 @@ fails, say so and do not claim verification. Outside a terminal Pace writes at m
 15 s, so make a short run print its updates (keep logs out of the repo):
 
 ```bash
-PACE_MIN_INTERVAL=0 PACE_HEARTBEAT=5 PACE_BAR=never python train.py <tiny args> > /tmp/pace-smoke.log 2>&1
+PACE_MIN_INTERVAL=0 PACE_HEARTBEAT=5 python train.py <tiny args> > /tmp/pace-smoke.log 2>&1
 python <skill-dir>/verify.py /tmp/pace-smoke.log
 ```
 
@@ -134,8 +135,8 @@ the scheduler can estimate**; **Verified** (the exact command and verdict) and *
 (GPU, DDP, callback, Docker build, and why); **Remaining gaps** (unknown totals, work after
 the root, evaluation pauses, early stopping, lock files, wrappers with no hook, an unused
 `tqdm` dependency left in place); **Optional follow-ups** not applied. If the repo has
-`orch_starter/config.yaml`, say an expected runtime can be set there once OrchAI supports it
-(a pointer only: invent no config keys).
+`orch_starter/config*.yaml` files, offer `project.expected_runtime_minutes` (`patterns/orchai.md`);
+invent no other config keys.
 
 An honest "unknown" beats an invented total. If Pace is not on the index the repo installs
 from, the dependency edit is still right; say the install fails until it is.

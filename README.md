@@ -16,6 +16,12 @@ Pace is a logger with progress reporting built in. Its output reads like any goo
 logger in a terminal, and every progress line also carries a short, versioned trailer
 that a scheduler can read to estimate when the job will finish.
 
+> **Running jobs on OrchAI?** Pace is part of setting a repo up for OrchAI. It is how My
+> Jobs and Tasks show a job's progress and time left, and how the queue forecasts when
+> waiting jobs start. Without it a job still runs, but shows none of that, makes those
+> forecasts worse, and gets a warning in Confirm Job. Start with
+> [Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
+
 - **One way to log across projects**: the same levels, format and progress bars everywhere.
 - **Progress for real ML work**: loops, manual counters, timed steps, phases, PyTorch Lightning and Hugging Face training.
 - **Completion estimates**: the terminal shows time remaining, and a scheduler such as OrchAI gets the same estimate from the job's logs.
@@ -74,6 +80,7 @@ should use `parse_line`, `LineSplitter` and `JobForecast` (see
 | Page | Read it for |
 |---|---|
 | [Getting started](https://github.com/Precision-AI-Inc/pace/blob/main/docs/getting-started.md) | Install, first log lines, first progress loop, terminal vs container output. |
+| [Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md) | The five steps to make an OrchAI job show its progress, the `adopt-pace` skill, and what the tested example jobs taught. |
 | [Logging](https://github.com/Precision-AI-Inc/pace/blob/main/docs/logging.md) | Levels, `exception`, `configure` and precedence, `capture_logging`, colour, encodings, ranks. |
 | [Progress](https://github.com/Precision-AI-Inc/pace/blob/main/docs/progress.md) | `track`, `progress`, `timed`, `phase`, `plan`, nesting, resuming, root scope, emission rates, the terminal bar. |
 | [Examples](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md) | One runnable script per style of logging and progress: loops, epochs, resuming, phases, ranks, reading the output. |

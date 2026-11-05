@@ -1,6 +1,7 @@
 # Hugging Face Transformers and TRL
 
-<!-- verify against adapters: the exact constructor arguments of PaceCallback -->
+`PaceCallback(description="Train", *, logger=None, scope=None, root=True)`, and `fail()` for your own
+error handling.
 
 ```python
 from transformers import Trainer
@@ -19,14 +20,17 @@ trainer.train(resume_from_checkpoint=args.resume)
 `trainer.add_callback(PaceCallback())` after construction. The callback reports
 `state.global_step` against `state.max_steps`, rank 0 only.
 
-- Dependency: `precisionai-pace[transformers]`.
+- Dependency: `precisionai-pace[transformers]>=0.1.3`.
 - When a wrapper builds the trainer (Axolotl, LLaMA-Factory, torchtune, a company library),
   look for its hook for extra callbacks. If it has none, say so in the report rather than
   patching an installed package.
 - `disable_tqdm=True` in `TrainingArguments` removes the Trainer's tqdm bar; offer it, do
   not apply it unasked.
-- `max_steps = -1` with no epoch bound gives no total <!-- verify against adapters: what the callback does then -->;
-  the Trainer still computes `max_steps` from epochs and dataset length, so this is rare.
+- `state.max_steps` of 0 or less (no step budget) makes the total unknown, which gives no
+  estimate; the Trainer computes `max_steps` from epochs and dataset length, so this is rare.
+- The `Trainer` has no hook for an exception, so a crash writes no `fail` record: the log
+  just stops. If the script already catches errors around `trainer.train()`, offer
+  `callback.fail()` there (keep a reference to the callback); do not add a new `try`.
 - Transformers' log lines: see `logging.md` (`take_over=["transformers"]`).
 
 ## Examples
