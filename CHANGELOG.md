@@ -11,11 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Pace 1.0.0 is the first stable release. From here the Python API (`precisionai.pace.__all__` and each public submodule's `__all__`), the `[pace ...]` trailer, the `PACE_*` variables and `configure()` options, and the `ForecastConfig` field names follow semantic versioning; see [Compatibility](https://github.com/Precision-AI-Inc/pace/blob/main/README.md#compatibility). The line format and the behaviour are the same as 0.1.3.
 
-### Removed from the public API
+### Removed
 
-Every public submodule now has an `__all__`, and the module-level names that were implementation details start with `_`. No aliases are kept: nothing outside Pace imported these, and renaming them is free before 1.0. Everything in `precisionai.pace.__all__` is unchanged.
+The public API is trimmed before it is frozen. Every public submodule now has an `__all__`, and the names that were implementation details start with `_`. No aliases are kept: nothing outside Pace used these, and renaming them is free before 1.0. Everything in `precisionai.pace.__all__` is unchanged.
 
 - `precisionai.pace.core`: `DEFAULT_TERMINAL_COLUMNS`, `Settings`, `Target`.
+- `Logger`: the methods `target`, `write_line`, `draw_bar`, `hold`, `release`, `write_held`, `claim_scope` and `predict_scope`, and the attributes `settings`, `lock` and `plan_scopes`. Its logging methods, `configure`, `reset`, `clock` and `run_id` stay public.
 - `precisionai.pace.scopes`: `FALLBACK_ID`, `MAX_DERIVED_ID_CHARS`, `MAX_ID_CHARS`, `PlanEntry`, `REDRAW_INTERVAL`, `UPDATE_FRACTION`, `derive_scope_id`, `validate_scope_id`, `T`.
 - `precisionai.pace.protocol`: `MAX_FIELDS`, `MAX_LABEL_CHARS`, `MAX_LINE_BYTES`, `MAX_NUMBER`, `MAX_PHASES`, `MAX_PHASES_CHARS`, `MAX_SEQ`, `MAX_UNIT_CHARS`, `MAX_VALUE_CHARS`, `RUN_PATTERN`, `SCOPE_PATTERN`, `ANSI_PATTERN`, `decode_value`, `encode_value`, `format_number`, `check_id`, `is_bare_step`. The limits are unchanged and stay documented in the specification.
 - `precisionai.pace.tqdm`: `MIN_ELAPSED`.

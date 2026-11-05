@@ -514,6 +514,11 @@ The trailer:
 
 - No key or word is ever removed or redefined. A new optional key or word may come in a
   minor release.
+- Additive means new keys and new words only. A key that exists today must never start
+  appearing on an event that does not carry it now: a reader rejects the whole line when a
+  key it knows sits on the wrong event, so every deployed 1.x reader would drop that line
+  (the 0.1.0 to 0.1.1 `step` change under [Short child scopes](#short-child-scopes) was
+  that case). A new key or word matches `[a-z0-9]+`.
 - Readers must ignore keys and words they do not know, so an older reader keeps reading a
   newer writer's lines (the one exception before 1.0 is under
   [Short child scopes](#short-child-scopes)).

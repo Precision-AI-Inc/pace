@@ -492,9 +492,9 @@ def test_a_forked_child_does_not_write_its_parent_held_back_line(log: Logger, cl
     download = Phase("Download", logger=log)
     download.start()
     log._held[download] = (0.0, download._write_pending_start, -1)  # held by another process
-    log.write_held()
+    log._write_held()
     assert log._held == {}
-    assert not log.settings.resolve("stream").lines()
+    assert not log._settings.resolve("stream").lines()
 
 
 @pytest.mark.parametrize("min_interval", [None, 5.0])

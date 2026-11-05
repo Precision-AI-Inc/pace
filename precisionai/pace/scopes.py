@@ -151,7 +151,7 @@ class Scope:
             raise TypeError(f"unit must be a string such as 'step', got {unit!r}; pass the total as total=...")
         self._out = logger or default_logger
         base = _derive_scope_id(description) if scope is None else _validate_scope_id(scope)
-        self.id = self._out.claim_scope(base)
+        self.id = self._out._claim_scope(base)
         self.description = description
         self.unit = unit
         self.root = bool(root)
@@ -175,7 +175,7 @@ class Scope:
 
     def start(self) -> None:
         """Write the ``start`` record. Does nothing if the scope already started."""
-        with contextlib.suppress(Exception), self._out.lock:
+        with contextlib.suppress(Exception), self._out._lock:
             if self._state != "new":
                 return
             now = self._out.clock.monotonic()
@@ -193,31 +193,31 @@ class Scope:
                 self._pending = True
                 self._last_out = now
                 self._due = now + delay
-                self._out.hold(self, self._due, self._write_pending_start)
+                self._out._hold(self, self._due, self._write_pending_start)
             else:
                 self._emit(Event.START, now)
 
     def advance(self, n: float = 1) -> None:
         """Add ``n`` to the completed amount."""
-        with contextlib.suppress(Exception), self._out.lock:
+        with contextlib.suppress(Exception), self._out._lock:
             self._set_completed(self.completed + _count(n))
 
     def update(self, completed: float) -> None:
         """Set the completed amount; a value that is not a non-negative number is ignored."""
-        with contextlib.suppress(Exception), self._out.lock:
+        with contextlib.suppress(Exception), self._out._lock:
             number = _number(completed)
             if number is not None and number >= 0:
                 self._set_completed(number)
 
     def set_total(self, total: float | None) -> None:
         """Change the total; ``None`` or a non-positive number makes it unknown."""
-        with contextlib.suppress(Exception), self._out.lock:
+        with contextlib.suppress(Exception), self._out._lock:
             self.total = _total(total)
             self._after_change()
 
     def declare(self, phases: tuple[tuple[str, float], ...]) -> None:
         """Write a ``plan`` record from this scope and close it; used by :func:`plan`."""
-        with contextlib.suppress(Exception), self._out.lock:
+        with contextlib.suppress(Exception), self._out._lock:
             now = self._out.clock.monotonic()
             self._started_at = now
             self._state = "closed"
@@ -271,17 +271,17 @@ class Scope:
         now = self._out.clock.monotonic()
         # The rank check reads the environment, so it comes after the cheap time gate.
         target = None
-        if now >= self._next_check and self._out.settings.progress_enabled():
-            target = self._out.target()
+        if now >= self._next_check and self._out._settings.progress_enabled():
+            target = self._out._target()
         if target is not None:
-            settings = self._out.settings
+            settings = self._out._settings
             gap = _REDRAW_INTERVAL if target.bar else min(_REDRAW_INTERVAL, settings.resolve("min_interval"))
             self._next_check = now + gap
             if target.bar or self._is_due(now, settings.resolve("min_interval"), settings.resolve("heartbeat")):
                 # Writing the update also writes the held lines that are due, this scope's start among them.
                 self._emit(Event.UPDATE, now, target)
                 return
-        self._out.write_held()
+        self._out._write_held()
 
     def _is_due(self, now: float, min_interval: float, heartbeat: float) -> bool:
         since = now - self._last_out
@@ -294,7 +294,7 @@ class Scope:
         return self.completed - self._last_completed >= _UPDATE_FRACTION * self.total
 
     def _finish(self, event: Event) -> None:
-        with contextlib.suppress(Exception), self._out.lock:
+        with contextlib.suppress(Exception), self._out._lock:
             if self._state == "new":
                 self.start()
             if self._state != "open":
@@ -305,16 +305,16 @@ class Scope:
     def _start_delay(self) -> float:
         """Return how long a one-off step or a child scope may hold back its start line; 0 to write it now."""
         child = self._parent_scope is not None and not self.root and not self.resumed
-        if not (self._ONE_OFF or child) or not self._out.settings.progress_enabled():
+        if not (self._ONE_OFF or child) or not self._out._settings.progress_enabled():
             return 0.0
-        target = self._out.target()
+        target = self._out._target()
         if target is None or target.bar:
             return 0.0
-        return self._out.settings.resolve("min_interval")
+        return self._out._settings.resolve("min_interval")
 
     def _write_pending_start(self) -> None:
         """Write the start held back by a scope that is still running, and the starts it must follow."""
-        with contextlib.suppress(Exception), self._out.lock:
+        with contextlib.suppress(Exception), self._out._lock:
             if self._pending:
                 self._write_late_start()
                 now = self._out.clock.monotonic()
@@ -327,7 +327,7 @@ class Scope:
 
     def _write_late_start(self) -> None:
         self._pending = False
-        self._out.release(self)
+        self._out._release(self)
         if self._ONE_OFF:
             self._emit(Event.START, self._out.clock.monotonic())
             return
@@ -379,15 +379,15 @@ class Scope:
         target: _Target | None = None,
         phases: tuple[tuple[str, float], ...] = (),
     ) -> None:
-        if not self._out.settings.progress_enabled():
+        if not self._out._settings.progress_enabled():
             return
-        target = target or self._out.target()
+        target = target or self._out._target()
         if target is None:
             return
         if self._pending:
             # This scope's own held start is settled below, against the line being written.
-            self._out.release(self)
-        self._out.write_held()
+            self._out._release(self)
+        self._out._write_held()
         event = self._settle_pending(event)
         record = self._record(event, now, phases)
         self._last_out = now
@@ -402,9 +402,9 @@ class Scope:
                 record, forecast, self.description, self.unit, target.charset, bar=drawing, depth=self.depth
             )
             if drawing:
-                self._out.draw_bar(text, target)
+                self._out._draw_bar(text, target)
                 return
-        self._out.write_line(self._progress_line(text, record, target), target)
+        self._out._write_line(self._progress_line(text, record, target), target)
 
     def _progress_line(self, text: str, record: Record, target: _Target) -> str:
         stamp = format_timestamp(self._out.clock.wall())
@@ -661,13 +661,13 @@ def plan(phases: Sequence[_PlanEntry], *, scope: str | None = None, logger: Logg
         Output to use.
     """
     out = logger or default_logger
-    with contextlib.suppress(Exception), out.lock:
+    with contextlib.suppress(Exception), out._lock:
         name = scope or "plan"
         # Every plan() under one name shares a scope, so q orders them and a reader
         # never lets a late copy of an older plan replace a newer one.
-        declaring = out.plan_scopes.get(name)
+        declaring = out._plan_scopes.get(name)
         if declaring is None:
-            declaring = out.plan_scopes[name] = Scope(scope=name, logger=out)
+            declaring = out._plan_scopes[name] = Scope(scope=name, logger=out)
         declaring.declare(_weighted(phases, out))
 
 
@@ -687,7 +687,7 @@ def _entry(entry: _PlanEntry, out: Logger, reserved: set[str]) -> tuple[str, flo
     name, weight = (entry, None) if isinstance(entry, str) else (entry[0], _total(entry[1]))
     # Predict the id the phase will get, counting earlier entries of this plan as taken,
     # so two phases with the same name are listed as "train" and "train-2" like their scopes.
-    return out.predict_scope(_derive_scope_id(name), reserved), weight
+    return out._predict_scope(_derive_scope_id(name), reserved), weight
 
 
 def _weighted(phases: Sequence[_PlanEntry], out: Logger) -> tuple[tuple[str, float], ...]:
