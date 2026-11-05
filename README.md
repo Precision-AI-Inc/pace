@@ -16,9 +16,10 @@ Pace is a logger with progress reporting built in. Its output reads like any goo
 logger in a terminal, and every progress line also carries a short, versioned trailer
 that a scheduler can read to estimate when the job will finish.
 
-> **Running jobs on OrchAI?** Pace is part of setting a repo up for OrchAI. Without it a
-> job still runs, but OrchAI shows no progress or time left for it, and its forecasts of
-> when queued jobs start get worse. Start with
+> **Running jobs on OrchAI?** Pace is part of setting a repo up for OrchAI. It is how My
+> Jobs and Tasks show a job's progress and time left, and how the queue forecasts when
+> waiting jobs start. Without it a job still runs, but shows none of that, makes those
+> forecasts worse, and gets a warning in Confirm Job. Start with
 > [Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
 
 - **One way to log across projects**: the same levels, format and progress bars everywhere.

@@ -117,7 +117,7 @@ fails, say so and do not claim verification. Outside a terminal Pace writes at m
 15 s, so make a short run print its updates (keep logs out of the repo):
 
 ```bash
-PACE_MIN_INTERVAL=0 PACE_HEARTBEAT=5 PACE_BAR=never python train.py <tiny args> > /tmp/pace-smoke.log 2>&1
+PACE_MIN_INTERVAL=0 PACE_HEARTBEAT=5 python train.py <tiny args> > /tmp/pace-smoke.log 2>&1
 python <skill-dir>/verify.py /tmp/pace-smoke.log
 ```
 

@@ -15,8 +15,9 @@ point the user at it in the report.
   Dockerfile.
 - **What Confirm Job looks for.** A mention of `precisionai-pace` in `requirements*.txt`/`.in`,
   `requirements/*.txt`, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`,
-  `environment*.yml`/`.yaml` or the Dockerfile,
-  or `import precisionai.pace` in the entry-point script `container.command` names. Without
+  `environment*.yml`/`.yaml`, the Dockerfile, or a file the Dockerfile hands pip `-r`/`-c`
+  or conda `-f`; or `import precisionai.pace` in the scripts `container.command` runs (up
+  to 3 entry-point files, not the modules they import). Without
   one it warns "This job won't report progress" (a warning: submitting still works). The
   dependency edit in the file the image installs from clears it.
 - **Which script.** `container.command` in `orch_starter/config*.yaml` is the job. A repo

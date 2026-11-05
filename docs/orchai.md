@@ -2,10 +2,10 @@
 
 OrchAI is Precision AI's job platform, and Pace is part of setting a repo up for it, next
 to the Dockerfile and `config.yaml`. OrchAI reads the `[pace ...]` lines your job writes to
-its log. From them it shows, in **My Jobs** and **Tasks**, how far each job has got and when
-it should finish, and forecasts when the jobs queued behind it will start. A job without
-Pace still runs, but shows no progress or time left ("Not reported"), and makes the queue's
-forecasts worse.
+its log: from them **My Jobs** and **Tasks** show how far each job has got and when it
+should finish, and the queue forecasts when the jobs behind it will start. A job without
+Pace still runs, but shows no progress or time left ("Not reported"), makes the queue's
+forecasts worse, and gets a "This job won't report progress" warning in Confirm Job.
 
 This page is the short path for an OrchAI user. The rest of these docs explain each
 piece in depth.
@@ -94,12 +94,13 @@ plan, makes the edits above, runs a short smoke test and checks the output. Inst
 once for every repository on your machine:
 
 ```bash
-src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src"
-mkdir -p ~/.claude/skills && rm -rf ~/.claude/skills/adopt-pace
-cp -r "$src/skills/adopt-pace" ~/.claude/skills/ && rm -rf "$src"
+src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src" &&
+  mkdir -p ~/.claude/skills && rm -rf ~/.claude/skills/adopt-pace &&
+  cp -r "$src/skills/adopt-pace" ~/.claude/skills/ && rm -rf "$src"
 ```
 
-Run the same commands again to update it.
+Run the same command again to update it: it removes the old copy first, so no stale
+files are left behind.
 
 Then, in your repository, ask Claude Code to "add Pace to this repo". It asks before it
 edits anything. Other ways to install it:
@@ -152,7 +153,7 @@ What they taught:
 
 | You see | Why, and what to do |
 |---|---|
-| Confirm Job still says "This job won't report progress" | Any one of these clears it: `precisionai-pace` in `requirements*.txt`/`.in` or `requirements/*.txt`, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`, `environment*.yml`/`.yaml` or the Dockerfile, or `import precisionai.pace` in the entry-point script. Adding it to the file your Dockerfile installs from is enough. Submitting still works either way. |
+| Confirm Job still says "This job won't report progress" | Any one of these clears it: `precisionai-pace` in `requirements*.txt`/`.in`, `requirements/*.txt`, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`, `environment*.yml`/`.yaml`, the Dockerfile, or a file the Dockerfile installs from with `-r`/`-c` (pip) or `-f` (conda); or `import precisionai.pace` in the script `container.command` runs (up to 3 entry-point files are read, not what they import). Adding it to the file your Dockerfile installs from is enough. Submitting still works either way. |
 | "Not yet" for a long time | Pace is installed but the root has not started, for example while a download runs first. |
 | "Estimating" never changes to a time | The scope has no total, or the run is too short (see above). |
 | The job shows finished while it is still running | The root ended before the last stage. Move the root, or use a plan. |

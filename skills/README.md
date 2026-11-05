@@ -20,21 +20,22 @@ The repository is public, so a shallow clone is enough. For you only, in every
 repository:
 
 ```bash
-src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src"
-mkdir -p ~/.claude/skills && rm -rf ~/.claude/skills/adopt-pace
-cp -r "$src/skills/adopt-pace" ~/.claude/skills/ && rm -rf "$src"
+src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src" &&
+  mkdir -p ~/.claude/skills && rm -rf ~/.claude/skills/adopt-pace &&
+  cp -r "$src/skills/adopt-pace" ~/.claude/skills/ && rm -rf "$src"
 ```
 
 Or in one repository, shared with everyone who clones it (commit the folder), from the
 repository's root:
 
 ```bash
-src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src"
-mkdir -p .claude/skills && rm -rf .claude/skills/adopt-pace
-cp -r "$src/skills/adopt-pace" .claude/skills/ && rm -rf "$src"
+src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src" &&
+  mkdir -p .claude/skills && rm -rf .claude/skills/adopt-pace &&
+  cp -r "$src/skills/adopt-pace" .claude/skills/ && rm -rf "$src"
 ```
 
-Run the same commands again to update it. Then open Claude Code in the repository and ask:
+Run the same command again to update it: it removes the old copy first, so no stale
+files are left behind. Then open Claude Code in the repository and ask:
 
 > add Pace to this repo
 
