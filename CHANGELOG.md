@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-05
+
 ### Fixed
 
 - The time remaining no longer stays too long for a job that starts slowly (model loading, compilation) and then runs faster. The slow first intervals used to be averaged into the rate until the end: a 2-minute LoRA fine-tune whose first 3 steps took 54 s first estimated 1m14s with 38 s left, and still 35 s with 23 s left. While each interval is faster than the one before (by more than 1.25 times), the rate now restarts from it and no time is shown yet; the first interval that is not that much faster ends this for good, so only a start that keeps speeding up benefits. The same job now first shows a time one record later, 24 s with 23 s left, then 9 s with 8 s left. After 9 such intervals a time is shown anyway. This applies only to a scope of more than 100 units (steps, say); one of 100 units or fewer (epochs, say), or with no known total, is estimated exactly as before, since with so few, noisy intervals the rule made its first estimates slightly worse. A job that is steady from the start (its second interval no more than 1.25 times its first), or slows down, is also estimated exactly as before. The new `ForecastConfig.warmup_factor` sets the speed-up threshold; it must be greater than 1, and `math.inf` turns warm-up off. The new `ForecastConfig.warmup_min_total` (100) sets the size threshold; it must be 0 or more. With `min_intervals=1`, warm-up needs a second interval before Live.
@@ -75,7 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runnable examples, one per style of logging and progress (plain loops, epochs, concurrent work, phases and a plan, resuming, unknown totals, nested scopes, `logging` capture, distributed ranks, and reading the output).
 - User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Precision-AI-Inc/pace/compare/v0.0.2...v0.1.0
