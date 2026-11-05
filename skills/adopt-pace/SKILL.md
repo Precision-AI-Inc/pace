@@ -135,7 +135,7 @@ the scheduler can estimate**; **Verified** (the exact command and verdict) and *
 (GPU, DDP, callback, Docker build, and why); **Remaining gaps** (unknown totals, work after
 the root, evaluation pauses, early stopping, lock files, wrappers with no hook, an unused
 `tqdm` dependency left in place); **Optional follow-ups** not applied. If the repo has
-`orch_starter/config.yaml`, offer `project.expected_runtime_minutes` (`patterns/orchai.md`);
+`orch_starter/config*.yaml` files, offer `project.expected_runtime_minutes` (`patterns/orchai.md`);
 invent no other config keys.
 
 An honest "unknown" beats an invented total. If Pace is not on the index the repo installs

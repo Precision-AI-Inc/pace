@@ -74,7 +74,7 @@ should use `parse_line`, `LineSplitter` and `JobForecast` (see
 | Page | Read it for |
 |---|---|
 | [Getting started](https://github.com/Precision-AI-Inc/pace/blob/main/docs/getting-started.md) | Install, first log lines, first progress loop, terminal vs container output. |
-| [Using Pace with OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md) | The five steps to make an OrchAI job show its progress, the `adopt-pace` skill, and what the tested example jobs taught. |
+| [Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md) | The five steps to make an OrchAI job show its progress, the `adopt-pace` skill, and what the tested example jobs taught. |
 | [Logging](https://github.com/Precision-AI-Inc/pace/blob/main/docs/logging.md) | Levels, `exception`, `configure` and precedence, `capture_logging`, colour, encodings, ranks. |
 | [Progress](https://github.com/Precision-AI-Inc/pace/blob/main/docs/progress.md) | `track`, `progress`, `timed`, `phase`, `plan`, nesting, resuming, root scope, emission rates, the terminal bar. |
 | [Examples](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md) | One runnable script per style of logging and progress: loops, epochs, resuming, phases, ranks, reading the output. |

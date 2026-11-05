@@ -1,4 +1,4 @@
-# Using Pace with OrchAI
+# Getting started on OrchAI
 
 OrchAI is Precision AI's job platform. It reads the `[pace ...]` lines your job writes
 to its log and shows, in **My Jobs** and **Tasks**, how far each job has got and when it
@@ -46,9 +46,18 @@ PyTorch Lightning or a Hugging Face `Trainer` (TRL's `SFTTrainer` too): add the
 callback and leave the loop alone. It is the root.
 
 ```python
-from precisionai.pace.lightning import PaceCallback      # or precisionai.pace.transformers
+import lightning.pytorch as pl
+from precisionai.pace.lightning import PaceCallback
 
-trainer = Trainer(..., callbacks=[PaceCallback("Train")])
+trainer = pl.Trainer(max_epochs=args.epochs, callbacks=[PaceCallback("Train")])
+```
+
+```python
+from transformers import Trainer
+from precisionai.pace.transformers import PaceCallback
+
+trainer = Trainer(model=model, args=training_args, train_dataset=train_ds,
+                  callbacks=[PaceCallback("Train")])
 ```
 
 Inference, several phases, vLLM, a model server, or a total you only learn later: see
@@ -136,7 +145,7 @@ What they taught:
 
 | You see | Why, and what to do |
 |---|---|
-| Confirm Job still says "This job won't report progress" | It looks for `precisionai-pace` in your requirements files, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`, `environment.yml`, the Dockerfile's `pip install` lines, and an `import precisionai.pace` in the entry-point script. Add it to the file your Dockerfile installs from. Submitting still works. |
+| Confirm Job still says "This job won't report progress" | Any one of these clears it: `precisionai-pace` in a requirements file, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`, `environment.yml` or the Dockerfile, or `import precisionai.pace` in the entry-point script. Adding it to the file your Dockerfile installs from is enough. Submitting still works either way. |
 | "Not yet" for a long time | Pace is installed but the root has not started, for example while a download runs first. |
 | "Estimating" never changes to a time | The scope has no total, or the run is too short (see above). |
 | The job shows finished while it is still running | The root ended before the last stage. Move the root, or use a plan. |

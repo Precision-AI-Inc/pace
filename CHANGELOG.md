@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A new page, [Using Pace with OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md), gives the five steps to make an OrchAI job show its progress: the dependency, one root scope, a local check, an optional expected runtime, and what to look for after submitting. It also lists what the tested example jobs taught and what to do when something looks wrong. Getting started and the README link to it.
+- A new page, [Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md), gives the five steps to make an OrchAI job show its progress: the dependency, one root scope, a local check, an optional expected runtime, and what to look for after submitting. It also lists what the tested example jobs taught and what to do when something looks wrong. Getting started and the README link to it.
 - The `adopt-pace` skill has a new `patterns/orchai.md` for jobs that run on OrchAI: what Confirm Job looks for, the expected runtime, library progress bars, and why a short demo shows no estimate.
 
 ### Changed

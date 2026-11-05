@@ -12,7 +12,7 @@ the main loop, one `root` scope), runs a short smoke test and checks the output 
 `verify.py`.
 
 For jobs that run on OrchAI, the same steps by hand are in
-[Using Pace with OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
+[Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
 
 ### Install
 
