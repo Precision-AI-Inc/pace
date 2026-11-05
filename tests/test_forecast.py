@@ -18,6 +18,7 @@ import pytest
 
 from precisionai.pace.forecast import (
     DEFAULT_CONFIG,
+    Forecast,
     ForecastConfig,
     ForecastState,
     JobForecast,
@@ -115,6 +116,7 @@ def test_default_config_holds_the_initial_thresholds() -> None:
     assert DEFAULT_CONFIG.min_fraction == 0.01
     assert DEFAULT_CONFIG.heartbeat_seconds == 120
     assert DEFAULT_CONFIG.stale_factor == 3.0
+    assert DEFAULT_CONFIG.warmup_min_total == 100
 
 
 def test_unknown_before_any_record() -> None:
@@ -311,19 +313,59 @@ def test_warm_up_lasts_while_each_rate_climbs_past_the_one_before() -> None:
     assert snap.rate == pytest.approx((1.5 + 1.6) / 2)
 
 
-def test_one_fastest_so_far_interval_is_not_enough_for_live() -> None:
-    # 20 noisy epochs: 146 s, 91 s, then 45 s. Each is 1.25 x faster than the one before,
-    # so the 45 s epoch alone would be taken as the speed.
-    fc = ScopeForecast("epochs")
-    run = Run(fc, "epochs", total=20.0)
+def _units_of(total: float, seconds: tuple[float, ...], config: ForecastConfig = DEFAULT_CONFIG) -> ScopeForecast:
+    """A scope of ``total`` units, one record per unit, each unit taking the next of ``seconds``."""
+    fc = ScopeForecast("epochs", config=config)
+    run = Run(fc, "epochs", total=total)
     run.start()
-    for seconds in (146.0, 91.0, 45.0):
-        run.mark(run.t + seconds, run.done + 1.0)
-    assert fc.snapshot(run.now).state is ForecastState.LEARNING
-    run.mark(run.t + 120.0, run.done + 1.0)  # slower: warm-up over
-    snap = fc.snapshot(run.now)
+    for unit_seconds in seconds:
+        run.mark(run.t + unit_seconds, run.done + 1.0)
+    return fc
+
+
+def _latest(fc: ScopeForecast) -> Forecast:
+    return fc.snapshot(fc.last_received or 0.0)
+
+
+def test_one_fastest_so_far_interval_is_not_enough_for_live() -> None:
+    # 146 s, 91 s, then 45 s a unit: each is 1.25 x faster than the one before, so the
+    # 45 s unit alone would be taken as the speed.
+    assert _latest(_units_of(101.0, (146.0, 91.0, 45.0))).state is ForecastState.LEARNING
+    snap = _latest(_units_of(101.0, (146.0, 91.0, 45.0, 120.0)))  # slower: warm-up over
     assert snap.state is ForecastState.LIVE
     assert snap.rate == pytest.approx((1 / 45 + 1 / 120) / 2)
+
+
+@pytest.mark.parametrize("total", [20.0, 100.0])
+def test_a_scope_of_up_to_100_units_is_estimated_as_without_warm_up(total) -> None:
+    # 20 noisy epochs gain nothing from warm-up: it made their first estimates worse.
+    seconds = (146.0, 91.0, 45.0)
+    snap = _latest(_units_of(total, seconds))
+    assert snap.state is ForecastState.LIVE
+    assert snap.rate == pytest.approx((1 / 146 + 1 / 91 + 1 / 45) / 3)
+    assert snap == _latest(_units_of(total, seconds, ForecastConfig(warmup_factor=math.inf)))
+
+
+def test_a_scope_of_101_units_warms_up() -> None:
+    snap = _latest(_units_of(101.0, (146.0, 91.0, 45.0)))
+    assert snap.state is ForecastState.LEARNING
+    assert snap.rate is None
+
+
+def test_a_scope_without_a_total_is_estimated_as_without_warm_up() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.total = None
+    run.start()
+    run.tick(20.0, 0.5)  # no total yet: warm-up ends here, and a later total does not restart it
+    run.total = 1000.0
+    run.ticks(2, 20.0, 2.0)
+    assert fc.snapshot(run.now).rate == pytest.approx((0.5 + 2.0 + 2.0) / 3)
+
+
+def test_the_warm_up_threshold_is_configurable() -> None:
+    config = ForecastConfig(warmup_min_total=10)
+    assert _latest(_units_of(20.0, (146.0, 91.0, 45.0), config)).state is ForecastState.LEARNING
 
 
 def test_a_job_that_keeps_speeding_up_goes_live_after_the_reference_window() -> None:
@@ -347,6 +389,12 @@ def test_a_job_that_keeps_speeding_up_goes_live_after_the_reference_window() -> 
 def test_a_warmup_factor_that_never_ends_the_warm_up_is_refused(factor) -> None:
     with pytest.raises(ValueError, match="warmup_factor must be greater than 1"):
         ForecastConfig(warmup_factor=factor)
+
+
+@pytest.mark.parametrize("minimum", [-1.0, float("nan")])
+def test_a_warmup_min_total_below_zero_is_refused(minimum) -> None:
+    with pytest.raises(ValueError, match="warmup_min_total must be 0 or more"):
+        ForecastConfig(warmup_min_total=minimum)
 
 
 def test_a_steady_start_is_averaged_plainly() -> None:

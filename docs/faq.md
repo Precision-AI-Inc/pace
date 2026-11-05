@@ -17,8 +17,9 @@ streams removes the duplicates by scope and sequence number; see
 An estimate from the first few steps is typically wrong: warm-up, data-loader start-up and
 compilation make early steps unrepresentative. Pace shows a time only once it has at
 least 60 seconds of observations, three measured intervals and 1% of the work done.
-While each interval is faster than the one before (by more than 1.25 times), the rate
-restarts from the latest interval and no time is shown yet. The first interval that is
+For a scope of more than 100 units (steps, not epochs), while each interval is faster
+than the one before (by more than 1.25 times), the rate restarts from the latest
+interval and no time is shown yet. The first interval that is
 not that much faster ends this for good, so a slow load followed by a compile that is
 only a little faster still counts the compile.
 

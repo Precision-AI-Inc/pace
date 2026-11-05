@@ -388,19 +388,25 @@ defaults.
 - An interval with no progress (`c` unchanged, a heartbeat) is not measured; the next
   interval with progress spans back to the last one that had it. Intervals with
   `Δe <= 0` are skipped.
-- **Warm-up.** A segment starts warming up. While each interval rate is more than
-  1.25x the one before it, the average restarts from that rate, so the slow intervals
+- **Warm-up.** Only a scope of more than 100 units (`warmup_min_total`) warms up. One
+  of 100 units or fewer (epochs, say), or with no known total when its first interval
+  is measured, ends the warm-up at its first interval, so it is estimated exactly as
+  without the rule: its few, noisy intervals cannot tell a warm-up from noise (over 20
+  epochs of about 100 s +/- 40 s, the rule made the first estimate's mean error 27.2%
+  instead of 25.9%). A larger segment starts warming up. While each interval rate is
+  more than 1.25x the one before it, the average restarts from that rate, so the slow intervals
   of model loading and compilation are never averaged into the speed that follows.
   The first rate that is not 1.25x faster ends the warm-up for the rest of the segment,
   and so does going Live; a later speed-up goes through the outlier rules below. A
   start that is steady or slows down ends the warm-up at its second interval, which
   leaves its average as it would be without the rule.
 - A scope does not go Live while it warms up: one fastest-so-far interval is not yet a
-  speed (20 noisy epochs of 146 s, 91 s and 45 s would otherwise be timed from the 45 s
-  one). After 9 intervals of warm-up it may go Live anyway, so a job that keeps
-  speeding up is not held in Learning. The Live thresholds count every interval,
+  speed (units of 146 s, 91 s and 45 s would otherwise be timed from the 45 s one).
+  After 9 intervals of warm-up it may go Live anyway, so a job that keeps speeding up
+  is not held in Learning. The Live thresholds count every interval,
   warm-up included. `warmup_factor` must be greater than 1; `warmup_factor=math.inf`
-  turns warm-up off, and with it this condition.
+  turns warm-up off, and with it this condition, as does `warmup_min_total=math.inf`.
+  `warmup_min_total` must be 0 or more.
 - From the last warm-up rate on, intervals are averaged plainly (`1/n`) at first;
   after that the weight of a new interval is 0.3.
 - An interval rate more than 3x above or below the median of the last 9 accepted rates

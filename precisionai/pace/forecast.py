@@ -75,12 +75,19 @@ class ForecastConfig:
         going Live. A scope does not go Live while it warms up, unless it has warmed up for
         ``reference_window`` intervals. Must be greater than 1 (``math.inf`` turns warm-up
         off).
+    warmup_min_total : float
+        Warm-up applies only to a scope whose total is more than this many units. A scope
+        of fewer units (epochs, say), or with no known total, has too few and too noisy
+        intervals to tell a warm-up from noise, so its first interval ends the warm-up. Must
+        be 0 or more (``math.inf`` turns warm-up off).
     """
 
     def __post_init__(self) -> None:
-        """Reject a ``warmup_factor`` that would never end the warm-up."""
+        """Reject a ``warmup_factor`` or ``warmup_min_total`` the warm-up cannot work with."""
         if not self.warmup_factor > 1:
             raise ValueError(f"warmup_factor must be greater than 1, got {self.warmup_factor!r}")
+        if not self.warmup_min_total >= 0:
+            raise ValueError(f"warmup_min_total must be 0 or more, got {self.warmup_min_total!r}")
 
     min_observed_seconds: float = 60.0
     min_intervals: int = 3
@@ -93,6 +100,7 @@ class ForecastConfig:
     min_reference: int = 3
     shift_intervals: int = 3
     warmup_factor: float = 1.25
+    warmup_min_total: float = 100.0
 
 
 DEFAULT_CONFIG = ForecastConfig()
@@ -461,8 +469,14 @@ class ScopeForecast:
             return
         rate = done / seconds
         if math.isfinite(rate):
+            if self._estimator.warming and not self._warms_up():
+                # Too few units to tell a warm-up from noise: estimated as without the rule.
+                self._estimator.end_warmup()
             self._estimator.add(rate)
             self._previous = (record.elapsed, completed)
+
+    def _warms_up(self) -> bool:
+        return self._total is not None and self._total > self._config.warmup_min_total
 
     def _ready(self) -> bool:
         cfg = self._config
