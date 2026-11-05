@@ -71,8 +71,16 @@ class ForecastConfig:
         A segment is warming up (model loading, compilation, caches filling) while each
         interval rate is more than this many times the one before it: the average restarts
         from each such rate, so the slow start is never averaged in. The first rate that is
-        not that much faster ends the warm-up for the rest of the segment.
+        not that much faster ends the warm-up for the rest of the segment, and so does
+        going Live. A scope does not go Live while it warms up, unless it has warmed up for
+        ``reference_window`` intervals. Must be greater than 1 (``math.inf`` turns warm-up
+        off).
     """
+
+    def __post_init__(self) -> None:
+        """Reject a ``warmup_factor`` that would never end the warm-up."""
+        if not self.warmup_factor > 1:
+            raise ValueError(f"warmup_factor must be greater than 1, got {self.warmup_factor!r}")
 
     min_observed_seconds: float = 60.0
     min_intervals: int = 3
@@ -130,7 +138,8 @@ class _RateEstimator:
     Before any of that, the segment warms up: while each rate is more than
     ``warmup_factor`` times the one before, the average restarts from it, so a slow start
     is not averaged into the speed that follows. The first rate that is not ends the
-    warm-up for good; a later speed-up goes through the outlier rules like any other.
+    warm-up for good, as does :meth:`end_warmup`; a later speed-up goes through the
+    outlier rules like any other.
     """
 
     def __init__(self, config: ForecastConfig) -> None:
@@ -139,18 +148,22 @@ class _RateEstimator:
         self._pending: list[float] = []
         self._pending_side = 0
         self._count = 0
-        self._warming = True
+        self.warming = math.isfinite(config.warmup_factor)
         self.value: float | None = None
         self.intervals = 0
+
+    def end_warmup(self) -> None:
+        """End the warm-up: from now on every rate is averaged in or tested as an outlier."""
+        self.warming = False
 
     def add(self, rate: float) -> None:
         """Take one interval rate into account."""
         self.intervals += 1
-        if self._warming:
+        if self.warming:
             if self.value is None or rate > self.value * self._config.warmup_factor:
                 self._restart_from([rate])
                 return
-            self._warming = False
+            self.warming = False
         side = self._side(rate)
         if side == 0:
             self._blend(rate)
@@ -421,6 +434,8 @@ class ScopeForecast:
         elif self._ready():
             self._live = True
             self._reached_live = True
+            # A Live scope's speed-ups go through the outlier and shift rules.
+            self._estimator.end_warmup()
 
     def _measure(self, record: Record) -> None:
         completed = record.completed or 0.0
@@ -454,8 +469,12 @@ class ScopeForecast:
         if self._estimator.value is None or not self._total or self._total <= 0 or self._completed is None:
             return False
         fraction = (self._completed - self._baseline_completed) / self._total
+        # The rate must have stopped climbing: one fastest-so-far interval is not yet a
+        # speed. Capped, so a job that keeps speeding up still goes Live.
+        warmed_up = not self._estimator.warming or self._estimator.intervals >= cfg.reference_window
         return (
-            self._elapsed - self._baseline_elapsed >= cfg.min_observed_seconds
+            warmed_up
+            and self._elapsed - self._baseline_elapsed >= cfg.min_observed_seconds
             and self._estimator.intervals >= cfg.min_intervals
             and fraction >= cfg.min_fraction
         )

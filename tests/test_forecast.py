@@ -301,11 +301,52 @@ def test_warm_up_lasts_while_each_rate_climbs_past_the_one_before() -> None:
     run.start()
     run.tick(50.0, 0.05)  # model load
     run.tick(15.0, 1.0)  # still compiling
-    run.tick(15.0, 1.5)  # 1.5 x the one before: still warming up
-    assert fc.snapshot(run.now).state is ForecastState.LIVE
-    assert fc.snapshot(run.now).rate == pytest.approx(1.5)
+    run.tick(15.0, 1.5)  # 1.5 x the one before: still warming up, so not Live yet
+    snap = fc.snapshot(run.now)
+    assert snap.state is ForecastState.LEARNING
+    assert snap.rate is None
     run.tick(15.0, 1.6)  # not 1.25 x faster: warm-up over, averaged from here
-    assert fc.snapshot(run.now).rate == pytest.approx((1.5 + 1.6) / 2)
+    snap = fc.snapshot(run.now)
+    assert snap.state is ForecastState.LIVE
+    assert snap.rate == pytest.approx((1.5 + 1.6) / 2)
+
+
+def test_one_fastest_so_far_interval_is_not_enough_for_live() -> None:
+    # 20 noisy epochs: 146 s, 91 s, then 45 s. Each is 1.25 x faster than the one before,
+    # so the 45 s epoch alone would be taken as the speed.
+    fc = ScopeForecast("epochs")
+    run = Run(fc, "epochs", total=20.0)
+    run.start()
+    for seconds in (146.0, 91.0, 45.0):
+        run.mark(run.t + seconds, run.done + 1.0)
+    assert fc.snapshot(run.now).state is ForecastState.LEARNING
+    run.mark(run.t + 120.0, run.done + 1.0)  # slower: warm-up over
+    snap = fc.snapshot(run.now)
+    assert snap.state is ForecastState.LIVE
+    assert snap.rate == pytest.approx((1 / 45 + 1 / 120) / 2)
+
+
+def test_a_job_that_keeps_speeding_up_goes_live_after_the_reference_window() -> None:
+    fc = ScopeForecast("train")
+    run = Run(fc)
+    run.start()
+    rate = 0.1
+    for _ in range(DEFAULT_CONFIG.reference_window - 1):
+        rate *= 1.5
+        run.tick(15.0, rate)
+    assert fc.snapshot(run.now).state is ForecastState.LEARNING
+    rate *= 1.5
+    run.tick(15.0, rate)
+    assert fc.snapshot(run.now).state is ForecastState.LIVE
+    rate *= 1.5
+    run.tick(15.0, rate)  # Live ends the warm-up: a single faster interval is averaged in
+    assert fc.snapshot(run.now).rate == pytest.approx(rate / 1.5 + 0.5 * (rate - rate / 1.5))
+
+
+@pytest.mark.parametrize("factor", [1.0, 0.0, -1.0, float("nan")])
+def test_a_warmup_factor_that_never_ends_the_warm_up_is_refused(factor) -> None:
+    with pytest.raises(ValueError, match="warmup_factor must be greater than 1"):
+        ForecastConfig(warmup_factor=factor)
 
 
 def test_a_steady_start_is_averaged_plainly() -> None:
@@ -426,7 +467,8 @@ def _sft_records() -> list[tuple[Record, float]]:
 def test_a_slow_warm_up_does_not_hold_the_estimate_down() -> None:
     # Model load and compile take 54 s for 3 steps; then about 4.5 steps/s. The plain
     # mean of the first rates said 74 s when 38 s were left (+94%), 35 s for 23 s, and
-    # 11 s for 8 s.
+    # 11 s for 8 s. At 118/300 the rate was still climbing, so the scope waits one more
+    # record before it goes Live.
     fc = ScopeForecast("fine-tune")
     records = _sft_records()
     end = next(record.elapsed for record, _ in records if record.event is Event.END and record.scope == "fine-tune")
@@ -437,7 +479,7 @@ def test_a_slow_warm_up_does_not_hold_the_estimate_down() -> None:
         if record.scope == "fine-tune" and snap.state is ForecastState.LIVE:
             assert snap.remaining_seconds is not None
             errors.append(snap.remaining_seconds / (end - record.elapsed) - 1)
-    assert len(errors) == 3
+    assert len(errors) == 2
     assert abs(errors[0]) <= 0.30
     assert all(abs(error) <= 0.15 for error in errors)
 
@@ -593,7 +635,7 @@ def test_scope_metadata_comes_from_the_records() -> None:
 
 
 def test_custom_config_changes_the_thresholds() -> None:
-    config = ForecastConfig(min_observed_seconds=10, min_intervals=1, min_fraction=0.0)
+    config = ForecastConfig(min_observed_seconds=10, min_intervals=1, min_fraction=0.0, warmup_factor=math.inf)
     fc = ScopeForecast("train", config=config)
     run = Run(fc)
     run.start()
@@ -927,7 +969,9 @@ def test_a_plan_without_phases_is_ignored() -> None:
 
 
 def test_job_config_reaches_every_scope() -> None:
-    job = JobForecast(config=ForecastConfig(min_observed_seconds=10, min_intervals=1, min_fraction=0.0))
+    job = JobForecast(
+        config=ForecastConfig(min_observed_seconds=10, min_intervals=1, min_fraction=0.0, warmup_factor=math.inf)
+    )
     run = Run(job, "job", root=True)
     run.start()
     run.tick(10.0, 1.0)

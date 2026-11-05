@@ -365,7 +365,8 @@ remaining_time = max(total - completed, 0) / robust_rate
   evaluation pauses), but a sustained slowdown is not hidden. A slow start (model
   loading, compilation) is left out once the speed it led up to shows.
 - **Learning → Live** (default): at least 60 s observed **and** at least 3 update
-  intervals **and** at least 1% of the total done.
+  intervals **and** at least 1% of the total done **and** the rate no longer climbing
+  (see Warm-up below).
 - **Stale** (default): no record for `max(3 × median interval, 2 × heartbeat)`.
 - A record for a scope from a new run (a run id not seen before) begins a new segment; rates
   are never averaged across a restart. A `step` is a `start` and an `end` at once. The
@@ -390,11 +391,16 @@ defaults.
 - **Warm-up.** A segment starts warming up. While each interval rate is more than
   1.25x the one before it, the average restarts from that rate, so the slow intervals
   of model loading and compilation are never averaged into the speed that follows.
-  The first rate that is not 1.25x faster ends the warm-up for the rest of the segment;
-  a later speed-up goes through the outlier rules below. A start that is steady or
-  slows down ends the warm-up at its second interval, which leaves its average as it
-  would be without the rule. The Live thresholds count every interval, warm-up
-  included, so warm-up never delays Live. `warmup_factor=math.inf` turns it off.
+  The first rate that is not 1.25x faster ends the warm-up for the rest of the segment,
+  and so does going Live; a later speed-up goes through the outlier rules below. A
+  start that is steady or slows down ends the warm-up at its second interval, which
+  leaves its average as it would be without the rule.
+- A scope does not go Live while it warms up: one fastest-so-far interval is not yet a
+  speed (20 noisy epochs of 146 s, 91 s and 45 s would otherwise be timed from the 45 s
+  one). After 9 intervals of warm-up it may go Live anyway, so a job that keeps
+  speeding up is not held in Learning. The Live thresholds count every interval,
+  warm-up included. `warmup_factor` must be greater than 1; `warmup_factor=math.inf`
+  turns warm-up off, and with it this condition.
 - From the last warm-up rate on, intervals are averaged plainly (`1/n`) at first;
   after that the weight of a new interval is 0.3.
 - An interval rate more than 3x above or below the median of the last 9 accepted rates
