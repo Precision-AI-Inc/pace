@@ -34,14 +34,17 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any
 
-from precisionai.pace._env import LEVELS, Clock, Settings, level_name, parse_level
+from precisionai.pace._env import LEVELS, Clock, level_name, parse_level
+from precisionai.pace._env import Settings as _Settings
 from precisionai.pace._render import Charset, charset_for, encode_safely, fit, format_timestamp, log_line
 
-DEFAULT_TERMINAL_COLUMNS = 80
+__all__ = ["LEVELS", "Clock", "Logger", "logger"]
+
+_DEFAULT_TERMINAL_COLUMNS = 80
 
 
 @dataclass(frozen=True, slots=True)
-class Target:
+class _Target:
     """Where one line is going and what that stream can show.
 
     Parameters
@@ -86,7 +89,7 @@ class Logger:
 
     def __init__(self, clock: Clock | None = None) -> None:
         self.clock = clock or Clock()
-        self.settings = Settings()
+        self.settings = _Settings()
         self.lock = threading.RLock()
         # Written on every start record, so a reader can tell a restarted process
         # from the same start line read twice.
@@ -158,7 +161,7 @@ class Logger:
     def reset(self) -> None:
         """Forget every explicit setting, so the environment and defaults apply again."""
         with self.lock:
-            self.settings = Settings()
+            self.settings = _Settings()
 
     def debug(self, message: object) -> None:
         """Write a ``DEBUG`` line."""
@@ -216,7 +219,7 @@ class Logger:
                 line = log_line(format_timestamp(self.clock.wall()), label, str(message), target.color)
                 self.write_line(line, target)
 
-    def target(self) -> Target | None:
+    def target(self) -> _Target | None:
         """Resolve the stream now and describe what it can show; ``None`` when there is no usable stream."""
         stream = self.settings.resolve("stream")
         if stream is None or not callable(getattr(stream, "write", None)):
@@ -226,7 +229,7 @@ class Logger:
         tty = _is_tty(stream)
         color_mode = self.settings.resolve("color")
         bar_mode = self.settings.resolve("bar")
-        return Target(
+        return _Target(
             stream=stream,
             encoding=encoding,
             charset=charset_for(encoding),
@@ -235,30 +238,30 @@ class Logger:
             bar=bar_mode == "always" or (bar_mode == "auto" and tty),
         )
 
-    def write_line(self, text: str, target: Target) -> None:
+    def write_line(self, text: str, target: _Target) -> None:
         """Write one line, first erasing any in-place bar so the two never overlap."""
         with self.lock:
             self._erase_bar(target)
             self._put(target, text + "\n")
 
-    def draw_bar(self, text: str, target: Target) -> None:
+    def draw_bar(self, text: str, target: _Target) -> None:
         """Redraw the single in-place line with ``text``."""
         with self.lock:
-            columns = shutil.get_terminal_size((DEFAULT_TERMINAL_COLUMNS, 24)).columns - 1
+            columns = shutil.get_terminal_size((_DEFAULT_TERMINAL_COLUMNS, 24)).columns - 1
             shown = fit(text, max(columns, 1), target.charset)
             pad = max(self._bar_width - len(shown), 0) if self._bar_stream is target.stream else 0
             self._put(target, "\r" + shown + " " * pad)
             self._bar_width = len(shown) + pad
             self._bar_stream = target.stream
 
-    def _erase_bar(self, target: Target) -> None:
+    def _erase_bar(self, target: _Target) -> None:
         if self._bar_width and self._bar_stream is target.stream:
             self._put(target, "\r" + " " * self._bar_width + "\r")
         self._bar_width = 0
         self._bar_stream = None
 
     @staticmethod
-    def _put(target: Target, text: str) -> None:
+    def _put(target: _Target, text: str) -> None:
         target.stream.write(encode_safely(text, target.encoding))
         target.stream.flush()
 

@@ -5,15 +5,13 @@
 # Precision AI Pace
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/Precision-AI-Inc/pace/blob/main/LICENSE.md)
-[![PyPI](https://img.shields.io/pypi/v/precisionai-pace.svg?include_prereleases)](https://pypi.org/project/precisionai-pace/)
-[![Python](https://img.shields.io/pypi/pyversions/precisionai-pace.svg?include_prereleases)](https://pypi.org/project/precisionai-pace/)
+[![PyPI](https://img.shields.io/pypi/v/precisionai-pace.svg)](https://pypi.org/project/precisionai-pace/)
+[![Python](https://img.shields.io/pypi/pyversions/precisionai-pace.svg)](https://pypi.org/project/precisionai-pace/)
 
 ---
 
-> Pace follows semantic versioning. Before 1.0, a minor version may change the Python API, but the `[pace ...]` line format only grows: new keys, never a changed one. (0.1 replaced the 0.0.x `[pace:1 ...]` format, which it does not read.)
-
 Pace is a logger with progress reporting built in. Its output reads like any good
-logger in a terminal, and every progress line also carries a short, versioned trailer
+logger in a terminal, and every progress line also carries a short, machine-readable trailer
 that a scheduler can read to estimate when the job will finish.
 
 > **Running jobs on OrchAI?** Pace is part of setting a repo up for OrchAI. It is how My
@@ -68,8 +66,8 @@ is a rate-limited line like this one:
 2026-11-03T17:36:42Z PROGRESS Train  1840/5000  36.8%  2.4 step/s · ~21m57s  [pace train c=1840 t=5000 e=763.1 q=57 r=6bfc3dd5 root]
 ```
 
-The part before `[pace ...]` is for people. The bracketed trailer is a stable,
-versioned format described in [docs/design.md](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md); a program that reads it
+The part before `[pace ...]` is for people. The bracketed trailer is a stable format
+that only grows, described in [docs/design.md](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md); a program that reads it
 should use `parse_line`, `LineSplitter` and `JobForecast` (see
 [Reading Pace output](https://github.com/Precision-AI-Inc/pace/blob/main/docs/reading-output.md)).
 
@@ -103,6 +101,29 @@ Dependencies: `pip install -r docs/requirements.txt`
 
 ---
 
+## Compatibility
+
+Pace follows semantic versioning. From 1.0:
+
+- **Python API**: stable. It is everything in `precisionai.pace.__all__` and in the
+  `__all__` of each public submodule (`core`, `scopes`, `capture`, `protocol`,
+  `forecast`, `lightning`, `transformers`, `tqdm`, `version`).
+- **The `[pace ...]` trailer**: permanent, and it only grows. No key or word is ever
+  removed or redefined, readers ignore keys and words they do not know, and there is no
+  version marker.
+- **`PACE_*` variables and `configure()` options**: names and accepted values are stable.
+- **`ForecastConfig`**: field names are stable. Defaults and the estimation algorithm may
+  change in a minor release.
+- **Not covered**: the readable text before the trailer, the estimate numbers,
+  `_`-prefixed names and modules, and the `adopt-pace` skill's `verify.py`.
+
+A deprecated name keeps working, with a `DeprecationWarning`, for at least one minor
+release before it is removed. Dropping a Python version that has reached end of life
+happens in a minor release. The detail is in
+[Specification: compatibility](https://github.com/Precision-AI-Inc/pace/blob/main/docs/design.md#compatibility).
+
+---
+
 ## Development
 
 ```bash
@@ -116,7 +137,7 @@ python -m pytest
 ```
 
 Coverage must remain at or above **90%**, enforced by pytest and the pre-commit hook.
-CI runs the tests on Python 3.11 through 3.13.
+CI runs the tests on Python 3.11 through 3.14.
 
 ---
 
@@ -136,7 +157,7 @@ See [CLAUDE.md](https://github.com/Precision-AI-Inc/pace/blob/main/CLAUDE.md) fo
 
 ## Releasing
 
-Push a tag matching `v*.*.*` (e.g. `v0.1.0`) to trigger `.github/workflows/release.yml`,
+Push a tag matching `v*.*.*` (e.g. `v1.0.0`) to trigger `.github/workflows/release.yml`,
 which runs the test suite, builds the sdist and wheel, publishes to PyPI via trusted
 publishing, and creates a GitHub Release. The version comes from the git tag via
 `setuptools-scm`. Update `CHANGELOG.md` before tagging.

@@ -9,7 +9,7 @@ Apply these standards when writing, reviewing, or refactoring code in Pace. Read
 - Python 3.11+ is supported (the oldest release that is not end-of-life), managed with `python -m venv .venv` (never conda)
 - Install: `pip install -e ".[dev]"` → installs all deps including pre-commit
 - Register hooks once: `pre-commit install`
-- CI runs the tests on 3.11 through 3.13. Release 0.0.1 still covers 3.8 to 3.10.
+- CI runs the tests on 3.11 through 3.14. Release 0.0.1 still covers 3.8 to 3.10.
 
 ---
 

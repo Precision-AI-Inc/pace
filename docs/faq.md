@@ -56,7 +56,7 @@ lines were written, and on a legacy cp1252 stream the readable part fell back to
 The in-place bar and colour have not been tested in a Windows terminal; colour needs one
 that renders ANSI escape sequences. Set `NO_COLOR=1` if you see raw escape codes.
 
-The tests run in CI on Linux, Python 3.11 through 3.13.
+The tests run in CI on Linux, Python 3.11 through 3.14.
 
 ## What about multiple processes and ranks?
 

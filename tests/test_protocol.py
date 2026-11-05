@@ -5,7 +5,7 @@
 
 import pytest
 
-from precisionai.pace.protocol import Event, Record, encode_value, format_number, format_trailer, parse_line
+from precisionai.pace.protocol import Event, Record, _encode_value, _format_number, format_trailer, parse_line
 
 RUN = "1b8b7650"
 
@@ -137,23 +137,23 @@ def test_format_trailer_rejects_invalid_phase_name() -> None:
 
 
 def test_encode_value_escapes_unsafe_characters_as_utf8() -> None:
-    assert encode_value("a b]é") == "a%20b%5D%C3%A9"
+    assert _encode_value("a b]é") == "a%20b%5D%C3%A9"
 
 
 def test_encode_value_rejects_empty() -> None:
     with pytest.raises(ValueError, match="must not be empty"):
-        encode_value("")
+        _encode_value("")
 
 
 @pytest.mark.parametrize(("value", "expected"), [(5000, "5000"), (2.5, "2.5"), (0.1234567, "0.123457"), (0, "0")])
 def test_format_number(value: float, expected: str) -> None:
-    assert format_number(value) == expected
+    assert _format_number(value) == expected
 
 
 @pytest.mark.parametrize("value", [-1.0, float("inf"), float("nan")])
 def test_format_number_rejects_invalid(value: float) -> None:
     with pytest.raises(ValueError, match="finite, non-negative"):
-        format_number(value)
+        _format_number(value)
 
 
 def test_format_trailer_writes_the_run_id_on_every_record() -> None:
@@ -189,7 +189,7 @@ def test_format_trailer_label_of_only_control_characters_becomes_dash() -> None:
 
 def test_format_number_rejects_values_the_parser_would_reject() -> None:
     with pytest.raises(ValueError, match="at most"):
-        format_number(1e16)
+        _format_number(1e16)
 
 
 @pytest.mark.parametrize(

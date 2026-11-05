@@ -15,6 +15,8 @@ from precisionai.pace._env import level_name, parse_level
 from precisionai.pace.core import Logger
 from precisionai.pace.core import logger as default_logger
 
+__all__ = ["PaceHandler", "capture_logging"]
+
 
 class PaceHandler(logging.Handler):
     """A ``logging`` handler that writes each record as a Pace log line.

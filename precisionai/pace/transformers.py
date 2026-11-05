@@ -24,6 +24,8 @@ except ImportError:
     TrainerCallback = object  # type: ignore[assignment,misc]
     _TRANSFORMERS_AVAILABLE = False
 
+__all__ = ["PaceCallback"]
+
 
 def _length(dataloader: Any) -> float | None:
     """Return the number of batches of a dataloader, or ``None`` when it has no length."""

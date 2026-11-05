@@ -15,8 +15,8 @@ with progress(total=total_steps, description="Train", unit="step", root=True) as
 
 - Count steps, not epochs, even when the loop reads naturally as `for epoch in ...`: an
   epoch-unit root of 10 gives the estimate ten data points, and only a scope of more than
-  100 units gets the start-up correction (0.1.3: slow first steps while the model loads or
-  compiles stop dragging the rate down).
+  100 units gets a start-up correction (slow first steps while the model loads or compiles
+  stop dragging the rate down).
 - With a `max_steps` cap, the total is `min(args.max_steps, args.epochs * len(loader))`.
 - With early stopping, the estimate is an upper bound: say so in the report.
 - With gradient accumulation, advance per micro-batch (what the loop iterates) and keep the

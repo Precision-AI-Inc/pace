@@ -15,17 +15,17 @@ from precisionai.pace import scopes
 from precisionai.pace.core import Logger
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import MAX_LINE_BYTES, MAX_NUMBER, Event, Record, parse_line
+from precisionai.pace.protocol import _MAX_LINE_BYTES, _MAX_NUMBER, Event, Record, parse_line
 from precisionai.pace.scopes import (
     Phase,
     Scope,
-    derive_scope_id,
+    _derive_scope_id,
+    _validate_scope_id,
     phase,
     plan,
     progress,
     timed,
     track,
-    validate_scope_id,
 )
 from tests.conftest import FakeClock, FakeStream
 
@@ -838,7 +838,7 @@ def test_repeated_plans_share_a_scope_in_q_order(log: Logger, stream: FakeStream
 def test_a_plan_of_long_names_stays_within_the_parser_limit(log: Logger, stream: FakeStream) -> None:
     plan([f"phase-{index:02d}-" + "x" * 55 for index in range(32)], logger=log)
     (line,) = stream.lines()
-    assert len(line.encode("utf-8")) <= MAX_LINE_BYTES
+    assert len(line.encode("utf-8")) <= _MAX_LINE_BYTES
     record = parse_line(line)
     assert record is not None
     assert len(record.phases) == 32
@@ -871,7 +871,7 @@ def test_a_rank_change_applies_to_the_next_line(
     ],
 )
 def test_derived_ids(description: str, expected: str) -> None:
-    assert derive_scope_id(description) == expected
+    assert _derive_scope_id(description) == expected
 
 
 @pytest.mark.parametrize(
@@ -879,7 +879,7 @@ def test_derived_ids(description: str, expected: str) -> None:
     [("Train.v2", "Train.v2"), ("my scope", "my-scope"), ("a" * 70, "a" * 64), ("///", "scope")],
 )
 def test_explicit_ids_are_validated_and_sanitised(scope: str, expected: str) -> None:
-    assert validate_scope_id(scope) == expected
+    assert _validate_scope_id(scope) == expected
 
 
 def test_explicit_id_is_used_and_made_unique(log: Logger, stream: FakeStream) -> None:
@@ -1183,4 +1183,4 @@ def test_a_count_pushed_past_the_trailer_limit_is_capped(log: Logger, clock: Fak
         run.update(1e16)
     end = parse_line(stream.lines()[-1])
     assert end is not None
-    assert end.completed == MAX_NUMBER
+    assert end.completed == _MAX_NUMBER

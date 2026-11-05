@@ -148,11 +148,9 @@ Compute rates from `elapsed`, never from the timestamp at the front of the line.
 `elapsed` is on a monotonic clock, so it is unaffected by clock changes. The timestamp
 is UTC and meant for display.
 
-Keys and words a reader does not know are ignored, so a later minor version stays
-readable. The trailer has no version number, so the format only ever grows. One case
-where an older reader loses a line: from 0.1.1 a short child scope is one `step` that
-carries `c`, `t` and `u`, which a 0.1.0 reader rejects as keys on the wrong event. It
-then misses that one child; its parent and the job estimate are unaffected.
+Keys and words a reader does not know are ignored, so a later release stays readable.
+The trailer has no version number, so the format only ever grows; see
+[Specification: compatibility](design.md#compatibility).
 
 ## Two streams, duplicate lines
 

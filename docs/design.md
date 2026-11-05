@@ -80,7 +80,8 @@ from precisionai.pace.transformers import PaceCallback   # [transformers]; TRL u
   them.
 - **Full list**: besides the names above, the public API includes `plan`,
   `capture_logging`, `parse_line`, `LineSplitter`, `ScopeForecast` and `JobForecast`;
-  `precisionai.pace.__all__` is the complete list.
+  `precisionai.pace.__all__` is the complete list for the package, and each public
+  submodule's `__all__` for that module (see [Compatibility](#compatibility)).
 - **Standard `logging`**: `precisionai.pace.capture_logging()` routes the standard
   library's records (and so PyTorch's and Transformers') through the same output.
   Opt-in, so importing Pace never changes another library's logging on its own.
@@ -497,6 +498,41 @@ defaults.
   Labels are short and are not repeated on every update.
 - A malformed or unsupported line is ignored and never raises in the consumer.
 
+## Compatibility
+
+Pace follows semantic versioning from 1.0.0. What each part promises:
+
+| Part | Promise |
+|---|---|
+| Python API | Stable: a name is removed or changed incompatibly only in a major release. The API is `precisionai.pace.__all__` plus the `__all__` of each public submodule (`core`, `scopes`, `capture`, `protocol`, `forecast`, `lightning`, `transformers`, `tqdm`, `version`), which the module reference documents. |
+| `[pace ...]` trailer | Permanent and additive only, never versioned (see below). |
+| `PACE_*` variables and `configure()` options | Names and accepted values are stable. A new option or a new accepted value may come in a minor release. |
+| `ForecastConfig` | Field names are stable. Default values, and the estimation algorithm they tune, may change in a minor release. |
+| Not covered | The readable text before the trailer, the estimate numbers themselves, every `_`-prefixed name and module, and the `adopt-pace` skill's `verify.py` (a checking aid, not an API). |
+
+The trailer:
+
+- No key or word is ever removed or redefined. A new optional key or word may come in a
+  minor release.
+- Readers must ignore keys and words they do not know, so an older reader keeps reading a
+  newer writer's lines (the one exception before 1.0 is under
+  [Short child scopes](#short-child-scopes)).
+- There is no version marker. A change that cannot be made by adding would need a new
+  marker (not `pace`) and a major release, and readers of that release would read both
+  the old and the new marker.
+
+Deprecation and Python versions:
+
+- A deprecated name keeps working for at least one minor release, warns with a
+  `DeprecationWarning`, and its deprecation is noted in `CHANGELOG.md` before it is
+  removed.
+- Dropping a Python version that has reached its end of life happens in a minor release
+  and is not a breaking change.
+
+1.0.0 renamed with a leading `_` the module-level names that were implementation details
+(the parser's limits and patterns, value encoding, scope-id helpers and the like); the
+`CHANGELOG.md` entry lists them. No aliases were kept: nothing outside Pace imported them.
+
 ## Testing
 
 - Conformance fixtures live in `tests/fixtures/protocol/`: input lines with their expected parse results, including malformed, oversized and
@@ -504,7 +540,7 @@ defaults.
   They cover parsing one line at a time; splitting byte chunks into lines and removing
   duplicates are tested in Python only. The fixtures are not shipped in the package;
   readers in other languages take them from the repository. Consumers run the same fixtures against their integration.
-- Every release is tested on Python 3.11 through 3.13.
+- Every release is tested on Python 3.11 through 3.14.
 
 ## Not in this version
 

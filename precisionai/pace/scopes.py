@@ -39,29 +39,31 @@ from precisionai.pace._render import (
     plan_text,
     progress_text,
 )
-from precisionai.pace.core import Logger, Target
+from precisionai.pace.core import Logger, _Target
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.forecast import ScopeForecast
 from precisionai.pace.protocol import (
-    MAX_LINE_BYTES,
-    MAX_NUMBER,
-    SCOPE_PATTERN,
+    _MAX_LINE_BYTES,
+    _MAX_NUMBER,
+    _SCOPE_PATTERN,
     Event,
     Record,
+    _is_bare_step,
     format_trailer,
-    is_bare_step,
 )
 
-REDRAW_INTERVAL = 0.1
-MAX_DERIVED_ID_CHARS = 48
-MAX_ID_CHARS = 64
-FALLBACK_ID = "scope"
-UPDATE_FRACTION = 0.01
+__all__ = ["Phase", "Scope", "phase", "plan", "progress", "timed", "track"]
+
+_REDRAW_INTERVAL = 0.1
+_MAX_DERIVED_ID_CHARS = 48
+_MAX_ID_CHARS = 64
+_FALLBACK_ID = "scope"
+_UPDATE_FRACTION = 0.01
 
 _UNSAFE_ID_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 _PARENT: ContextVar["Scope | None"] = ContextVar("pace_parent_scope", default=None)
 
-T = TypeVar("T")
+_T = TypeVar("_T")
 
 
 def _number(value: Any) -> float | None:
@@ -74,27 +76,27 @@ def _number(value: Any) -> float | None:
 
 def _count(value: Any) -> float:
     number = _number(value)
-    return 0.0 if number is None or number < 0 else min(number, MAX_NUMBER)
+    return 0.0 if number is None or number < 0 else min(number, _MAX_NUMBER)
 
 
 def _total(value: Any) -> float | None:
     number = _number(value)
     # A total no trailer can carry is reported as unknown rather than dropped.
-    return None if number is None or number <= 0 or number > MAX_NUMBER else number
+    return None if number is None or number <= 0 or number > _MAX_NUMBER else number
 
 
-def derive_scope_id(description: str) -> str:
+def _derive_scope_id(description: str) -> str:
     """Return a scope id from a description: lower case, anything outside the id alphabet as ``-``, at most 48 characters."""
-    cleaned = _UNSAFE_ID_CHARS.sub("-", description.lower())[:MAX_DERIVED_ID_CHARS].strip("-")
-    return cleaned or FALLBACK_ID
+    cleaned = _UNSAFE_ID_CHARS.sub("-", description.lower())[:_MAX_DERIVED_ID_CHARS].strip("-")
+    return cleaned or _FALLBACK_ID
 
 
-def validate_scope_id(scope: str) -> str:
+def _validate_scope_id(scope: str) -> str:
     """Return ``scope`` if it is a valid scope id, otherwise a sanitised version of it."""
-    if SCOPE_PATTERN.fullmatch(scope):
+    if _SCOPE_PATTERN.fullmatch(scope):
         return scope
-    cleaned = _UNSAFE_ID_CHARS.sub("-", scope)[:MAX_ID_CHARS].strip("-")
-    return cleaned or FALLBACK_ID
+    cleaned = _UNSAFE_ID_CHARS.sub("-", scope)[:_MAX_ID_CHARS].strip("-")
+    return cleaned or _FALLBACK_ID
 
 
 class Scope:
@@ -148,7 +150,7 @@ class Scope:
         if not isinstance(unit, str):
             raise TypeError(f"unit must be a string such as 'step', got {unit!r}; pass the total as total=...")
         self._out = logger or default_logger
-        base = derive_scope_id(description) if scope is None else validate_scope_id(scope)
+        base = _derive_scope_id(description) if scope is None else _validate_scope_id(scope)
         self.id = self._out.claim_scope(base)
         self.description = description
         self.unit = unit
@@ -258,7 +260,7 @@ class Scope:
             _PARENT.set(self._parent_scope)
 
     def _set_completed(self, completed: float) -> None:
-        self.completed = min(completed, MAX_NUMBER)
+        self.completed = min(completed, _MAX_NUMBER)
         self._after_change()
 
     def _after_change(self) -> None:
@@ -273,7 +275,7 @@ class Scope:
             target = self._out.target()
         if target is not None:
             settings = self._out.settings
-            gap = REDRAW_INTERVAL if target.bar else min(REDRAW_INTERVAL, settings.resolve("min_interval"))
+            gap = _REDRAW_INTERVAL if target.bar else min(_REDRAW_INTERVAL, settings.resolve("min_interval"))
             self._next_check = now + gap
             if target.bar or self._is_due(now, settings.resolve("min_interval"), settings.resolve("heartbeat")):
                 # Writing the update also writes the held lines that are due, this scope's start among them.
@@ -289,7 +291,7 @@ class Scope:
             return True
         if self.total is None:
             return False
-        return self.completed - self._last_completed >= UPDATE_FRACTION * self.total
+        return self.completed - self._last_completed >= _UPDATE_FRACTION * self.total
 
     def _finish(self, event: Event) -> None:
         with contextlib.suppress(Exception), self._out.lock:
@@ -374,7 +376,7 @@ class Scope:
         self,
         event: Event,
         now: float,
-        target: Target | None = None,
+        target: _Target | None = None,
         phases: tuple[tuple[str, float], ...] = (),
     ) -> None:
         if not self._out.settings.progress_enabled():
@@ -404,15 +406,15 @@ class Scope:
                 return
         self._out.write_line(self._progress_line(text, record, target), target)
 
-    def _progress_line(self, text: str, record: Record, target: Target) -> str:
+    def _progress_line(self, text: str, record: Record, target: _Target) -> str:
         stamp = format_timestamp(self._out.clock.wall())
         # A child folded into one line keeps the PROGRESS label its start and end would have had.
-        name = STEP_LABEL if is_bare_step(record) else PROGRESS_LABEL
+        name = STEP_LABEL if _is_bare_step(record) else PROGRESS_LABEL
         label = colorize(name, target.color) + " " * (len(PROGRESS_LABEL) - len(name))
         prefix = f"{stamp} {label} "
         trailer = f"  {format_trailer(record)}"
-        # A reader rejects lines over MAX_LINE_BYTES, so the readable text gives way.
-        budget = MAX_LINE_BYTES - len(prefix.encode("utf-8")) - len(trailer.encode("utf-8"))
+        # A reader rejects lines over _MAX_LINE_BYTES, so the readable text gives way.
+        budget = _MAX_LINE_BYTES - len(prefix.encode("utf-8")) - len(trailer.encode("utf-8"))
         return prefix + _fit_bytes(text, budget) + trailer
 
 
@@ -458,7 +460,7 @@ class Phase(Scope):
         super().__exit__(exc_type, exc, traceback)
 
 
-PlanEntry = Phase | str | tuple[str, float]
+_PlanEntry = Phase | str | tuple[str, float]
 
 
 def progress(
@@ -506,7 +508,7 @@ def progress(
 
 
 def track(
-    iterable: Iterable[T],
+    iterable: Iterable[_T],
     description: str = "",
     unit: str = "it",
     total: float | None = None,
@@ -516,7 +518,7 @@ def track(
     completed: float = 0,
     resumed: bool = False,
     logger: Logger | None = None,
-) -> Iterator[T]:
+) -> Iterator[_T]:
     """Yield the items of ``iterable`` and report progress as the loop consumes them.
 
     The scope starts when iteration begins. An item counts as completed when the loop
@@ -554,7 +556,7 @@ def track(
     return _iterate(iterable, handle)
 
 
-def _iterate(iterable: Iterable[T], handle: Scope) -> Iterator[T]:
+def _iterate(iterable: Iterable[_T], handle: Scope) -> Iterator[_T]:
     try:
         handle.start()
         handle.bind()
@@ -598,15 +600,15 @@ def timed(description: Any = "", *, scope: str | None = None, logger: Logger | N
     if callable(description):
         return _timed(description, getattr(description, "__name__", "call"), scope, logger)
 
-    def decorate(func: Callable[..., T]) -> Callable[..., T]:
+    def decorate(func: Callable[..., _T]) -> Callable[..., _T]:
         return _timed(func, description or func.__name__, scope, logger)
 
     return decorate
 
 
-def _timed(func: Callable[..., T], description: str, scope: str | None, logger: Logger | None) -> Callable[..., T]:
+def _timed(func: Callable[..., _T], description: str, scope: str | None, logger: Logger | None) -> Callable[..., _T]:
     @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> T:
+    def wrapper(*args: Any, **kwargs: Any) -> _T:
         with Phase(description, unit="call", scope=scope, logger=logger):
             return func(*args, **kwargs)
 
@@ -641,7 +643,7 @@ def phase(
     return Phase(name, weight, scope=scope, logger=logger)
 
 
-def plan(phases: Sequence[PlanEntry], *, scope: str | None = None, logger: Logger | None = None) -> None:
+def plan(phases: Sequence[_PlanEntry], *, scope: str | None = None, logger: Logger | None = None) -> None:
     """Write a ``plan`` record declaring the phases still to come and their weights.
 
     Each entry is a :class:`Phase` (from :func:`phase`, not yet entered), a name, or a
@@ -679,16 +681,16 @@ def _fit_bytes(text: str, budget: int) -> str:
     return data[: budget - 3].decode("utf-8", errors="ignore") + "..."
 
 
-def _entry(entry: PlanEntry, out: Logger, reserved: set[str]) -> tuple[str, float | None]:
+def _entry(entry: _PlanEntry, out: Logger, reserved: set[str]) -> tuple[str, float | None]:
     if isinstance(entry, Phase):
         return entry.id, entry.weight
     name, weight = (entry, None) if isinstance(entry, str) else (entry[0], _total(entry[1]))
     # Predict the id the phase will get, counting earlier entries of this plan as taken,
     # so two phases with the same name are listed as "train" and "train-2" like their scopes.
-    return out.predict_scope(derive_scope_id(name), reserved), weight
+    return out.predict_scope(_derive_scope_id(name), reserved), weight
 
 
-def _weighted(phases: Sequence[PlanEntry], out: Logger) -> tuple[tuple[str, float], ...]:
+def _weighted(phases: Sequence[_PlanEntry], out: Logger) -> tuple[tuple[str, float], ...]:
     entries: list[tuple[str, float | None]] = []
     reserved: set[str] = set()
     for phase_entry in phases:

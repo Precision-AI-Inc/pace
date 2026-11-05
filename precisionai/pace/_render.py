@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from precisionai.pace.forecast import Forecast, ForecastState
-from precisionai.pace.protocol import ANSI_PATTERN, Event, Record, is_bare_step
+from precisionai.pace.protocol import _ANSI_PATTERN, Event, Record, _is_bare_step
 
 PROGRESS_LABEL = "PROGRESS"
 STEP_LABEL = "STEP"
@@ -112,7 +112,7 @@ def neutralize(message: str) -> str:
     are removed here first: ``[pa`` + ESC ``[31m`` + ``ce:`` must not survive as a
     marker. Any ESC left over is dropped too.
     """
-    plain = ANSI_PATTERN.sub("", message).replace("\x1b", "")
+    plain = _ANSI_PATTERN.sub("", message).replace("\x1b", "")
     return _FORGED_MARKER.sub("[ ", plain)
 
 
@@ -216,7 +216,7 @@ def progress_text(
         return _bar_text(record, forecast, name, shown_unit, charset)
     parts = [("  " * (depth - 1) + charset.branch if depth else "") + name]
     event = record.event
-    if event is Event.START or (event is Event.STEP and not is_bare_step(record)):
+    if event is Event.START or (event is Event.STEP and not _is_bare_step(record)):
         parts.append(f"{_count_text(record)} {shown_unit}".rstrip())
     elif event is not Event.STEP:
         parts.append(_count_text(record))

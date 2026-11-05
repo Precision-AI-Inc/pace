@@ -6,12 +6,12 @@ learned building the example jobs. The user-facing version is Pace's
 [`docs/orchai.md`](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md):
 point the user at it in the report.
 
-- **Dependency: a minimum, never a pin.** `precisionai-pace>=0.1.3` (with the extra). A node
+- **Dependency: a minimum, never a pin.** `precisionai-pace>=1.0.0` (with the extra). A node
   rebuilds the image only when a file the Dockerfile copies in changes, so an unchanged
   requirements file keeps the Pace installed first; raising the minimum is what picks up a
   new release. Put it in the file the Dockerfile installs from (`requirements.txt` when it
   runs `pip install -r`); a base image with only system Python (Ollama) takes
-  `python3 -m pip install --break-system-packages "precisionai-pace>=0.1.3"` in the
+  `python3 -m pip install --break-system-packages "precisionai-pace>=1.0.0"` in the
   Dockerfile.
 - **What Confirm Job looks for.** A mention of `precisionai-pace` in `requirements*.txt`/`.in`,
   `requirements/*.txt`, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`,
@@ -33,7 +33,7 @@ point the user at it in the report.
   may go from "Estimating" straight to "Finished": a demo needs about five minutes of work
   to show a live estimate.
 - **Units.** Count optimizer steps, images, prompts or requests, not epochs: a scope of
-  more than 100 units gets 0.1.3's start-up correction (slow first steps while the model
+  more than 100 units gets a start-up correction (slow first steps while the model
   loads or compiles stop dragging the estimate down), and more units give more updates.
 - **Library bars.** OrchAI reads the whole log, so a framework's own bar is noise there.
   Offer `enable_progress_bar=False` (Lightning), `disable_tqdm=True` (`TrainingArguments`),

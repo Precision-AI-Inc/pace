@@ -143,7 +143,7 @@ Details that matter:
 | `min_interval` | seconds, 0 or more | `15` |
 | `heartbeat` | seconds, 0 or more | `120` |
 | `all_ranks` | `True` or `False` | `False` |
-| `clock` | `precisionai.pace._env.Clock`, for tests | the real clocks |
+| `clock` | a `precisionai.pace.Clock`, for tests | the real clocks |
 
 `stream` as a name is looked up each time a line is written, so it follows
 redirection such as pytest's capture or `contextlib.redirect_stdout`. An object is
