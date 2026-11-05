@@ -13,8 +13,9 @@ point the user at it in the report.
   runs `pip install -r`); a base image with only system Python (Ollama) takes
   `python3 -m pip install --break-system-packages "precisionai-pace>=0.1.3"` in the
   Dockerfile.
-- **What Confirm Job looks for.** A mention of `precisionai-pace` in `requirements*.txt`,
-  `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`, `environment*.yml` or the Dockerfile,
+- **What Confirm Job looks for.** A mention of `precisionai-pace` in `requirements*.txt`/`.in`,
+  `requirements/*.txt`, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`,
+  `environment*.yml`/`.yaml` or the Dockerfile,
   or `import precisionai.pace` in the entry-point script `container.command` names. Without
   one it warns "This job won't report progress" (a warning: submitting still works). The
   dependency edit in the file the image installs from clears it.

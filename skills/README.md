@@ -20,20 +20,21 @@ The repository is public, so a shallow clone is enough. For you only, in every
 repository:
 
 ```bash
-git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git /tmp/pace
-mkdir -p ~/.claude/skills
-cp -r /tmp/pace/skills/adopt-pace ~/.claude/skills/
+src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src"
+mkdir -p ~/.claude/skills && rm -rf ~/.claude/skills/adopt-pace
+cp -r "$src/skills/adopt-pace" ~/.claude/skills/ && rm -rf "$src"
 ```
 
-Or in one repository, shared with everyone who clones it (commit the folder):
+Or in one repository, shared with everyone who clones it (commit the folder), from the
+repository's root:
 
 ```bash
-mkdir -p .claude/skills
-cp -r /tmp/pace/skills/adopt-pace .claude/skills/
+src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src"
+mkdir -p .claude/skills && rm -rf .claude/skills/adopt-pace
+cp -r "$src/skills/adopt-pace" .claude/skills/ && rm -rf "$src"
 ```
 
-To update it later, clone again into a new directory and copy the folder over the old
-one. Then open Claude Code in the repository and ask:
+Run the same commands again to update it. Then open Claude Code in the repository and ask:
 
 > add Pace to this repo
 
@@ -49,6 +50,8 @@ and `verify.py` (the output checker) sit beside it; copy the whole folder.
 python ~/.claude/skills/adopt-pace/verify.py run.log
 my-job --smoke 2>&1 | python ~/.claude/skills/adopt-pace/verify.py
 ```
+
+Installed in the repository instead, it is `.claude/skills/adopt-pace/verify.py`.
 
 It reports every scope, which one is the root, missing totals or `end` records, plan
 names that match no scope, and what the estimator concludes at the end of the log. The

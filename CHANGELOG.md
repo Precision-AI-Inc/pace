@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The `adopt-pace` skill now adds `precisionai-pace>=0.1.3`, a minimum version, instead of matching the repository's pinning style, and explains why a cached image needs one. It now advises counting steps rather than epochs. Its Lightning and Transformers notes give the callbacks' real arguments and what they do with no total, and mention `fail()` for a crashed Transformers run.
-- The skill's install instructions start from a clone of this repository and install into `~/.claude/skills`.
+- The skill's install instructions start from a fresh clone of this repository, can be run again to update, and cover both `~/.claude/skills` and a repository's own `.claude/skills`.
+- The README opens with a note for OrchAI users: Pace is part of setting a repo up for OrchAI, and Getting started on OrchAI is where to start.
 
 ## [0.1.3] - 2026-11-05
 

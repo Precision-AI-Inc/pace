@@ -1,8 +1,11 @@
 # Getting started on OrchAI
 
-OrchAI is Precision AI's job platform. It reads the `[pace ...]` lines your job writes
-to its log and shows, in **My Jobs** and **Tasks**, how far each job has got and when it
-should finish. A job without Pace still runs; its Progress column says "Not reported".
+OrchAI is Precision AI's job platform, and Pace is part of setting a repo up for it, next
+to the Dockerfile and `config.yaml`. OrchAI reads the `[pace ...]` lines your job writes to
+its log. From them it shows, in **My Jobs** and **Tasks**, how far each job has got and when
+it should finish, and forecasts when the jobs queued behind it will start. A job without
+Pace still runs, but shows no progress or time left ("Not reported"), and makes the queue's
+forecasts worse.
 
 This page is the short path for an OrchAI user. The rest of these docs explain each
 piece in depth.
@@ -65,12 +68,13 @@ Inference, several phases, vLLM, a model server, or a total you only learn later
 examples below.
 
 **3. Check it locally.** Outside a terminal Pace writes at most one line every 15
-seconds, so make a short run write every update, then check the log with the checker that
-ships with the [`adopt-pace` skill](#let-claude-code-do-it):
+seconds. `PACE_MIN_INTERVAL=0` lifts that, so a short run writes a line at each 1% of
+its total (or each heartbeat). Then check the log with the checker that ships with the
+[`adopt-pace` skill](#let-claude-code-do-it):
 
 ```bash
-PACE_MIN_INTERVAL=0 PACE_BAR=never python train.py --epochs 1 > /tmp/pace.log 2>&1
-python ~/.claude/skills/adopt-pace/verify.py /tmp/pace.log
+PACE_MIN_INTERVAL=0 python train.py --epochs 1 > /tmp/pace.log 2>&1
+python ~/.claude/skills/adopt-pace/verify.py /tmp/pace.log   # or .claude/skills/adopt-pace/verify.py in the repo
 ```
 
 It reports one root, a total and an `end` for every scope, or says what is missing.
@@ -90,9 +94,12 @@ plan, makes the edits above, runs a short smoke test and checks the output. Inst
 once for every repository on your machine:
 
 ```bash
-git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git /tmp/pace
-mkdir -p ~/.claude/skills && cp -r /tmp/pace/skills/adopt-pace ~/.claude/skills/
+src=$(mktemp -d) && git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git "$src"
+mkdir -p ~/.claude/skills && rm -rf ~/.claude/skills/adopt-pace
+cp -r "$src/skills/adopt-pace" ~/.claude/skills/ && rm -rf "$src"
 ```
+
+Run the same commands again to update it.
 
 Then, in your repository, ask Claude Code to "add Pace to this repo". It asks before it
 edits anything. Other ways to install it:
@@ -145,7 +152,7 @@ What they taught:
 
 | You see | Why, and what to do |
 |---|---|
-| Confirm Job still says "This job won't report progress" | Any one of these clears it: `precisionai-pace` in a requirements file, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`, `environment.yml` or the Dockerfile, or `import precisionai.pace` in the entry-point script. Adding it to the file your Dockerfile installs from is enough. Submitting still works either way. |
+| Confirm Job still says "This job won't report progress" | Any one of these clears it: `precisionai-pace` in `requirements*.txt`/`.in` or `requirements/*.txt`, `pyproject.toml`, `setup.cfg`/`setup.py`, `Pipfile`, `environment*.yml`/`.yaml` or the Dockerfile, or `import precisionai.pace` in the entry-point script. Adding it to the file your Dockerfile installs from is enough. Submitting still works either way. |
 | "Not yet" for a long time | Pace is installed but the root has not started, for example while a download runs first. |
 | "Estimating" never changes to a time | The scope has no total, or the run is too short (see above). |
 | The job shows finished while it is still running | The root ended before the last stage. Move the root, or use a plan. |
