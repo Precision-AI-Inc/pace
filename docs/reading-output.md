@@ -275,7 +275,9 @@ no estimate of its own takes one from its children: a counted parent times its u
 (from its own records once one has finished, so a unit may hold several children, such
 as a training and a validation loop) and adds the units still to come, while a `phase()`
 takes only the running child's estimate and the job estimate is then marked `partial=True`
-(see [Phases and a plan](progress.md#phases-and-a-plan)).
+(see [Phases and a plan](progress.md#phases-and-a-plan)). A counted parent of more than
+100 units (a root over training steps, say) never takes an estimate from its children: it
+has one only once its own records make it Live, the same as its own line shows.
 
 Always show `partial=True` estimates as a lower bound, for example "at least 10 min
 left".
