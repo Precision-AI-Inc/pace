@@ -1,6 +1,6 @@
 # PyTorch Lightning
 
-`PaceCallback(description="Train", *, scope=None, root=True)` works with `lightning.pytorch`
+`PaceCallback(description="Train", *, logger=None, scope=None, root=True)` works with `lightning.pytorch`
 and the older `pytorch_lightning`. Add the callback. Do not touch the training loop. It reports `trainer.global_step` against
 `trainer.estimated_stepping_batches` as the root scope, with validation as a child scope,
 and restores the resume position from the checkpoint:

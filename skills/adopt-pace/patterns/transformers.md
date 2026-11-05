@@ -1,6 +1,6 @@
 # Hugging Face Transformers and TRL
 
-`PaceCallback(description="Train", *, scope=None, root=True)`, and `fail()` for your own
+`PaceCallback(description="Train", *, logger=None, scope=None, root=True)`, and `fail()` for your own
 error handling.
 
 ```python
