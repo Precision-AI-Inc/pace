@@ -11,22 +11,29 @@ pipeline repo, Claude Code surveys it, shows you a plan, makes the smallest edit
 the main loop, one `root` scope), runs a short smoke test and checks the output with
 `verify.py`.
 
+For jobs that run on OrchAI, the same steps by hand are in
+[Using Pace with OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
+
 ### Install
 
-Copy the folder into the repository you want to adopt Pace in, or into your user-level
-skills so it is available everywhere:
+The repository is public, so a shallow clone is enough. For you only, in every
+repository:
 
 ```bash
-# in that repository: shared with everyone who clones it
-mkdir -p .claude/skills
-cp -r /path/to/pace/skills/adopt-pace .claude/skills/
-
-# or for you only, in every repository
+git clone --depth 1 https://github.com/Precision-AI-Inc/pace.git /tmp/pace
 mkdir -p ~/.claude/skills
-cp -r /path/to/pace/skills/adopt-pace ~/.claude/skills/
+cp -r /tmp/pace/skills/adopt-pace ~/.claude/skills/
 ```
 
-Then open Claude Code in that repository and ask:
+Or in one repository, shared with everyone who clones it (commit the folder):
+
+```bash
+mkdir -p .claude/skills
+cp -r /tmp/pace/skills/adopt-pace .claude/skills/
+```
+
+To update it later, clone again into a new directory and copy the folder over the old
+one. Then open Claude Code in the repository and ask:
 
 > add Pace to this repo
 
@@ -39,8 +46,8 @@ and `verify.py` (the output checker) sit beside it; copy the whole folder.
 `verify.py` needs only the standard library and `precisionai-pace`:
 
 ```bash
-python skills/adopt-pace/verify.py run.log
-my-job --smoke 2>&1 | python skills/adopt-pace/verify.py
+python ~/.claude/skills/adopt-pace/verify.py run.log
+my-job --smoke 2>&1 | python ~/.claude/skills/adopt-pace/verify.py
 ```
 
 It reports every scope, which one is the root, missing totals or `end` records, plan

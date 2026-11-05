@@ -19,6 +19,7 @@ Contents
 
    readme
    getting-started
+   orchai
    logging
    progress
    frameworks

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A new page, [Using Pace with OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md), gives the five steps to make an OrchAI job show its progress: the dependency, one root scope, a local check, an optional expected runtime, and what to look for after submitting. It also lists what the tested example jobs taught and what to do when something looks wrong. Getting started and the README link to it.
+- The `adopt-pace` skill has a new `patterns/orchai.md` for jobs that run on OrchAI: what Confirm Job looks for, the expected runtime, library progress bars, and why a short demo shows no estimate.
+
+### Changed
+
+- The `adopt-pace` skill now adds `precisionai-pace>=0.1.3`, a minimum version, instead of matching the repository's pinning style, and explains why a cached image needs one. It now advises counting steps rather than epochs. Its Lightning and Transformers notes give the callbacks' real arguments and what they do with no total, and mention `fail()` for a crashed Transformers run.
+- The skill's install instructions start from a clone of this repository and install into `~/.claude/skills`.
+
 ## [0.1.3] - 2026-11-05
 
 ### Fixed
