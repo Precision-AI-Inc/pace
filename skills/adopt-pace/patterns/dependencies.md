@@ -11,7 +11,7 @@ same brackets, `precisionai-pace[lightning]>=0.1.3`. Pace needs Python 3.11 or l
 | `pyproject.toml`, Poetry | `precisionai-pace = ">=0.1.3"`, or `precisionai-pace = { version = ">=0.1.3", extras = ["lightning"] }` |
 | `setup.py`, `setup.cfg` | `install_requires` list |
 | conda `environment.yml` | under the `pip:` list, not as a conda package |
-| `Dockerfile`: `pip install a b c` | add it to that line. If the Dockerfile only runs `pip install -r requirements.txt`, the requirements file is enough. |
+| `Dockerfile`: `pip install a b c` | add it to that line, quoted: `"precisionai-pace>=0.1.3"` (unquoted, the shell reads `>` as a redirect and pip gets no minimum). If the Dockerfile only runs `pip install -r requirements.txt`, the requirements file is enough. |
 | `uv.lock`, `poetry.lock`, `Pipfile.lock` | do not edit by hand; tell the user to re-lock, or run the repo's own lock command if it works offline-safe |
 
 - A minimum, not a pin: an image built once is reused until a file it copies in changes
