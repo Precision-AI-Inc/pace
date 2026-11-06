@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-06
+
 ### Fixed
 
-- `PaceCallback` works with a `pytorch_lightning` `Trainer` when the `lightning` package is installed too, as it is with `precisionai-pace[lightning]`. Before, the callback subclassed only `lightning`'s `Callback` whenever `lightning` was importable, so for code that imports `pytorch_lightning` it was not a `pytorch_lightning.Callback`. When both packages are installed it now subclasses both.
+- `PaceCallback` works with a `pytorch_lightning` `Trainer` when the `lightning` package is installed too, as it is with `precisionai-pace[lightning]`. Before, the callback subclassed only `lightning`'s `Callback` whenever `lightning` was importable, so for code that imports `pytorch_lightning` it was not a `pytorch_lightning.Callback`. When both packages are installed at 2.x it now subclasses both. A 1.x `pytorch_lightning` beside `lightning` is left as it was, because a 1.x `Trainer` calls some hooks with other arguments.
 
 ## [1.0.1] - 2026-11-06
 
@@ -125,7 +127,8 @@ The public API is trimmed before it is frozen. Every public submodule now has an
 - Runnable examples, one per style of logging and progress (plain loops, epochs, concurrent work, phases and a plan, resuming, unknown totals, nested scopes, `logging` capture, distributed ranks, and reading the output).
 - User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.3...v1.0.0
 [0.1.3]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.2...v0.1.3
