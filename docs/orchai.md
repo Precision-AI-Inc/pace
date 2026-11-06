@@ -113,8 +113,10 @@ it has the time left and a finish time.
   finish. A server with no end of its own gives no estimate.
 - **TRL fine-tunes need nothing extra.** `SFTTrainer`, `DPOTrainer` and the other TRL
   trainers take the Transformers `PaceCallback` like any `Trainer`.
-- **Log collectors read stdout and stderr.** Moving Pace to stderr does not hide it, and a
-  library's bar on stderr still lands in the job's log. Replace the bar that tracks the
+- **Log collectors usually read stdout and stderr.** Container logs (`docker logs`,
+  Kubernetes) carry both streams, so a library's bar on stderr still lands in the job's
+  log. Check what yours collects before moving Pace to stderr with `PACE_STREAM=stderr`:
+  a collector that reads only stdout would then see no progress. Replace the bar that tracks the
   job; a download bar can stay. Turn off a framework's own bar if you want a quieter log
   (`enable_progress_bar=False` in Lightning, `disable_tqdm=True` in `TrainingArguments`),
   and set `TQDM_DISABLE=1` (in the image's `ENV`) when Pace has replaced your tqdm and
@@ -154,4 +156,4 @@ edits anything. Other ways to install it, and how to use it with other coding ag
 | An estimate never appears | The scope has no total, or the run is too short (see above). |
 | The job shows finished while it is still running | The root ended before the last stage. Move the root, or use a plan. |
 | A new Pace release does not reach the job | The image was reused from cache. Raise the minimum version in your requirements. |
-| Library progress bars clutter the log | See "Log collectors read stdout and stderr" above. |
+| Library progress bars clutter the log | See "Log collectors usually read stdout and stderr" above. |

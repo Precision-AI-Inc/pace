@@ -95,8 +95,9 @@ Pace plan
 `PACE_STREAM=stderr` and `PACE_BAR=never`. For a job that runs in a container, also offer
 `ENV PYTHONUNBUFFERED=1` when the job prints (Pace flushes its own lines; `print` is
 block-buffered without a terminal) and `ENV TQDM_DISABLE=1` when Pace replaced the main
-`tqdm` and libraries still draw bars while loading (vLLM, `datasets`): a log collector
-reads stdout and stderr, so those bars land in the job's log.
+`tqdm` and libraries still draw bars while loading (vLLM, `datasets`): container log
+collectors usually read stdout and stderr, so those bars land in the job's log. Before
+offering `PACE_STREAM=stderr`, check that whatever reads the job's log reads stderr too.
 
 ## 4. Edit
 
