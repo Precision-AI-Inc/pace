@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `PaceCallback` works with a `pytorch_lightning` `Trainer` when the `lightning` package is installed too, as it is with `precisionai-pace[lightning]`. Before, the callback subclassed only `lightning`'s `Callback` whenever `lightning` was importable, so for code that imports `pytorch_lightning` it was not a `pytorch_lightning.Callback`. When both packages are installed it now subclasses both.
+
 ## [1.0.1] - 2026-11-06
 
 ### Fixed

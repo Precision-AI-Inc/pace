@@ -217,6 +217,43 @@ def test_a_description_and_scope_id_can_be_chosen(quiet: Logger, stream: FakeStr
     assert not train[0].root
 
 
+def test_a_pytorch_lightning_trainer_runs_the_callback_when_both_packages_are_installed(
+    quiet: Logger, stream: FakeStream, tmp_path: Path
+) -> None:
+    old = pytest.importorskip("pytorch_lightning")
+
+    class OldTinyModel(old.LightningModule):
+        def __init__(self) -> None:
+            super().__init__()
+            self.layer = torch.nn.Linear(4, 1)
+
+        def training_step(self, batch: Any, batch_idx: int) -> Any:
+            x, y = batch
+            return torch.nn.functional.mse_loss(self.layer(x), y)
+
+        def configure_optimizers(self) -> Any:
+            return torch.optim.SGD(self.parameters(), lr=0.01)
+
+    callback = PaceCallback(logger=quiet)
+    assert isinstance(callback, old.Callback)
+    assert isinstance(callback, pl.Callback)
+    old.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=EPOCHS,
+        callbacks=[callback],
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        default_root_dir=str(tmp_path),
+    ).fit(OldTinyModel(), loader())
+    train = of(records(stream), "train")
+    assert train[0].event is Event.START
+    assert train[-1].event is Event.END
+    assert train[-1].completed == BATCHES * EPOCHS
+
+
 def test_without_lightning_installed_the_callback_says_how_to_install_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pace_lightning, "_LIGHTNING_AVAILABLE", False)
     with pytest.raises(ImportError, match=r"precisionai-pace\[lightning\]"):

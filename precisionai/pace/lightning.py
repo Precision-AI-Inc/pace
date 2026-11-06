@@ -9,7 +9,9 @@ predict pass. Only global rank 0 writes, whatever ``PACE_ALL_RANKS`` says, so a
 multi-GPU job still produces one record per scope.
 
 Install with ``pip install precisionai-pace[lightning]``. Both ``lightning`` (2.x) and
-the older ``pytorch_lightning`` import names are supported.
+the older ``pytorch_lightning`` import names are supported. When both are installed (2.x)
+the callback is a subclass of both packages' ``Callback``, so either package's ``Trainer``
+accepts it.
 """
 
 import math
@@ -18,18 +20,28 @@ from typing import Any
 from precisionai.pace._adapters import AdapterScopes
 from precisionai.pace.core import Logger
 
+_CALLBACK_BASES: list[type] = []
 try:
-    from lightning.pytorch.callbacks import Callback  # type: ignore[import]
+    from lightning.pytorch.callbacks import Callback as _LightningCallback  # type: ignore[import]
 
-    _LIGHTNING_AVAILABLE = True
+    _CALLBACK_BASES.append(_LightningCallback)
 except ImportError:
-    try:
-        from pytorch_lightning.callbacks import Callback  # type: ignore[import]
+    pass
+try:
+    import pytorch_lightning as _pytorch_lightning  # type: ignore[import]
+    from pytorch_lightning.callbacks import Callback as _PytorchLightningCallback  # type: ignore[import]
 
-        _LIGHTNING_AVAILABLE = True
-    except ImportError:
-        Callback = object  # type: ignore[assignment,misc]
-        _LIGHTNING_AVAILABLE = False
+    # Hooks the callback does not override come from the first base. pytorch_lightning 2.x is
+    # the same code as lightning 2.x, so both bases are safe; a 1.x Trainer calls some hooks
+    # with other arguments, so 1.x is a base only when it is the one package installed.
+    _major = str(getattr(_pytorch_lightning, "__version__", "2")).split(".")[0]
+    if not _CALLBACK_BASES or not _major.isdigit() or int(_major) >= 2:
+        _CALLBACK_BASES.append(_PytorchLightningCallback)
+except ImportError:
+    pass
+_LIGHTNING_AVAILABLE = bool(_CALLBACK_BASES)
+if not _CALLBACK_BASES:
+    _CALLBACK_BASES.append(object)
 
 __all__ = ["PaceCallback"]
 
@@ -44,7 +56,7 @@ def _batches(counts: Any) -> float | None:
     return total if math.isfinite(total) and total > 0 else None
 
 
-class PaceCallback(Callback):  # type: ignore[misc,valid-type]
+class PaceCallback(*_CALLBACK_BASES):  # type: ignore[misc]
     """Report a Lightning run's progress as Pace records.
 
     Parameters
