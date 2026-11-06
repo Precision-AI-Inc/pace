@@ -51,8 +51,8 @@ point the user at it in the report.
 
 Each job in OrchAI's example repo has a config in `orch_starter/` beside a script:
 [`README.md`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/README.md)
-lists which config runs which pattern. Every link below is for OrchAI users (private
-repository); the user may need to ask for access.
+lists which config runs which pattern. The repo is private to Precision AI; the user may
+need access.
 
 - Images and dependencies:
   [`detection/Dockerfile`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/Dockerfile),

@@ -27,19 +27,6 @@ same brackets, `precisionai-pace[lightning]>=1.0.0`. Pace needs Python 3.11 or l
 
 ## Examples
 
-- A `requirements.txt` the Dockerfile installs from, with the rest of the job's packages:
-
-  ```text
-  torch>=2.3
-  precisionai-pace[lightning]>=1.0.0
-  ```
-
-  ```dockerfile
-  COPY requirements.txt .
-  RUN pip install --no-cache-dir -r requirements.txt
-  ```
-
-  A Dockerfile with no requirements file: `RUN pip install --no-cache-dir torch "precisionai-pace>=1.0.0"`.
-- Tested, for OrchAI users (private repository): the `requirements.txt` and `Dockerfile` beside each script in OrchAI's example
+- Tested: the `requirements.txt` and `Dockerfile` beside each script in OrchAI's example
   repo, for example [`detection/requirements.txt`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/requirements.txt)
   and [`llm/requirements.txt`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/requirements.txt).

@@ -33,5 +33,5 @@ trainer.fit(model, datamodule=dm, ckpt_path=args.resume)
 ## Examples
 
 - Pace: [`lightning_example.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/lightning_example.py).
-- Tested, for OrchAI users (private repository): [`detection/train_lightning.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/train_lightning.py)
+- Tested: [`detection/train_lightning.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/train_lightning.py)
   in OrchAI's example repo (`PaceCallback("Train")`, `ckpt_path` resume, own bar off).

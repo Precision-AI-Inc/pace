@@ -17,7 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `logger.configure(stream=...)` with a name other than `stdout` or `stderr` now warns (`UserWarning`) before falling back to stdout, as it always did. It does not raise, unlike an unknown `color` or `bar` mode, so code that passed such a name keeps running. `PACE_STREAM` keeps its documented behaviour: any other value means stdout, without a warning.
 - The docstrings of `track` and `progress`, the Progress page and the specification's Compatibility section note that the two take their positional arguments in different orders, and that the orders stay as they are under 1.x.
-- Links to OrchAI's example repository (`Precision-AI-Inc/orchai-examples`) in the docs and the `adopt-pace` skill are marked as for OrchAI users, since that repository is private. The skill's dependency pattern has a standalone `requirements.txt` and Dockerfile example, and the OrchAI page points to Pace's own examples, so nothing depends on the private repository.
 
 ## [1.0.0] - 2026-11-05
 

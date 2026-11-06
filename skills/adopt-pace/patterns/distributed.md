@@ -24,5 +24,5 @@ with progress(total=total_steps, description="Train", unit="step", root=True) as
 ## Examples
 
 - Pace: [`distributed.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/distributed.py).
-- Tested, for OrchAI users (private repository): [`detection/train_loop.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/train_loop.py)
+- Tested: [`detection/train_loop.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/train_loop.py)
   in OrchAI's example repo (DDP under `torchrun`).
