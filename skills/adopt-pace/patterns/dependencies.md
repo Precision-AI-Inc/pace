@@ -15,7 +15,7 @@ same brackets, `precisionai-pace[lightning]>=1.0.0`. Pace needs Python 3.11 or l
 | `uv.lock`, `poetry.lock`, `Pipfile.lock` | do not edit by hand; tell the user to re-lock, or run the repo's own lock command if it works offline-safe |
 
 - A minimum, not a pin: an image built once is reused until a file it copies in changes
-  (OrchAI nodes work this way), so the minimum is what a fresh build guarantees, and raising
+  (build caches and nodes that keep built images work this way), so the minimum is what a fresh build guarantees, and raising
   it is what picks up a fix. If `pip index versions precisionai-pace` shows a release
   newer than the minimum above, use that.
 - A repo that pins every dependency exactly as a policy (not just in a lock file): ask the
@@ -27,6 +27,18 @@ same brackets, `precisionai-pace[lightning]>=1.0.0`. Pace needs Python 3.11 or l
 
 ## Examples
 
-- Tested: the `requirements.txt` and `Dockerfile` beside each script in OrchAI's example
-  repo, for example [`detection/requirements.txt`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/requirements.txt)
-  and [`llm/requirements.txt`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/requirements.txt).
+`requirements.txt`, which the Dockerfile installs with `pip install -r`:
+
+```text
+torch>=2.3
+precisionai-pace[lightning]>=1.0.0
+```
+
+A Dockerfile that installs packages on its own line, quoted:
+
+```dockerfile
+RUN pip install --no-cache-dir "precisionai-pace>=1.0.0" vllm
+```
+
+A base image with only the system Python (an Ollama image, for example) may need
+`python3 -m pip install --break-system-packages "precisionai-pace>=1.0.0"`.

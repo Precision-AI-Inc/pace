@@ -52,5 +52,3 @@ for step, batch in enumerate(track(loader, description="Train", unit="batch", ro
 - Pace: [`track_loop.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/track_loop.py)
   (`track`), [`manual_progress.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/manual_progress.py)
   (`progress`).
-- Tested, in a real training loop: [`detection/train_loop.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/train_loop.py)
-  in OrchAI's example repo (root `progress`, child scopes, `@timed`, resume, DDP under `torchrun`).

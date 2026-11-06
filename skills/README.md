@@ -1,6 +1,7 @@
 # Skills
 
-Claude Code skills that ship with Pace.
+Coding-agent skills that ship with Pace, for anyone adding Pace to their own repository.
+They are written for Claude Code and work with other agents too (see below).
 
 ## adopt-pace
 
@@ -11,8 +12,8 @@ pipeline repo, Claude Code surveys it, shows you a plan, makes the smallest edit
 the main loop, one `root` scope), runs a short smoke test and checks the output with
 `verify.py`.
 
-For jobs that run on OrchAI, the same steps by hand are in
-[Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
+The same steps by hand, for a job that runs in a container or under a scheduler, are in
+[Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
 
 ### Install
 
@@ -42,6 +43,15 @@ files are left behind. Then open Claude Code in the repository and ask:
 Claude Code reads `SKILL.md`, shows its plan and asks before editing. The `patterns/`
 folder (one small file of snippets per situation, read only when the repository needs it)
 and `verify.py` (the output checker) sit beside it; copy the whole folder.
+
+### Other coding agents
+
+`SKILL.md` is plain Markdown with a short front-matter header, so any coding agent that
+can read files and run commands can follow it. Copy the folder into the repository as
+above (any path works), then ask the agent to "follow `<path>/adopt-pace/SKILL.md` to add
+Pace to this repo". To make it permanent, add that line to the repository's own agent
+instructions (`AGENTS.md` or its equivalent). If your agent supports skills in the same
+`SKILL.md` format, install the folder wherever it looks for them.
 
 ### Check a run yourself
 

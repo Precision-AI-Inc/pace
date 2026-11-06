@@ -65,7 +65,6 @@ with progress(total=len(requests), description="Generate", unit="request", root=
 
 ## Examples
 
-- Tested: [`llm/serve_ollama.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/serve_ollama.py)
-  in OrchAI's example repo (Ollama from a GGUF file, `@timed` startup, concurrent requests).
 - Pace: [`timed_steps.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/timed_steps.py)
   (`@timed`), [`manual_progress.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/manual_progress.py).
+  Pace's examples start no server: the snippet above is the whole pattern.

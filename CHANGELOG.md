@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The docs and the `adopt-pace` skill no longer carry pages for one particular platform, or links to private example repositories. "Getting started on OrchAI" is now [Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md), at the same address, and holds the general lessons: count steps, not epochs; one root scope per job; `PYTHONUNBUFFERED=1` and `TQDM_DISABLE=1` in the image; a quoted minimum version in a Dockerfile, never a pin; cached images; `PACE_MIN_INTERVAL` for short runs; checking a short run with `verify.py`; progress from rank 0 only; and that log collectors read both stdout and stderr. The skill's `patterns/orchai.md` is gone, and its patterns describe the vLLM, model-server and TRL cases inline. [skills/README.md](https://github.com/Precision-AI-Inc/pace/blob/main/skills/README.md) explains how to use the skill with coding agents other than Claude Code.
+
 ## [1.0.0] - 2026-11-05
 
 Pace 1.0.0 is the first stable release. From here the Python API (`precisionai.pace.__all__` and each public submodule's `__all__`), the `[pace ...]` trailer, the `PACE_*` variables and `configure()` options, and the `ForecastConfig` field names follow semantic versioning; see [Compatibility](https://github.com/Precision-AI-Inc/pace/blob/main/README.md#compatibility). The line format and the behaviour are the same as 0.1.3.

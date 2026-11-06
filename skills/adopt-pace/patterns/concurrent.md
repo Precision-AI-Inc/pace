@@ -31,5 +31,3 @@ with ThreadPoolExecutor(max_workers=args.workers) as pool, progress(
 
 - Pace: [`manual_progress.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/manual_progress.py)
   (`progress`, results advanced as they arrive).
-- Tested: [`llm/serve_ollama.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/serve_ollama.py)
-  in OrchAI's example repo (concurrent requests, out of order).

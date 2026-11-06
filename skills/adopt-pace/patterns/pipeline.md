@@ -78,5 +78,3 @@ runtime, use (a) or (b).
 - Pace: [`phases_and_plan.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/phases_and_plan.py)
   (`plan` and `phase`), [`timed_steps.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/timed_steps.py)
   (`@timed`).
-- Tested: [`detection/infer_ssdlite.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/infer_ssdlite.py)
-  in OrchAI's example repo (a plan, a `track` stage, a `phase`).
