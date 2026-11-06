@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-06
+
 ### Fixed
 
 - `logger.configure(stream=...)` reads a stream name in any case, as `PACE_STREAM` already did: `"STDERR"` now means stderr instead of stdout.
@@ -119,7 +121,8 @@ The public API is trimmed before it is frozen. Every public submodule now has an
 - Runnable examples, one per style of logging and progress (plain loops, epochs, concurrent work, phases and a plan, resuming, unknown totals, nested scopes, `logging` capture, distributed ranks, and reading the output).
 - User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.3...v1.0.0
 [0.1.3]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.1...v0.1.2
