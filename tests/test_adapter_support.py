@@ -178,6 +178,31 @@ def test_the_lightning_adapter_falls_back_to_the_older_package_name(monkeypatch:
     assert issubclass(fresh.PaceCallback, Callback)
 
 
+def test_the_lightning_adapter_subclasses_both_packages_when_both_are_installed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NewCallback:
+        pass
+
+    class OldCallback:
+        pass
+
+    for package, module, callback in [
+        ("lightning", "lightning.pytorch", NewCallback),
+        ("pytorch_lightning", None, OldCallback),
+    ]:
+        monkeypatch.setitem(sys.modules, package, types.ModuleType(package))
+        if module is not None:
+            monkeypatch.setitem(sys.modules, module, types.ModuleType(module))
+        callbacks = types.ModuleType(f"{module or package}.callbacks")
+        callbacks.Callback = callback  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, f"{module or package}.callbacks", callbacks)
+    fresh = load_fresh(pace_lightning, "pace_lightning_both")
+    assert fresh._LIGHTNING_AVAILABLE is True
+    assert issubclass(fresh.PaceCallback, NewCallback)
+    assert issubclass(fresh.PaceCallback, OldCallback)
+
+
 def test_the_adapters_degrade_to_a_plain_class_when_nothing_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
     block(
         monkeypatch,

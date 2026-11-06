@@ -58,7 +58,7 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
       - name: Install dependencies
-        run: pip install -e ".[dev,all]" trl  # trl only backs the TRL test
+        run: pip install -e ".[dev,all]" trl pytorch-lightning  # trl backs the TRL test; pytorch-lightning the older-package test
 
       - name: Run adapter tests
         run: >
