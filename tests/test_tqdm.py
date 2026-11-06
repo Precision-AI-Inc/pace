@@ -248,6 +248,16 @@ def test_tqdm_arguments_are_kept_under_their_attribute_names(quiet: Logger) -> N
     assert bar.bar_format == "{l_bar}"
 
 
+def test_explicit_none_and_zero_arguments_are_kept_as_tqdm_keeps_them(quiet: Logger) -> None:
+    unset = PaceTqdm(total=3, leave=None, miniters=None, logger=quiet)
+    assert unset.leave is None
+    assert unset.miniters == 0
+    assert unset.dynamic_miniters is True
+    fixed = PaceTqdm(total=3, miniters=0, logger=quiet)
+    assert fixed.miniters == 0
+    assert fixed.dynamic_miniters is False
+
+
 def test_a_position_can_be_moved_as_huggingface_hub_does(quiet: Logger) -> None:
     bar = PaceTqdm(total=3, position=4, logger=quiet)
     bar.pos -= 1

@@ -121,11 +121,15 @@ class PaceTqdm:
         self._started = self._log.clock.monotonic()
         self._total = total
         for name, default in _TQDM_SETTINGS.items():
-            value = ignored.get(name)
-            setattr(self, name, default if value is None else value)
-        self.dynamic_miniters = not ignored.get("miniters")
+            setattr(self, name, ignored.get(name, default))
+        # As tqdm: no ``miniters`` (or ``None``) is 0 with dynamic miniters; any number is fixed.
+        self.dynamic_miniters = ignored.get("miniters") is None
+        if self.dynamic_miniters:
+            self.miniters = 0
         self.fp = ignored.get("file")
         self.pos = ignored.get("position") or 0
+        # tqdm's times are ``time.time()`` values, so a caller compares them with that; Pace's
+        # own rates use the monotonic clock and never read these.
         self.start_t = self.last_print_t = self._log.clock.wall()
         self.last_print_n = initial
         self.desc = "" if desc is None else str(desc)
