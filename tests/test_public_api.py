@@ -3,7 +3,9 @@
 
 """End-to-end: what the logger writes, the parser reads and the estimator understands."""
 
+import ast
 import importlib
+import inspect
 
 import pytest
 
@@ -13,6 +15,7 @@ from precisionai.pace import ForecastState, JobForecast, Logger, parse_line, tra
 from .conftest import FakeClock, FakeStream
 
 PACKAGE_NAMES = [
+    "Clock",
     "Event",
     "Forecast",
     "ForecastConfig",
@@ -39,26 +42,23 @@ PACKAGE_NAMES = [
     "track",
 ]
 
-# Every name a documented submodule offers, which `docs/modules.rst` and the docs name. They stay importable
-# from these paths however the code behind them is organised.
+# The public names of each documented submodule: its ``__all__``, which `docs/modules.rst` documents and the
+# compatibility promise in the README covers. They stay importable from these paths however the code behind them
+# is organised. Anything else in these modules is an implementation detail and starts with an underscore.
 SUBMODULE_NAMES = {
-    "core": "DEFAULT_TERMINAL_COLUMNS LEVELS Logger Settings Target logger",
-    "scopes": (
-        "FALLBACK_ID MAX_DERIVED_ID_CHARS MAX_ID_CHARS Phase PlanEntry REDRAW_INTERVAL Scope UPDATE_FRACTION "
-        "derive_scope_id phase plan progress timed track validate_scope_id"
-    ),
+    "core": "Clock LEVELS Logger logger",
+    "scopes": "Phase Scope phase plan progress timed track",
     "capture": "PaceHandler capture_logging",
-    "protocol": (
-        "Event LineSplitter MARKER MAX_FIELDS MAX_LABEL_CHARS MAX_LINE_BYTES MAX_NUMBER MAX_PHASES MAX_PHASES_CHARS "
-        "MAX_SEQ MAX_UNIT_CHARS MAX_VALUE_CHARS RUN_PATTERN Record SCOPE_PATTERN decode_value encode_value "
-        "format_number format_trailer parse_line"
-    ),
+    "protocol": "Event LineSplitter MARKER Record format_trailer parse_line",
     "forecast": "DEFAULT_CONFIG Forecast ForecastConfig ForecastState JobEstimate JobForecast ScopeForecast",
     "lightning": "PaceCallback",
     "transformers": "PaceCallback",
-    "tqdm": "MIN_ELAPSED PaceTqdm",
-    "version": "DISTRIBUTION UNKNOWN_VERSION get_version",
+    "tqdm": "PaceTqdm",
+    "version": "get_version",
 }
+
+# Logger is public, so each of its attributes without a leading underscore is API too.
+LOGGER_ATTRIBUTES = "clock configure critical debug error exception info log reset run_id success warning"
 
 
 def test_public_names_are_exported() -> None:
@@ -71,7 +71,44 @@ def test_public_names_are_exported() -> None:
 @pytest.mark.parametrize("module", sorted(SUBMODULE_NAMES))
 def test_documented_submodules_offer_their_names(module: str) -> None:
     imported = importlib.import_module(f"precisionai.pace.{module}")
-    assert [name for name in SUBMODULE_NAMES[module].split() if not hasattr(imported, name)] == []
+    assert sorted(imported.__all__) == sorted(SUBMODULE_NAMES[module].split())
+    assert [name for name in imported.__all__ if not hasattr(imported, name)] == []
+
+
+def _module_level_names(body: list[ast.stmt]) -> tuple[set[str], set[str]]:
+    """Return the names a module body defines and imports, looking inside ``if``, ``try`` and ``with`` blocks."""
+    defined: set[str] = set()
+    imported: set[str] = set()
+    for node in body:
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+            defined.add(node.name)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            defined.update(target.id for target in targets if isinstance(target, ast.Name))
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            imported.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
+        elif isinstance(node, (ast.If, ast.Try, ast.With)):
+            blocks = [getattr(node, field, []) for field in ("body", "orelse", "finalbody")]
+            blocks += [handler.body for handler in getattr(node, "handlers", [])]
+            for block in blocks:
+                inner_defined, inner_imported = _module_level_names(block)
+                defined |= inner_defined
+                imported |= inner_imported
+    return defined, imported
+
+
+@pytest.mark.parametrize("module", sorted(SUBMODULE_NAMES))
+def test_documented_submodules_define_no_other_public_names(module: str) -> None:
+    imported_module = importlib.import_module(f"precisionai.pace.{module}")
+    defined, imported = _module_level_names(ast.parse(inspect.getsource(imported_module)).body)
+    # A stand-in for a missing optional framework (``Callback = object``) shadows an import; it is not a new name.
+    public = {name for name in defined - imported if not name.startswith("_")}
+    assert sorted(public - set(imported_module.__all__)) == []
+
+
+def test_logger_offers_only_its_documented_attributes() -> None:
+    public = {name for name in dir(Logger()) if not name.startswith("_")}
+    assert sorted(public) == sorted(LOGGER_ATTRIBUTES.split())
 
 
 @pytest.mark.parametrize("module", sorted(SUBMODULE_NAMES))

@@ -8,7 +8,8 @@ import time
 
 import pytest
 
-from precisionai.pace._env import Clock, Settings, current_rank, level_name, parse_level
+from precisionai.pace._env import Settings, current_rank, level_name, parse_level
+from precisionai.pace.core import Clock
 
 
 def test_clock_defaults_to_the_real_clocks() -> None:

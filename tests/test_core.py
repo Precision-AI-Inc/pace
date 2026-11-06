@@ -253,14 +253,14 @@ def test_info_is_never_coloured(clock: FakeClock) -> None:
 
 
 def test_scope_ids_are_made_unique_with_a_numeric_suffix(log: Logger) -> None:
-    assert [log.claim_scope("train") for _ in range(3)] == ["train", "train-2", "train-3"]
-    assert log.claim_scope("eval") == "eval"
+    assert [log._claim_scope("train") for _ in range(3)] == ["train", "train-2", "train-3"]
+    assert log._claim_scope("eval") == "eval"
 
 
 def test_scope_id_suffix_keeps_the_id_within_64_characters(log: Logger) -> None:
     base = "a" * 64
-    assert log.claim_scope(base) == base
-    second = log.claim_scope(base)
+    assert log._claim_scope(base) == base
+    second = log._claim_scope(base)
     assert second == "a" * 62 + "-2"
     assert len(second) == 64
 

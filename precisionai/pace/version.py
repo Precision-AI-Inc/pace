@@ -5,11 +5,13 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-DISTRIBUTION = "precisionai-pace"
-UNKNOWN_VERSION = "0.0.0"
+__all__ = ["get_version"]
+
+_DISTRIBUTION = "precisionai-pace"
+_UNKNOWN_VERSION = "0.0.0"
 
 
-def get_version(distribution: str = DISTRIBUTION) -> str:
+def get_version(distribution: str = _DISTRIBUTION) -> str:
     """Return the installed version of ``distribution``.
 
     Parameters
@@ -26,4 +28,4 @@ def get_version(distribution: str = DISTRIBUTION) -> str:
     try:
         return version(distribution)
     except PackageNotFoundError:
-        return UNKNOWN_VERSION
+        return _UNKNOWN_VERSION

@@ -20,7 +20,7 @@ trainer.train(resume_from_checkpoint=args.resume)
 `trainer.add_callback(PaceCallback())` after construction. The callback reports
 `state.global_step` against `state.max_steps`, rank 0 only.
 
-- Dependency: `precisionai-pace[transformers]>=0.1.3`.
+- Dependency: `precisionai-pace[transformers]>=1.0.0`.
 - When a wrapper builds the trainer (Axolotl, LLaMA-Factory, torchtune, a company library),
   look for its hook for extra callbacks. If it has none, say so in the report rather than
   patching an installed package.

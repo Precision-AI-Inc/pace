@@ -29,19 +29,39 @@ import secrets
 import shutil
 import sys
 import threading
+import time
 import traceback
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any
 
-from precisionai.pace._env import LEVELS, Clock, Settings, level_name, parse_level
+from precisionai.pace._env import LEVELS, level_name, parse_level
+from precisionai.pace._env import Settings as _Settings
 from precisionai.pace._render import Charset, charset_for, encode_safely, fit, format_timestamp, log_line
 
-DEFAULT_TERMINAL_COLUMNS = 80
+__all__ = ["LEVELS", "Clock", "Logger", "logger"]
+
+_DEFAULT_TERMINAL_COLUMNS = 80
 
 
 @dataclass(frozen=True, slots=True)
-class Target:
+class Clock:
+    """The two clocks the package reads.
+
+    Parameters
+    ----------
+    monotonic : callable
+        Seconds on a monotonic clock. Used for every rate, interval and ``e=`` value.
+    wall : callable
+        Seconds since the epoch. Used only for the printed timestamp.
+    """
+
+    monotonic: Callable[[], float] = time.monotonic
+    wall: Callable[[], float] = time.time
+
+
+@dataclass(frozen=True, slots=True)
+class _Target:
     """Where one line is going and what that stream can show.
 
     Parameters
@@ -86,13 +106,13 @@ class Logger:
 
     def __init__(self, clock: Clock | None = None) -> None:
         self.clock = clock or Clock()
-        self.settings = Settings()
-        self.lock = threading.RLock()
+        self._settings = _Settings()
+        self._lock = threading.RLock()
         # Written on every start record, so a reader can tell a restarted process
         # from the same start line read twice.
         self.run_id = secrets.token_hex(4)
         # plan() scopes by name, kept so repeated plans share a scope and a q sequence.
-        self.plan_scopes: dict[str, Any] = {}
+        self._plan_scopes: dict[str, Any] = {}
         self._scope_ids: set[str] = set()
         self._next_suffix: dict[str, int] = {}
         self._bar_width = 0
@@ -142,8 +162,8 @@ class Logger:
         ValueError
             If ``level``, ``color``, ``bar`` or an interval is not a valid value.
         """
-        with self.lock:
-            self.settings.update(
+        with self._lock:
+            self._settings.update(
                 level=level,
                 stream=stream,
                 color=color,
@@ -157,8 +177,8 @@ class Logger:
 
     def reset(self) -> None:
         """Forget every explicit setting, so the environment and defaults apply again."""
-        with self.lock:
-            self.settings = Settings()
+        with self._lock:
+            self._settings = _Settings()
 
     def debug(self, message: object) -> None:
         """Write a ``DEBUG`` line."""
@@ -206,27 +226,27 @@ class Logger:
             number = parse_level(level)
             number = LEVELS["INFO"] if number is None else number
             label = level_name(number)
-            with self.lock:
-                if number < self.settings.resolve("level"):
+            with self._lock:
+                if number < self._settings.resolve("level"):
                     return
-                target = self.target()
+                target = self._target()
                 if target is None:
                     return
-                self.write_held()
+                self._write_held()
                 line = log_line(format_timestamp(self.clock.wall()), label, str(message), target.color)
-                self.write_line(line, target)
+                self._write_line(line, target)
 
-    def target(self) -> Target | None:
+    def _target(self) -> _Target | None:
         """Resolve the stream now and describe what it can show; ``None`` when there is no usable stream."""
-        stream = self.settings.resolve("stream")
+        stream = self._settings.resolve("stream")
         if stream is None or not callable(getattr(stream, "write", None)):
             return None
         encoding = getattr(stream, "encoding", None)
         encoding = encoding if isinstance(encoding, str) and encoding else "ascii"
         tty = _is_tty(stream)
-        color_mode = self.settings.resolve("color")
-        bar_mode = self.settings.resolve("bar")
-        return Target(
+        color_mode = self._settings.resolve("color")
+        bar_mode = self._settings.resolve("bar")
+        return _Target(
             stream=stream,
             encoding=encoding,
             charset=charset_for(encoding),
@@ -235,34 +255,34 @@ class Logger:
             bar=bar_mode == "always" or (bar_mode == "auto" and tty),
         )
 
-    def write_line(self, text: str, target: Target) -> None:
+    def _write_line(self, text: str, target: _Target) -> None:
         """Write one line, first erasing any in-place bar so the two never overlap."""
-        with self.lock:
+        with self._lock:
             self._erase_bar(target)
             self._put(target, text + "\n")
 
-    def draw_bar(self, text: str, target: Target) -> None:
+    def _draw_bar(self, text: str, target: _Target) -> None:
         """Redraw the single in-place line with ``text``."""
-        with self.lock:
-            columns = shutil.get_terminal_size((DEFAULT_TERMINAL_COLUMNS, 24)).columns - 1
+        with self._lock:
+            columns = shutil.get_terminal_size((_DEFAULT_TERMINAL_COLUMNS, 24)).columns - 1
             shown = fit(text, max(columns, 1), target.charset)
             pad = max(self._bar_width - len(shown), 0) if self._bar_stream is target.stream else 0
             self._put(target, "\r" + shown + " " * pad)
             self._bar_width = len(shown) + pad
             self._bar_stream = target.stream
 
-    def _erase_bar(self, target: Target) -> None:
+    def _erase_bar(self, target: _Target) -> None:
         if self._bar_width and self._bar_stream is target.stream:
             self._put(target, "\r" + " " * self._bar_width + "\r")
         self._bar_width = 0
         self._bar_stream = None
 
     @staticmethod
-    def _put(target: Target, text: str) -> None:
+    def _put(target: _Target, text: str) -> None:
         target.stream.write(encode_safely(text, target.encoding))
         target.stream.flush()
 
-    def hold(self, key: object, deadline: float, action: Callable[[], None]) -> None:
+    def _hold(self, key: object, deadline: float, action: Callable[[], None]) -> None:
         """Hold back a line: run ``action`` at the first write once ``deadline`` has passed, unless released.
 
         Pace starts no threads, so a held-back line waits for the next line this logger writes
@@ -277,19 +297,19 @@ class Logger:
         action : callable
             Writes the line.
         """
-        with self.lock:
+        with self._lock:
             self._held[key] = (deadline, action, os.getpid())
 
-    def release(self, key: object) -> None:
+    def _release(self, key: object) -> None:
         """Drop the line held under ``key``, if it has not been written."""
-        with self.lock:
+        with self._lock:
             self._held.pop(key, None)
 
-    def write_held(self) -> None:
+    def _write_held(self) -> None:
         """Write the held-back lines that are due; called before each line this logger writes."""
         if not self._held:
             return
-        with self.lock:
+        with self._lock:
             # A held line's own write calls back in here; the outer pass writes the rest in the
             # order they were held, which keeps a parent's start ahead of its children's.
             if self._writing_held:
@@ -306,7 +326,7 @@ class Logger:
             finally:
                 self._writing_held = False
 
-    def claim_scope(self, base: str) -> str:
+    def _claim_scope(self, base: str) -> str:
         """Return ``base`` or ``base`` with a numeric suffix, whichever no earlier scope in this process has used.
 
         Parameters
@@ -319,13 +339,13 @@ class Logger:
         str
             A scope id of at most 64 characters, unique within this logger.
         """
-        with self.lock:
+        with self._lock:
             candidate, number = self._free_scope(base, ())
             self._next_suffix[base] = number
             self._scope_ids.add(candidate)
             return candidate
 
-    def predict_scope(self, base: str, reserved: Collection[str] = ()) -> str:
+    def _predict_scope(self, base: str, reserved: Collection[str] = ()) -> str:
         """Return the id :meth:`claim_scope` would give ``base`` next, without claiming it.
 
         Parameters
@@ -340,7 +360,7 @@ class Logger:
         str
             The predicted scope id.
         """
-        with self.lock:
+        with self._lock:
             return self._free_scope(base, reserved)[0]
 
     def _free_scope(self, base: str, reserved: Collection[str]) -> tuple[str, int]:

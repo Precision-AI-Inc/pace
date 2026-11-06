@@ -7,14 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-05
+
+Pace 1.0.0 is the first stable release. From here the Python API (`precisionai.pace.__all__` and each public submodule's `__all__`), the `[pace ...]` trailer, the `PACE_*` variables and `configure()` options, and the `ForecastConfig` field names follow semantic versioning; see [Compatibility](https://github.com/Precision-AI-Inc/pace/blob/main/README.md#compatibility). The line format and the behaviour are the same as 0.1.3.
+
+### Removed
+
+The public API is trimmed before it is frozen. Every public submodule now has an `__all__`, and the names that were implementation details start with `_`. No aliases are kept: nothing outside Pace used these, and renaming them is free before 1.0. Everything in `precisionai.pace.__all__` is unchanged.
+
+- `precisionai.pace.core`: `DEFAULT_TERMINAL_COLUMNS`, `Settings`, `Target`.
+- `Logger`: the methods `target`, `write_line`, `draw_bar`, `hold`, `release`, `write_held`, `claim_scope` and `predict_scope`, and the attributes `settings`, `lock` and `plan_scopes`. Its logging methods, `configure`, `reset`, `clock` and `run_id` stay public.
+- `precisionai.pace.scopes`: `FALLBACK_ID`, `MAX_DERIVED_ID_CHARS`, `MAX_ID_CHARS`, `PlanEntry`, `REDRAW_INTERVAL`, `UPDATE_FRACTION`, `derive_scope_id`, `validate_scope_id`, `T`.
+- `precisionai.pace.protocol`: `MAX_FIELDS`, `MAX_LABEL_CHARS`, `MAX_LINE_BYTES`, `MAX_NUMBER`, `MAX_PHASES`, `MAX_PHASES_CHARS`, `MAX_SEQ`, `MAX_UNIT_CHARS`, `MAX_VALUE_CHARS`, `RUN_PATTERN`, `SCOPE_PATTERN`, `ANSI_PATTERN`, `decode_value`, `encode_value`, `format_number`, `check_id`, `is_bare_step`. The limits are unchanged and stay documented in the specification.
+- `precisionai.pace.tqdm`: `MIN_ELAPSED`.
+- `precisionai.pace.version`: `DISTRIBUTION`, `UNKNOWN_VERSION`.
+
 ### Added
 
+- `Clock`, the type of the `clock=` option of `Logger` and `configure()`, is public as `precisionai.pace.Clock` (and `precisionai.pace.core.Clock`).
+- Python 3.14 is tested in CI and listed in the package classifiers.
+- A Compatibility section in the README, with the detail in the specification, says what 1.0 promises: what counts as the Python API, that the trailer only grows and has no version marker, and how a name is deprecated.
 - A new page, [Getting started on OrchAI](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md), gives the five steps to make an OrchAI job show its progress: the dependency, one root scope, a local check, an optional expected runtime, and what to look for after submitting. It also lists what the tested example jobs taught and what to do when something looks wrong. Getting started and the README link to it.
 - The `adopt-pace` skill has a new `patterns/orchai.md` for jobs that run on OrchAI: what Confirm Job looks for, the expected runtime, library progress bars, and why a short demo shows no estimate.
 
 ### Changed
 
-- The `adopt-pace` skill now adds `precisionai-pace>=0.1.3`, a minimum version, instead of matching the repository's pinning style, and explains why a cached image needs one. It now advises counting steps rather than epochs. Its Lightning and Transformers notes give the callbacks' real arguments and what they do with no total, and mention `fail()` for a crashed Transformers run.
+- The package is marked `Development Status :: 5 - Production/Stable`. The README and the docs no longer call the trailer versioned (it has no version number) and drop the pre-1.0 caveats.
+- The `adopt-pace` skill now adds `precisionai-pace>=1.0.0`, a minimum version, instead of matching the repository's pinning style, and explains why a cached image needs one. It now advises counting steps rather than epochs. Its Lightning and Transformers notes give the callbacks' real arguments and what they do with no total, and mention `fail()` for a crashed Transformers run.
 - The skill's install instructions start from a fresh clone of this repository, can be run again to update, and cover both `~/.claude/skills` and a repository's own `.claude/skills`.
 - The README opens with a note for OrchAI users: Pace is part of setting a repo up for OrchAI, and Getting started on OrchAI is where to start.
 
@@ -88,7 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runnable examples, one per style of logging and progress (plain loops, epochs, concurrent work, phases and a plan, resuming, unknown totals, nested scopes, `logging` capture, distributed ranks, and reading the output).
 - User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.3...v1.0.0
 [0.1.3]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Precision-AI-Inc/pace/compare/v0.1.0...v0.1.1

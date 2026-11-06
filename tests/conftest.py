@@ -11,8 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from precisionai.pace._env import Clock
-from precisionai.pace.core import Logger, logger
+from precisionai.pace.core import Clock, Logger, logger
 
 CONTROLLED_VARIABLES = (
     "PACE_LEVEL",

@@ -6,15 +6,15 @@
 from importlib.metadata import version
 
 import precisionai.pace
-from precisionai.pace.version import DISTRIBUTION, UNKNOWN_VERSION, get_version
+from precisionai.pace.version import _DISTRIBUTION, _UNKNOWN_VERSION, get_version
 
 
 def test_get_version_matches_installed_distribution() -> None:
-    assert get_version() == version(DISTRIBUTION)
+    assert get_version() == version(_DISTRIBUTION)
 
 
 def test_get_version_unknown_distribution_falls_back() -> None:
-    assert get_version("precisionai-pace-does-not-exist") == UNKNOWN_VERSION
+    assert get_version("precisionai-pace-does-not-exist") == _UNKNOWN_VERSION
 
 
 def test_package_exposes_version() -> None:

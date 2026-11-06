@@ -16,7 +16,7 @@ trainer = pl.Trainer(
 trainer.fit(model, datamodule=dm, ckpt_path=args.resume)
 ```
 
-- Dependency: `precisionai-pace[lightning]>=0.1.3`.
+- Dependency: `precisionai-pace[lightning]>=1.0.0`.
 - If the trainer is built from a config file or `LightningCLI`, add the callback where
   callbacks are declared (for `LightningCLI`, `trainer.callbacks` in the YAML with
   `class_path: precisionai.pace.lightning.PaceCallback`, plus `init_args: {description: Fit}`

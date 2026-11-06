@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from precisionai.pace import Event, ForecastState, JobForecast, LineSplitter, Record, format_trailer, parse_line
-from precisionai.pace.protocol import MAX_LINE_BYTES, MAX_NUMBER, MAX_PHASES, MAX_SEQ, SCOPE_PATTERN
+from precisionai.pace.protocol import _MAX_LINE_BYTES, _MAX_NUMBER, _MAX_PHASES, _MAX_SEQ, _SCOPE_PATTERN
 
 hypothesis = pytest.importorskip("hypothesis")
 st: Any = pytest.importorskip("hypothesis.strategies")
@@ -26,7 +26,7 @@ PROFILE = hypothesis.settings(
     suppress_health_check=[hypothesis.HealthCheck.too_slow, hypothesis.HealthCheck.data_too_large],
 )
 
-scope_ids = st.from_regex(SCOPE_PATTERN, fullmatch=True)
+scope_ids = st.from_regex(_SCOPE_PATTERN, fullmatch=True)
 # Multiples of a quarter are exact in binary, so they survive the writer's six decimals unchanged.
 quarters = st.integers(0, 4_000_000).map(lambda n: n / 4)
 positive_quarters = st.integers(1, 4_000_000).map(lambda n: n / 4)
@@ -50,9 +50,9 @@ def records(draw: Any) -> Record:
         "run": draw(run_ids),
     }
     if event in (Event.UPDATE, Event.PLAN):
-        common["seq"] = draw(st.integers(2 if event is Event.UPDATE else 1, MAX_SEQ))
+        common["seq"] = draw(st.integers(2 if event is Event.UPDATE else 1, _MAX_SEQ))
     if event is Event.PLAN:
-        phases = draw(st.lists(st.tuples(scope_ids, quarters), max_size=MAX_PHASES))
+        phases = draw(st.lists(st.tuples(scope_ids, quarters), max_size=_MAX_PHASES))
         return Record(phases=tuple(phases), **common)
     if event is Event.STEP:
         label = draw(st.none() | printable_text)
@@ -77,7 +77,7 @@ def records(draw: Any) -> Record:
 def test_a_written_trailer_is_read_back_as_written(record: Record) -> None:
     trailer = format_trailer(record)
     assert trailer.isascii()
-    assert len(trailer.encode("ascii")) <= MAX_LINE_BYTES
+    assert len(trailer.encode("ascii")) <= _MAX_LINE_BYTES
     assert parse_line(trailer) == record
     assert parse_line(f"2026-01-01T00:00:00Z PROGRESS readable text  {trailer}\n") == record
 
@@ -138,11 +138,11 @@ def test_a_damaged_trailer_is_a_record_or_nothing_and_never_an_error(
     found = parse_line(trailer[:start] + noise + trailer[start + cut :])
     if found is None:
         return
-    assert SCOPE_PATTERN.fullmatch(found.scope)
-    assert found.seq is None or 1 <= found.seq <= MAX_SEQ
+    assert _SCOPE_PATTERN.fullmatch(found.scope)
+    assert found.seq is None or 1 <= found.seq <= _MAX_SEQ
     for number in (found.elapsed, found.completed or 0.0, found.total or 0.0):
         assert math.isfinite(number)
-        assert 0 <= number <= MAX_NUMBER
+        assert 0 <= number <= _MAX_NUMBER
     assert found.total is None or found.total > 0
     if found.run is not None and (found.event not in (Event.UPDATE, Event.PLAN) or found.seq is not None):
         format_trailer(found)
@@ -154,13 +154,13 @@ def reference_lines(data: bytes) -> list[str]:
     lines = []
     for line, final in [(line, False) for line in complete] + [(rest, True)]:
         raw = line[:-1] if line.endswith(b"\r") else line
-        if len(raw) <= MAX_LINE_BYTES and not (final and not raw):
+        if len(raw) <= _MAX_LINE_BYTES and not (final and not raw):
             lines.append(raw.decode("utf-8", errors="replace"))
     return lines
 
 
 def line_bytes() -> Any:
-    boundary = st.integers(MAX_LINE_BYTES - 3, MAX_LINE_BYTES + 3).flatmap(
+    boundary = st.integers(_MAX_LINE_BYTES - 3, _MAX_LINE_BYTES + 3).flatmap(
         lambda size: st.sampled_from([b"a" * size, b"a" * (size - 1) + b"\r", b"a" * (size - 2) + b"\xe2\x82"])
     )
     return st.one_of(st.binary(max_size=40), st.just(b""), st.just(b"\r"), boundary)

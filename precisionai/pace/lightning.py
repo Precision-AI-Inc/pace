@@ -31,6 +31,8 @@ except ImportError:
         Callback = object  # type: ignore[assignment,misc]
         _LIGHTNING_AVAILABLE = False
 
+__all__ = ["PaceCallback"]
+
 
 def _batches(counts: Any) -> float | None:
     """Return the number of batches in a loop from Lightning's per-dataloader counts, or ``None`` if unknown."""

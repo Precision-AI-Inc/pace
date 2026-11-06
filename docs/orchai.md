@@ -16,9 +16,9 @@ piece in depth.
 `requirements.txt`, which the Dockerfile installs from):
 
 ```text
-precisionai-pace>=0.1.3                 # a plain loop
-precisionai-pace[lightning]>=0.1.3      # PyTorch Lightning
-precisionai-pace[transformers]>=0.1.3   # Hugging Face Trainer, TRL
+precisionai-pace>=1.0.0                 # a plain loop
+precisionai-pace[lightning]>=1.0.0      # PyTorch Lightning
+precisionai-pace[transformers]>=1.0.0   # Hugging Face Trainer, TRL
 ```
 
 Use a minimum version, never an exact pin. An OrchAI node rebuilds your image only when a

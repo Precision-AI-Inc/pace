@@ -2,7 +2,10 @@ Module Reference
 ================
 
 API documentation for the ``precisionai.pace`` package. Everything listed in
-``precisionai.pace.__all__`` is importable from the package itself.
+``precisionai.pace.__all__`` is importable from the package itself. Each module below
+documents exactly the names in its ``__all__``; together they are the public API that
+the compatibility promise covers (see the specification). Names that start with ``_``
+are implementation details and may change in any release.
 
 precisionai.pace.core
 ---------------------

@@ -19,30 +19,32 @@ from functools import partial
 from typing import TypeVar
 from urllib.parse import unquote_to_bytes
 
+__all__ = ["MARKER", "Event", "LineSplitter", "Record", "format_trailer", "parse_line"]
+
 MARKER = "pace"
 
-MAX_LINE_BYTES = 4096
+_MAX_LINE_BYTES = 4096
 # Largest count, total, elapsed time or weight a trailer may carry.
-MAX_NUMBER = 1e15
-MAX_SEQ = 10**12
-MAX_FIELDS = 32
+_MAX_NUMBER = 1e15
+_MAX_SEQ = 10**12
+_MAX_FIELDS = 32
 # Raw (still percent-encoded) length. 768 holds a 64-character label or unit of
 # 4-byte characters, each written as 12 escape characters.
-MAX_VALUE_CHARS = 768
-MAX_LABEL_CHARS = 64
-MAX_UNIT_CHARS = 64
-MAX_PHASES = 32
+_MAX_VALUE_CHARS = 768
+_MAX_LABEL_CHARS = 64
+_MAX_UNIT_CHARS = 64
+_MAX_PHASES = 32
 # A full plan: 32 phases, each a 64-character scope id, ":" and the widest weight the
 # writer produces ("999999999999999.999999", 22 characters), joined by 31 commas.
-MAX_PHASES_CHARS = 32 * (64 + 1 + 22) + 31
+_MAX_PHASES_CHARS = 32 * (64 + 1 + 22) + 31
 
-RUN_PATTERN = re.compile(r"[a-z0-9]{1,16}")
+_RUN_PATTERN = re.compile(r"[a-z0-9]{1,16}")
 
-SCOPE_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
+_SCOPE_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 # The terminal escape sequences a reader removes before it looks for a trailer. The logger
 # strips the same ones from user messages, so a forged marker cannot hide inside one.
-ANSI_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+_ANSI_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 
 # Characters that may appear in a trailer value without percent-encoding.
 _SAFE_VALUE_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-:,")
@@ -66,7 +68,7 @@ class Record:
     Parameters
     ----------
     scope : str
-        Scope id, matching ``SCOPE_PATTERN``. Unique within one process run.
+        Scope id: 1 to 64 characters from ``A-Z a-z 0-9 . _ -``. Unique within one process run.
     event : Event
         What happened to the scope. ``STEP`` is a start and an end at once.
     seq : int or None
@@ -112,7 +114,7 @@ class Record:
     run: str | None = None
 
 
-def encode_value(value: str) -> str:
+def _encode_value(value: str) -> str:
     """Percent-encode ``value`` for use in a trailer.
 
     Parameters
@@ -142,13 +144,13 @@ def encode_value(value: str) -> str:
     return "".join(out)
 
 
-def format_number(value: float) -> str:
+def _format_number(value: float) -> str:
     """Return ``value`` as a trailer number: no exponent, no trailing zeros.
 
     Parameters
     ----------
     value : float
-        A finite, non-negative number no larger than ``MAX_NUMBER``.
+        A finite, non-negative number no larger than ``_MAX_NUMBER``.
 
     Returns
     -------
@@ -158,10 +160,10 @@ def format_number(value: float) -> str:
     Raises
     ------
     ValueError
-        If ``value`` is negative, infinite, NaN or above ``MAX_NUMBER``.
+        If ``value`` is negative, infinite, NaN or above ``_MAX_NUMBER``.
     """
-    if not math.isfinite(value) or value < 0 or value > MAX_NUMBER:
-        raise ValueError(f"trailer numbers must be finite, non-negative and at most {MAX_NUMBER:g}, got {value!r}")
+    if not math.isfinite(value) or value < 0 or value > _MAX_NUMBER:
+        raise ValueError(f"trailer numbers must be finite, non-negative and at most {_MAX_NUMBER:g}, got {value!r}")
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.6f}".rstrip("0").rstrip(".")
@@ -198,7 +200,7 @@ def format_trailer(record: Record) -> str:
     if record.event is not Event.UPDATE:
         items.append(record.event.value)
     items.extend(_count_fields(record))
-    elapsed = format_number(round(record.elapsed, 1))
+    elapsed = _format_number(round(record.elapsed, 1))
     if elapsed != "0":
         items.append(f"e={elapsed}")
     items.extend(_tail_fields(record))
@@ -210,7 +212,7 @@ def format_trailer(record: Record) -> str:
     return f"[{MARKER} {' '.join(items)}]"
 
 
-def check_id(pattern: re.Pattern[str], value: str, what: str) -> str:
+def _check_id(pattern: re.Pattern[str], value: str, what: str) -> str:
     """Return ``value`` if it matches ``pattern`` entirely, otherwise raise ``ValueError`` naming ``what``."""
     if not pattern.fullmatch(value):
         raise ValueError(f"invalid {what} {value!r}")
@@ -218,34 +220,34 @@ def check_id(pattern: re.Pattern[str], value: str, what: str) -> str:
 
 
 def _validate_ids(record: Record) -> None:
-    check_id(SCOPE_PATTERN, record.scope, "scope id")
+    _check_id(_SCOPE_PATTERN, record.scope, "scope id")
     if record.parent is not None:
-        check_id(SCOPE_PATTERN, record.parent, "parent scope id")
-    check_id(RUN_PATTERN, record.run or "", "run id")
+        _check_id(_SCOPE_PATTERN, record.parent, "parent scope id")
+    _check_id(_RUN_PATTERN, record.run or "", "run id")
     if (record.seq or 0) < _FIRST_SEQ.get(record.event, 0):
         raise ValueError(f"{record.event.value} needs a seq of at least {_FIRST_SEQ[record.event]}, got {record.seq}")
-    if len(record.phases) > MAX_PHASES:
-        raise ValueError(f"at most {MAX_PHASES} phases, got {len(record.phases)}")
+    if len(record.phases) > _MAX_PHASES:
+        raise ValueError(f"at most {_MAX_PHASES} phases, got {len(record.phases)}")
     for name, _ in record.phases:
-        check_id(SCOPE_PATTERN, name, "phase scope id")
+        _check_id(_SCOPE_PATTERN, name, "phase scope id")
 
 
 def _count_fields(record: Record) -> list[str]:
     event = record.event
     # A fail carries the counts it reached when it has them, so a reader still sees how far it got.
-    if event is Event.PLAN or is_bare_step(record) or (event is Event.FAIL and record.completed is None):
+    if event is Event.PLAN or _is_bare_step(record) or (event is Event.FAIL and record.completed is None):
         return []
-    completed = format_number(record.completed or 0.0)
+    completed = _format_number(record.completed or 0.0)
     total = _format_total(record.total)
     fields = [] if completed == "0" else [f"c={completed}"]
     if event not in (Event.END, Event.STEP) or total != completed:
         fields.append(f"t={total}")
     if record.unit is not None and event in (Event.START, Event.STEP):
-        fields.append(f"u={encode_value(_printable(record.unit, MAX_UNIT_CHARS))}")
+        fields.append(f"u={_encode_value(_printable(record.unit, _MAX_UNIT_CHARS))}")
     return fields
 
 
-def is_bare_step(record: Record) -> bool:
+def _is_bare_step(record: Record) -> bool:
     """Return whether ``record`` is a one-off step of one unit, written without counts; any other step carries them."""
     return record.event is Event.STEP and record.unit is None and record.completed == 1 and record.total == 1
 
@@ -253,7 +255,7 @@ def is_bare_step(record: Record) -> bool:
 def _format_total(total: float | None) -> str:
     # A total too small to show at six decimal places would read as t=0, which no reader
     # accepts (a total must be positive), so it is written as unknown instead.
-    text = "?" if total is None else format_number(total)
+    text = "?" if total is None else _format_number(total)
     return "?" if text == "0" else text
 
 
@@ -263,9 +265,9 @@ def _tail_fields(record: Record) -> list[str]:
     if record.event in (Event.UPDATE, Event.PLAN):
         fields.append(f"q={record.seq}")
     if record.event is Event.PLAN and record.phases:
-        fields.append("ph=" + ",".join(f"{name}:{format_number(weight)}" for name, weight in record.phases))
+        fields.append("ph=" + ",".join(f"{name}:{_format_number(weight)}" for name, weight in record.phases))
     if record.label is not None and record.event in (Event.START, Event.STEP):
-        fields.append(f"n={encode_value(_printable(record.label, MAX_LABEL_CHARS))}")
+        fields.append(f"n={_encode_value(_printable(record.label, _MAX_LABEL_CHARS))}")
     return fields
 
 
@@ -301,8 +303,8 @@ _EVENT_KEYS: dict[str, tuple[Event, ...]] = {
 }
 
 
-def decode_value(value: str) -> str:
-    """Reverse :func:`encode_value`.
+def _decode_value(value: str) -> str:
+    """Reverse :func:`_encode_value`.
 
     Parameters
     ----------
@@ -351,10 +353,10 @@ def parse_line(line: str) -> Record | None:
     if not isinstance(line, str):
         return None
     line = line.rstrip("\r\n")
-    if len(line) > MAX_LINE_BYTES:
+    if len(line) > _MAX_LINE_BYTES:
         return None
     # U+FFFD stands for one undecodable source byte (see LineSplitter), so count it as one.
-    if len(line.encode("utf-8", errors="surrogatepass")) - 2 * line.count("�") > MAX_LINE_BYTES:
+    if len(line.encode("utf-8", errors="surrogatepass")) - 2 * line.count("�") > _MAX_LINE_BYTES:
         return None
     tokens = _trailer_tokens(line)
     if tokens is None:
@@ -366,7 +368,7 @@ def parse_line(line: str) -> Record | None:
 
 
 def _trailer_tokens(line: str) -> list[str] | None:
-    text = ANSI_PATTERN.sub("", line).rstrip()
+    text = _ANSI_PATTERN.sub("", line).rstrip()
     if not text.endswith("]"):
         return None
     start = text.rfind(f"[{MARKER} ")
@@ -376,7 +378,7 @@ def _trailer_tokens(line: str) -> list[str] | None:
 
 
 def _build_record(tokens: list[str]) -> Record:
-    if not tokens or len(tokens) > MAX_FIELDS:
+    if not tokens or len(tokens) > _MAX_FIELDS:
         raise ValueError("no scope, or too many items")
     scope, nested, parent = tokens[0].partition("<")
     words = [token for token in tokens[1:] if "=" not in token]
@@ -453,7 +455,7 @@ def _parse_fields(tokens: list[str]) -> dict[str, str]:
 def _valid_value(key: str, value: str) -> bool:
     if value == "?":
         return key == "t"
-    limit = MAX_PHASES_CHARS if key == "ph" else MAX_VALUE_CHARS
+    limit = _MAX_PHASES_CHARS if key == "ph" else _MAX_VALUE_CHARS
     return len(value) <= limit and _VALUE_PATTERN.fullmatch(value) is not None
 
 
@@ -465,7 +467,7 @@ def _parse_seq(value: str) -> int:
     if not _INTEGER_PATTERN.fullmatch(value):
         raise ValueError(f"invalid sequence number {value!r}")
     seq = int(value)
-    if not 1 <= seq <= MAX_SEQ:
+    if not 1 <= seq <= _MAX_SEQ:
         raise ValueError(f"sequence number out of range: {value!r}")
     return seq
 
@@ -474,7 +476,7 @@ def _parse_number(value: str) -> float:
     if not _NUMBER_PATTERN.fullmatch(value):
         raise ValueError(f"invalid number {value!r}")
     number = float(value)
-    if number > MAX_NUMBER:
+    if number > _MAX_NUMBER:
         raise ValueError(f"number out of range: {value!r}")
     return number
 
@@ -490,7 +492,7 @@ def _parse_total(value: str) -> float | None:
 
 def _parse_phases(value: str) -> tuple[tuple[str, float], ...]:
     pairs = value.split(",")
-    if len(pairs) > MAX_PHASES:
+    if len(pairs) > _MAX_PHASES:
         raise ValueError("too many phases")
     phases = []
     for pair in pairs:
@@ -502,7 +504,7 @@ def _parse_phases(value: str) -> tuple[tuple[str, float], ...]:
 
 
 def _parse_text(value: str, limit: int, what: str) -> str:
-    text = decode_value(value)
+    text = _decode_value(value)
     if len(text) > limit:
         raise ValueError(f"{what} too long")
     if any(_is_control(char) for char in text):
@@ -510,17 +512,17 @@ def _parse_text(value: str, limit: int, what: str) -> str:
     return text
 
 
-_parse_scope = partial(check_id, SCOPE_PATTERN, what="scope id")
-_parse_run = partial(check_id, RUN_PATTERN, what="run id")
-_parse_unit = partial(_parse_text, limit=MAX_UNIT_CHARS, what="unit")
-_parse_label = partial(_parse_text, limit=MAX_LABEL_CHARS, what="label")
+_parse_scope = partial(_check_id, _SCOPE_PATTERN, what="scope id")
+_parse_run = partial(_check_id, _RUN_PATTERN, what="run id")
+_parse_unit = partial(_parse_text, limit=_MAX_UNIT_CHARS, what="unit")
+_parse_label = partial(_parse_text, limit=_MAX_LABEL_CHARS, what="label")
 
 
 class LineSplitter:
     r"""Cut a byte stream read in arbitrary chunks into text lines.
 
     Memory stays bounded however hostile the stream: a line longer than
-    ``MAX_LINE_BYTES`` cannot hold a valid trailer, so it is dropped rather
+    4096 bytes cannot hold a valid trailer, so it is dropped rather
     than buffered, and the result does not depend on where the chunks fall.
     ``\n`` and ``\r\n`` both end a line.
     """
@@ -596,13 +598,13 @@ class LineSplitter:
         self._tail += rest
 
     def _too_long(self, extra: int) -> bool:
-        # One byte of slack: a line of exactly MAX_LINE_BYTES waits here with its "\r".
-        return len(self._tail) + extra > MAX_LINE_BYTES + 1
+        # One byte of slack: a line of exactly _MAX_LINE_BYTES waits here with its "\r".
+        return len(self._tail) + extra > _MAX_LINE_BYTES + 1
 
     @staticmethod
     def _emit(data: bytes, lines: list[str], *, drop_empty: bool = False) -> None:
         if data.endswith(b"\r"):
             data = data[:-1]
-        if len(data) > MAX_LINE_BYTES or (drop_empty and not data):
+        if len(data) > _MAX_LINE_BYTES or (drop_empty and not data):
             return
         lines.append(data.decode("utf-8", errors="replace"))

@@ -26,7 +26,7 @@ if os.path.isfile(_readme_src):
 
 
 def _get_version_from_git() -> str:
-    """Use current git tag as version (e.g. 0.1.0); 0.0.0 if not on a tag."""
+    """Use current git tag as version (e.g. 1.0.0); 0.0.0 if not on a tag."""
     try:
         out = subprocess.run(
             ["git", "describe", "--tags", "--exact-match"],

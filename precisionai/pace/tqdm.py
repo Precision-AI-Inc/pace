@@ -20,9 +20,11 @@ from precisionai.pace.core import Logger
 from precisionai.pace.core import logger as default_logger
 from precisionai.pace.scopes import Scope
 
+__all__ = ["PaceTqdm"]
+
 # A caller divides by the elapsed time (vLLM does, for its tokens-per-second figure), so
 # it is never reported as zero.
-MIN_ELAPSED = 1e-6
+_MIN_ELAPSED = 1e-6
 
 
 def _ignore(*args: Any, **kwargs: Any) -> None:
@@ -171,7 +173,7 @@ class PaceTqdm:
     @property
     def format_dict(self) -> dict[str, Any]:
         """The count, total, elapsed time and rate, under the keys ``tqdm``'s ``format_dict`` uses."""
-        elapsed = max(self._log.clock.monotonic() - self._started, MIN_ELAPSED)
+        elapsed = max(self._log.clock.monotonic() - self._started, _MIN_ELAPSED)
         done = float(self.n) - float(self.initial)
         return {
             "n": self.n,

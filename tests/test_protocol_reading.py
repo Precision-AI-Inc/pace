@@ -11,13 +11,13 @@ from typing import Any
 import pytest
 
 from precisionai.pace.protocol import (
-    MAX_LABEL_CHARS,
-    MAX_LINE_BYTES,
+    _MAX_LABEL_CHARS,
+    _MAX_LINE_BYTES,
     Event,
     LineSplitter,
     Record,
-    decode_value,
-    encode_value,
+    _decode_value,
+    _encode_value,
     format_trailer,
     parse_line,
 )
@@ -42,28 +42,28 @@ def _record_from_fixture(fields: dict[str, Any]) -> Record:
 CASES = _load_cases()
 
 
-# --- decode_value ---
+# --- _decode_value ---
 
 
 @pytest.mark.parametrize("value", ["plain", "a b]é", "日本語 label", "100%", "x" * 50, "\x00\n\x1b[31m"])
 def test_decode_value_reverses_encode_value(value: str) -> None:
-    assert decode_value(encode_value(value)) == value
+    assert _decode_value(_encode_value(value)) == value
 
 
 def test_decode_value_accepts_lower_case_hex() -> None:
-    assert decode_value("caf%c3%a9") == "café"
+    assert _decode_value("caf%c3%a9") == "café"
 
 
 @pytest.mark.parametrize("value", ["%", "%4", "%zz", "a%4", "%%41", "%4g"])
 def test_decode_value_rejects_malformed_escape(value: str) -> None:
     with pytest.raises(ValueError, match="malformed percent escape"):
-        decode_value(value)
+        _decode_value(value)
 
 
 @pytest.mark.parametrize("value", ["%FF", "caf%C3", "%C3%28", "%ED%A0%80"])
 def test_decode_value_rejects_invalid_utf8(value: str) -> None:
     with pytest.raises(ValueError, match="not valid UTF-8"):
-        decode_value(value)
+        _decode_value(value)
 
 
 # --- fixtures ---
@@ -122,7 +122,7 @@ def test_parse_line_ignores_lone_surrogates() -> None:
 
 
 def test_parse_line_size_limit_is_in_bytes() -> None:
-    padding = MAX_LINE_BYTES - len(VALID) - 1
+    padding = _MAX_LINE_BYTES - len(VALID) - 1
     assert parse_line("x" * padding + " " + VALID) is not None
     assert parse_line("x" * (padding + 1) + " " + VALID) is None
     assert parse_line("é" * (padding // 2 + 1) + " " + VALID) is None
@@ -138,7 +138,7 @@ def test_parse_line_does_not_accept_non_ascii_digits() -> None:
 
 
 def _expected_after_write(record: Record) -> Record:
-    label = None if record.label is None else record.label[:MAX_LABEL_CHARS]
+    label = None if record.label is None else record.label[:_MAX_LABEL_CHARS]
     return dataclasses.replace(record, elapsed=round(record.elapsed, 1), label=label)
 
 
@@ -219,7 +219,7 @@ def test_splitter_accepts_empty_chunks() -> None:
 
 def test_splitter_discards_oversize_line_up_to_next_newline() -> None:
     splitter = LineSplitter()
-    assert splitter.feed(b"ok\n" + b"x" * (MAX_LINE_BYTES + 2)) == ["ok"]
+    assert splitter.feed(b"ok\n" + b"x" * (_MAX_LINE_BYTES + 2)) == ["ok"]
     assert splitter.feed(b"y" * 10_000) == []
     assert splitter.feed(b"zz\nnext\nrest") == ["next"]
     assert splitter.flush() == ["rest"]
@@ -227,21 +227,21 @@ def test_splitter_discards_oversize_line_up_to_next_newline() -> None:
 
 def test_splitter_drops_oversize_line_that_arrives_in_one_chunk() -> None:
     splitter = LineSplitter()
-    assert splitter.feed(b"x" * (MAX_LINE_BYTES + 1) + b"\nafter\n") == ["after"]
-    assert splitter.feed(b"x" * MAX_LINE_BYTES + b"\r\n") == ["x" * MAX_LINE_BYTES]
+    assert splitter.feed(b"x" * (_MAX_LINE_BYTES + 1) + b"\nafter\n") == ["after"]
+    assert splitter.feed(b"x" * _MAX_LINE_BYTES + b"\r\n") == ["x" * _MAX_LINE_BYTES]
 
 
 def test_splitter_tail_memory_is_bounded() -> None:
     splitter = LineSplitter()
     for _ in range(100):
         splitter.feed(b"x" * 1000)
-        assert len(splitter._tail) <= MAX_LINE_BYTES + 1
+        assert len(splitter._tail) <= _MAX_LINE_BYTES + 1
 
 
 def test_splitter_line_of_exactly_the_limit_survives_split_crlf() -> None:
     splitter = LineSplitter()
-    assert splitter.feed(b"x" * MAX_LINE_BYTES + b"\r") == []
-    assert splitter.feed(b"\n") == ["x" * MAX_LINE_BYTES]
+    assert splitter.feed(b"x" * _MAX_LINE_BYTES + b"\r") == []
+    assert splitter.feed(b"\n") == ["x" * _MAX_LINE_BYTES]
 
 
 def test_splitter_reset_drops_partial_line() -> None:
@@ -254,7 +254,7 @@ def test_splitter_reset_drops_partial_line() -> None:
 
 def test_splitter_reset_ends_oversize_discard() -> None:
     splitter = LineSplitter()
-    splitter.feed(b"x" * (MAX_LINE_BYTES + 5))
+    splitter.feed(b"x" * (_MAX_LINE_BYTES + 5))
     splitter.reset()
     assert splitter.feed(b"fresh\n") == ["fresh"]
 
@@ -275,7 +275,7 @@ def test_splitter_flush_with_nothing_or_only_a_carriage_return() -> None:
 
 def test_splitter_flush_after_oversize_tail_returns_nothing() -> None:
     splitter = LineSplitter()
-    splitter.feed(b"x" * (MAX_LINE_BYTES + 5))
+    splitter.feed(b"x" * (_MAX_LINE_BYTES + 5))
     assert splitter.flush() == []
     assert splitter.feed(b"ok\n") == ["ok"]
 
@@ -311,8 +311,8 @@ def test_line_splitter_drops_huge_line_in_one_chunk_without_buffering() -> None:
 
 def test_a_line_of_exactly_the_limit_parses_with_its_line_ending() -> None:
     trailer = "[pace a c=1 t=2 e=1 q=2 r=ab]"
-    line = "x" * (MAX_LINE_BYTES - len(trailer) - 1) + " " + trailer
-    assert len(line.encode("utf-8")) == MAX_LINE_BYTES
+    line = "x" * (_MAX_LINE_BYTES - len(trailer) - 1) + " " + trailer
+    assert len(line.encode("utf-8")) == _MAX_LINE_BYTES
     assert parse_line(line) is not None
     assert parse_line(line + "\n") is not None
     assert parse_line(line + "\r\n") is not None

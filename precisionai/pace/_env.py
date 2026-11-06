@@ -13,7 +13,6 @@ import contextlib
 import math
 import os
 import sys
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -36,22 +35,6 @@ DEFAULT_LEVEL = LEVELS["INFO"]
 _RANK_VARIABLES = ("RANK", "OMPI_COMM_WORLD_RANK", "PMI_RANK", "SLURM_PROCID", "LOCAL_RANK")
 _COLOR_MODES = ("auto", "always", "never")
 _TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
-
-
-@dataclass(frozen=True, slots=True)
-class Clock:
-    """The two clocks the package reads.
-
-    Parameters
-    ----------
-    monotonic : callable
-        Seconds on a monotonic clock. Used for every rate, interval and ``e=`` value.
-    wall : callable
-        Seconds since the epoch. Used only for the printed timestamp.
-    """
-
-    monotonic: Callable[[], float] = time.monotonic
-    wall: Callable[[], float] = time.time
 
 
 def parse_level(value: Any) -> int | None:
