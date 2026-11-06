@@ -534,6 +534,16 @@ Deprecation and Python versions:
 - Dropping a Python version that has reached its end of life happens in a minor release
   and is not a breaking change.
 
+Known quirks, kept because changing them would break 1.x callers:
+
+- `track` and `progress` take their positional arguments in different orders:
+  `track(iterable, description, unit, total)` and `progress(total, description, unit)`.
+  Pass everything after the first argument by keyword.
+- An unknown stream name does not raise, unlike an unknown `color` or `bar` mode.
+  `PACE_STREAM` with any value but `stderr` means stdout, silently, as every bad
+  environment value falls back. `configure(stream=...)` with an unknown name means stdout
+  too, with a `UserWarning` (1.0.0 gave no warning).
+
 1.0.0 renamed with a leading `_` the module-level names that were implementation details
 (the parser's limits and patterns, value encoding, scope-id helpers and the like); the
 `CHANGELOG.md` entry lists them. No aliases were kept: nothing outside Pace imported them.

@@ -503,6 +503,12 @@ def progress(
     -------
     Scope
         The handle: ``advance(n=1)``, ``update(completed)`` and ``set_total(total)``.
+
+    Notes
+    -----
+    The positional order is ``total, description, unit``, unlike :func:`track`, which
+    puts ``total`` last, after ``iterable``, ``description`` and ``unit``. The order is part
+    of the 1.0 API and does not change; pass ``description`` and ``unit`` by keyword.
     """
     return Scope(description, total, unit, scope=scope, root=root, completed=completed, resumed=resumed, logger=logger)
 
@@ -546,6 +552,12 @@ def track(
     -------
     iterator
         An iterator over the items of ``iterable``.
+
+    Notes
+    -----
+    The positional order is ``iterable, description, unit, total``, unlike
+    :func:`progress`, which starts with ``total``. The order is part of the 1.0 API and
+    does not change; pass everything after ``iterable`` by keyword.
     """
     if total is None:
         with contextlib.suppress(Exception):

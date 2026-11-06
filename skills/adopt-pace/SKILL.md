@@ -52,7 +52,9 @@ With `git ls-files`, `ls` and grep, note:
 Each file ends with runnable examples to copy: Pace's
 [`examples/`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md) and
 tested ones in OrchAI's [example repo](https://github.com/Precision-AI-Inc/orchai-examples)
-(detection, LLM, VLM).
+(detection, LLM, VLM; for OrchAI users, private repository). Pace's own examples and the
+snippets in each pattern file are enough on their own; the OrchAI links add full jobs for
+those who can open them.
 
 | Situation in the repo | Read |
 |---|---|

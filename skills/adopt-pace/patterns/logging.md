@@ -36,7 +36,7 @@ Loguru and `print` stay as they are. Pace does not bridge Loguru.
 - Pace: [`stdlib_logging.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/stdlib_logging.py),
   [`library_hooks.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/library_hooks.py)
   (`take_over` with a stand-in library).
-- Tested: [`llm/generate_vllm.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/generate_vllm.py)
+- Tested, for OrchAI users (private repository): [`llm/generate_vllm.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/generate_vllm.py)
   (vLLM's records through Pace, image sets `VLLM_CONFIGURE_LOGGING=0`) and
   [`detection/train_lightning.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/detection/train_lightning.py)
   in OrchAI's example repo.

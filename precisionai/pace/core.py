@@ -143,7 +143,8 @@ class Logger:
         level : str or int, optional
             Minimum level written.
         stream : {"stdout", "stderr"} or file-like, optional
-            Where to write. A name is looked up at write time; an object is used as is.
+            Where to write. A name (any case) is looked up at write time; an object is
+            used as is. Any other name warns and means ``stdout``.
         color : {"auto", "always", "never"}, optional
             Colour of the level label.
         bar : {"auto", "always", "never"}, optional
@@ -161,6 +162,12 @@ class Logger:
         ------
         ValueError
             If ``level``, ``color``, ``bar`` or an interval is not a valid value.
+
+        Warns
+        -----
+        UserWarning
+            If ``stream`` is a name other than ``stdout`` or ``stderr``. It does not raise,
+            because 1.0.0 accepted any name as ``stdout``.
         """
         with self._lock:
             self._settings.update(

@@ -129,15 +129,17 @@ Details that matter:
   variable changed while the process runs takes effect on the next line, unless an
   explicit `configure` value overrides it.
 - A bad value passed to `configure` raises `ValueError` (unknown level, a colour or
-  bar mode other than `auto`, `always`, `never`, a negative interval). A bad value in
-  an environment variable is ignored and the default applies.
+  bar mode other than `auto`, `always`, `never`, a negative interval). The one exception
+  is `stream`: a name other than `stdout` or `stderr` warns (`UserWarning`) and means
+  `stdout`, because 1.0.0 accepted any name that way. A bad value in an environment
+  variable is ignored and the default applies.
 
 ### `configure` options
 
 | Option | Values | Default |
 |---|---|---|
 | `level` | `"debug"`, `"info"`, `"success"`, `"warning"`, `"error"`, `"critical"`, or a number | `"info"` |
-| `stream` | `"stdout"`, `"stderr"`, or any object with `write` and `flush` | `"stdout"` |
+| `stream` | `"stdout"`, `"stderr"` (any case), or any object with `write` and `flush` | `"stdout"` |
 | `color` | `"auto"`, `"always"`, `"never"` | `"auto"` |
 | `bar` | `"auto"`, `"always"`, `"never"` | `"auto"` |
 | `min_interval` | seconds, 0 or more | `15` |

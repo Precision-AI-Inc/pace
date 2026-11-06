@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `logger.configure(stream=...)` reads a stream name in any case, as `PACE_STREAM` already did: `"STDERR"` now means stderr instead of stdout.
+- `PaceTqdm` holds `tqdm`'s data attributes as values (`iterable`, `leave`, `pos`, `fp`, `ncols`, `unit_scale`, `unit_divisor`, `miniters`, `start_t`, `last_print_n`, `last_print_t` and the rest of the constructor's display options), with `tqdm`'s defaults or the value passed. Before, reading one returned a do-nothing function, so code such as `bar.pos -= 1` (which `huggingface_hub` runs on its bars) failed. `n`, `total` and `desc` were already values.
+- `PaceTqdm.set_description_str` changes the label, as `set_description` does; before, it was accepted and ignored.
+
+### Changed
+
+- `logger.configure(stream=...)` with a name other than `stdout` or `stderr` now warns (`UserWarning`) before falling back to stdout, as it always did. It does not raise, unlike an unknown `color` or `bar` mode, so code that passed such a name keeps running. `PACE_STREAM` keeps its documented behaviour: any other value means stdout, without a warning.
+- The docstrings of `track` and `progress`, the Progress page and the specification's Compatibility section note that the two take their positional arguments in different orders, and that the orders stay as they are under 1.x.
+- Links to OrchAI's example repository (`Precision-AI-Inc/orchai-examples`) in the docs and the `adopt-pace` skill are marked as for OrchAI users, since that repository is private. The skill's dependency pattern has a standalone `requirements.txt` and Dockerfile example, and the OrchAI page points to Pace's own examples, so nothing depends on the private repository.
+
 ## [1.0.0] - 2026-11-05
 
 Pace 1.0.0 is the first stable release. From here the Python API (`precisionai.pace.__all__` and each public submodule's `__all__`), the `[pace ...]` trailer, the `PACE_*` variables and `configure()` options, and the `ForecastConfig` field names follow semantic versioning; see [Compatibility](https://github.com/Precision-AI-Inc/pace/blob/main/README.md#compatibility). The line format and the behaviour are the same as 0.1.3.

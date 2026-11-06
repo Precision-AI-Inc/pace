@@ -108,9 +108,11 @@ edits anything. Other ways to install it:
 
 ## What the example jobs taught
 
-The [OrchAI example jobs](https://github.com/Precision-AI-Inc/orchai-examples) (a private
-repository: ask for access if the links do not open) each run one pattern end to end on
-OrchAI, with a config to submit it:
+The [OrchAI example jobs](https://github.com/Precision-AI-Inc/orchai-examples) (for OrchAI
+users; private repository, so ask for access if the links do not open) each run one
+pattern end to end on OrchAI, with a config to submit it. Pace's own
+[examples](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md) show the
+same patterns without OrchAI:
 
 | Your job | Pattern | Example |
 |---|---|---|
