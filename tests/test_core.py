@@ -138,6 +138,39 @@ def test_configured_stream_name_beats_environment(
     assert "to stdout" in capsys.readouterr().out
 
 
+def test_a_configured_stream_name_is_read_in_any_case(capsys: pytest.CaptureFixture[str]) -> None:
+    out = Logger()
+    out.configure(stream=" STDERR ")
+    out.info("to stderr")
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "to stderr" in captured.err
+
+
+def test_an_unknown_configured_stream_name_warns_and_means_stdout(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = Logger()
+    monkeypatch.setenv("PACE_STREAM", "stderr")
+    with pytest.warns(UserWarning, match="stream must be 'stdout', 'stderr'") as caught:
+        out.configure(stream="bogus")
+    assert caught[0].filename == __file__
+    out.info("to stdout")
+    captured = capsys.readouterr()
+    assert "to stdout" in captured.out
+    assert captured.err == ""
+
+
+def test_an_unknown_stream_variable_means_stdout_without_a_warning(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, recwarn: pytest.WarningsRecorder
+) -> None:
+    out = Logger()
+    monkeypatch.setenv("PACE_STREAM", "bogus")
+    out.info("to stdout")
+    assert "to stdout" in capsys.readouterr().out
+    assert not [w for w in recwarn if issubclass(w.category, UserWarning)]
+
+
 def test_stream_replaced_after_first_write_is_honoured(monkeypatch: pytest.MonkeyPatch) -> None:
     out = Logger()
     first, second = io.StringIO(), io.StringIO()

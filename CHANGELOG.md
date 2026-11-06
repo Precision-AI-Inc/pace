@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `logger.configure(stream=...)` reads a stream name in any case, as `PACE_STREAM` already did: `"STDERR"` now means stderr instead of stdout.
+- `PaceTqdm` holds `tqdm`'s data attributes as values (`iterable`, `leave`, `pos`, `fp`, `ncols`, `unit_scale`, `unit_divisor`, `miniters`, `start_t`, `last_print_n`, `last_print_t` and the rest of the constructor's display options), with `tqdm`'s defaults or the value passed. Before, code that read or changed one of tqdm's data attributes (for example `bar.pos -= 1`) got a function instead of the value. `n`, `total` and `desc` were already values.
+- `PaceTqdm.set_description_str` changes the label, as `set_description` does; before, it was accepted and ignored.
+
 ### Changed
 
+- `logger.configure(stream=...)` with a name other than `stdout` or `stderr` now warns (`UserWarning`) before falling back to stdout, as it always did. It does not raise, unlike an unknown `color` or `bar` mode, so code that passed such a name (or `""`) keeps running, unless warnings are turned into errors (`-W error`, `filterwarnings = error`), where it now raises `UserWarning` instead of passing silently. `PACE_STREAM` keeps its documented behaviour: any other value means stdout, without a warning.
+- The docstrings of `track` and `progress`, the Progress page and the specification's Compatibility section note that the two take their positional arguments in different orders, and that the orders stay as they are under 1.x.
 - The docs and the `adopt-pace` skill no longer carry pages for one particular platform, or links to private example repositories. "Getting started on OrchAI" is replaced by [Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/running-on-a-scheduler.md), a new page at a new address (the old address now only says where the page moved), which holds the general lessons: count steps, not epochs; one root scope per job; `PYTHONUNBUFFERED=1` and `TQDM_DISABLE=1` in the image; a quoted minimum version in a Dockerfile, never a pin; cached images; `PACE_MIN_INTERVAL` for short runs; checking a short run with `verify.py`; progress from rank 0 only; and that log collectors usually read both stdout and stderr. The skill's `patterns/orchai.md` is gone, and its patterns describe the vLLM, model-server and TRL cases inline. [skills/README.md](https://github.com/Precision-AI-Inc/pace/blob/main/skills/README.md) explains how to use the skill with coding agents other than Claude Code.
 
 ## [1.0.0] - 2026-11-05

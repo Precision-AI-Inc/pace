@@ -20,6 +20,12 @@ derived from its description (`"Fine-tune 7B"` becomes `fine-tune-7b`) or given
 with `scope="..."`. Ids are unique within a process: if you open a second scope
 called `Train`, it is `train-2`.
 
+Pass everything after the first argument by keyword. `track` and `progress` take their
+positional arguments in different orders, `track(iterable, description, unit, total)` and
+`progress(total, description, unit)`, so `track(items, "Train", "step", 100)` and
+`progress(100, "Train", "step")` agree but `track(items, 100)` makes `100` the description.
+The orders are part of the 1.0 API and stay as they are.
+
 ## A plain loop
 
 ```python
