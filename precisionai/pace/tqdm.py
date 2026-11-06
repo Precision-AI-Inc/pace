@@ -13,6 +13,7 @@ It is written against the ``tqdm`` calls such libraries make, not as a subclass 
 """
 
 import contextlib
+import sys
 from collections.abc import Iterable, Iterator, Sized
 from typing import Any, Self
 
@@ -126,8 +127,10 @@ class PaceTqdm:
         self.dynamic_miniters = ignored.get("miniters") is None
         if self.dynamic_miniters:
             self.miniters = 0
-        self.fp = ignored.get("file")
-        self.pos = ignored.get("position") or 0
+        # As tqdm: ``fp`` is the stream given or stderr (Pace never writes to it), and ``pos``
+        # stores a given position negated.
+        self.fp = ignored.get("file") or sys.stderr
+        self.pos = -(ignored.get("position") or 0)
         # tqdm's times are ``time.time()`` values, so a caller compares them with that; Pace's
         # own rates use the monotonic clock and never read these.
         self.start_t = self.last_print_t = self._log.clock.wall()

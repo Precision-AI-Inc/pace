@@ -4,6 +4,7 @@
 """Tests for the tqdm-compatible class, including the calls vLLM makes with one."""
 
 import functools
+import sys
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -218,7 +219,7 @@ def test_tqdm_data_attributes_are_values_not_methods(quiet: Logger, clock: FakeC
     assert bar.miniters == 0
     assert bar.dynamic_miniters is True
     assert bar.ncols is None
-    assert bar.fp is None
+    assert bar.fp is sys.stderr
     assert bar.start_t == clock.wall
     assert bar.last_print_n == 0
     clock.advance(3.0)
@@ -240,7 +241,7 @@ def test_tqdm_arguments_are_kept_under_their_attribute_names(quiet: Logger) -> N
         logger=quiet,
     )
     assert bar.leave is False
-    assert bar.pos == 2
+    assert bar.pos == -2  # tqdm stores a given position negated
     assert bar.fp is sink
     assert bar.unit_scale is True
     assert bar.miniters == 5
@@ -262,7 +263,7 @@ def test_a_position_can_be_moved_as_huggingface_hub_does(quiet: Logger) -> None:
     bar = PaceTqdm(total=3, position=4, logger=quiet)
     bar.pos -= 1
     bar.refresh()
-    assert bar.pos == 3
+    assert bar.pos == -5
 
 
 def test_reset_restarts_the_start_time(quiet: Logger, clock: FakeClock) -> None:
