@@ -5,8 +5,9 @@ use any logger. Each progress line also ends with a short machine-readable trail
 (`[pace ...]`) that a scheduler can read to estimate when the job will finish.
 You do not have to do anything extra for that.
 
-Running jobs on OrchAI? [Getting started on OrchAI](orchai.md) is the short path: the
-dependency, one root scope, and what to check after you submit.
+Running jobs in containers or under a scheduler?
+[Running Pace on a cluster or scheduler](running-on-a-scheduler.md) is the short path: the dependency,
+one root scope, and a local check before you submit.
 
 ## Install
 
@@ -135,8 +136,9 @@ removes the duplicates; see [Reading Pace output](reading-output.md).
 
 - [Examples](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md): one
   runnable script per style of logging and progress. Copy the one that matches your job.
-- [Getting started on OrchAI](orchai.md): the five steps for an OrchAI job, and the
-  `adopt-pace` Claude Code skill that makes them for you.
+- [Running Pace on a cluster or scheduler](running-on-a-scheduler.md): the five steps for a job that
+  runs in a container or under a scheduler, and the `adopt-pace` skill that makes them
+  for you.
 - [Logging](logging.md): levels, `exception`, configuration, capturing the
   standard `logging` module.
 - [Progress](progress.md): `track`, `progress`, `timed`, `phase`, `plan`,

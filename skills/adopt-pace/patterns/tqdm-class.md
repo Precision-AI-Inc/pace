@@ -35,13 +35,12 @@ outputs = llm.generate(prompts, params, use_tqdm=PaceTqdm)
   ```
 
   Progress is then reported a chunk at a time; a smaller chunk gives a smoother estimate.
+  A vision-language model captioning images works the same way: count images, and
+  advance by the number in each chunk. Pace's examples have no vLLM script: this snippet
+  is the whole pattern.
 - vLLM's own log lines are separate: see `logging.md` (`VLLM_CONFIGURE_LOGGING=0`).
 
 ## Examples
 
 - Pace: [`library_hooks.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/library_hooks.py)
   (`PaceTqdm` with a stand-in library).
-- Tested, in OrchAI's example repo, with chunked progress:
-  [`llm/generate_vllm.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/generate_vllm.py)
-  and, for a vision-language model with `track` over chunks of images,
-  [`vlm/caption_vllm.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/vlm/caption_vllm.py).

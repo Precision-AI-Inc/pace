@@ -35,6 +35,7 @@ trainer.train(resume_from_checkpoint=args.resume)
 
 ## Examples
 
-- Pace: [`transformers_example.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/transformers_example.py).
-- Tested: [`llm/sft_trl_lora.py`](https://github.com/Precision-AI-Inc/orchai-examples/blob/main/llm/sft_trl_lora.py)
-  in OrchAI's example repo (TRL `SFTTrainer` with LoRA, `PaceCallback("Fine-tune")`, resume).
+- Pace: [`transformers_example.py`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/transformers_example.py)
+  (a plain `Trainer`). A TRL fine-tune (`SFTTrainer` with a LoRA adapter, resumed with
+  `resume_from_checkpoint`) takes the same `callbacks=[PaceCallback("Fine-tune")]` and
+  needs nothing else.

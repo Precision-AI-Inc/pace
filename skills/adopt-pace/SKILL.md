@@ -1,6 +1,6 @@
 ---
 name: adopt-pace
-description: Add Pace (precisionai-pace) logging and progress reporting to this repository so its jobs report completion estimates to a scheduler such as OrchAI. Use when asked to "add Pace", "add progress reporting", "make this job report its ETA", or to adopt precisionai-pace in a training, evaluation, inference or data-pipeline repo (plain PyTorch, PyTorch Lightning, Hugging Face Transformers/TRL, custom loops, concurrent evaluation harnesses, model servers).
+description: Add Pace (precisionai-pace) logging and progress reporting to this repository so its jobs report completion estimates to a scheduler, log collector or dashboard. Use when asked to "add Pace", "add progress reporting", "make this job report its ETA", or to adopt precisionai-pace in a training, evaluation, inference or data-pipeline repo (plain PyTorch, PyTorch Lightning, Hugging Face Transformers/TRL, custom loops, concurrent evaluation harnesses, model servers).
 ---
 
 # Adopt Pace in this repository
@@ -32,8 +32,8 @@ Pass `description=`, `unit=`, `total=`, `scope=` by keyword.
 
 With `git ls-files`, `ls` and grep, note:
 
-1. **What the job runs** (Dockerfile `CMD`, `orch_starter/config.yaml`, `[project.scripts]`,
-   Makefile, README). Several scripts: which are jobs? Ask if unclear. Instrument the script,
+1. **What the job runs** (Dockerfile `CMD`, a scheduler's job file such as a Slurm script or
+   a job config, `[project.scripts]`, Makefile, README). Several scripts: which are jobs? Ask if unclear. Instrument the script,
    not the launcher (`torchrun`, `accelerate launch`).
 2. **Framework** (Lightning, `Trainer`/`SFTTrainer`, `accelerate`, DDP, a plain loop). One that
    builds the trainer from config (Axolotl, LLaMA-Factory, LightningCLI) needs another hook.
@@ -49,10 +49,9 @@ With `git ls-files`, `ls` and grep, note:
 
 ## 2. Choose the scopes
 
-Each file ends with runnable examples to copy: Pace's
-[`examples/`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md) and
-tested ones in OrchAI's [example repo](https://github.com/Precision-AI-Inc/orchai-examples)
-(detection, LLM, VLM).
+Each file ends with runnable examples to copy from Pace's
+[`examples/`](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md), or
+says the snippet in it is the whole pattern (vLLM, a model server, TRL).
 
 | Situation in the repo | Read |
 |---|---|
@@ -69,7 +68,6 @@ tested ones in OrchAI's [example repo](https://github.com/Precision-AI-Inc/orcha
 | A library call that takes a `tqdm` class (vLLM `generate(use_tqdm=)`), or vLLM in chunks | `patterns/tqdm-class.md` |
 | Standard `logging`, a library's own log lines | `patterns/logging.md` |
 | Any dependency edit (always) | `patterns/dependencies.md` |
-| The job runs on OrchAI (`orch_starter/` in the repo, or the user says so) | `patterns/orchai.md` |
 
 **Choosing the root.** Ask: "when this scope ends, is the job really done?" If more than a few
 percent of the runtime comes after the loop (evaluation, export, upload), the loop alone is
@@ -94,7 +92,12 @@ Pace plan
 ```
 
 **Offer**, do not do, `capture_logging()`, turning off a framework's own bar,
-`PACE_STREAM=stderr` and `PACE_BAR=never`.
+`PACE_STREAM=stderr` and `PACE_BAR=never`. For a job that runs in a container, also offer
+`ENV PYTHONUNBUFFERED=1` when the job prints (Pace flushes its own lines; `print` is
+block-buffered without a terminal) and `ENV TQDM_DISABLE=1` when Pace replaced the main
+`tqdm` and libraries still draw bars while loading (vLLM, `datasets`): container log
+collectors usually read stdout and stderr, so those bars land in the job's log. Before
+offering `PACE_STREAM=stderr`, check that whatever reads the job's log reads stderr too.
 
 ## 4. Edit
 
@@ -134,9 +137,12 @@ In this order: **Changed** (a line per file); **Root scope** (id, unit, total, w
 the scheduler can estimate**; **Verified** (the exact command and verdict) and **Not run**
 (GPU, DDP, callback, Docker build, and why); **Remaining gaps** (unknown totals, work after
 the root, evaluation pauses, early stopping, lock files, wrappers with no hook, an unused
-`tqdm` dependency left in place); **Optional follow-ups** not applied. If the repo has
-`orch_starter/config*.yaml` files, offer `project.expected_runtime_minutes` (`patterns/orchai.md`);
-invent no other config keys.
+`tqdm` dependency left in place); **Optional follow-ups** not applied; invent no scheduler
+config keys. If the job's length is a flag (`--epochs`, `--steps`), say that a run of a
+couple of minutes may finish before any estimate appears: a demo needs about five minutes
+of work, or a lower `PACE_MIN_INTERVAL`, to show a live estimate. Point the user at
+[Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/running-on-a-scheduler.md)
+for the same steps by hand.
 
 An honest "unknown" beats an invented total. If Pace is not on the index the repo installs
 from, the dependency edit is still right; say the install fails until it is.

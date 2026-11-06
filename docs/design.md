@@ -17,9 +17,9 @@ override the output ones with `PACE_MIN_INTERVAL` and `PACE_HEARTBEAT` (or
 - Progress reporting for the shapes ML work actually takes: bounded loops, manual
   counters, timed steps, multi-phase pipelines, PyTorch Lightning and Hugging Face
   training.
-- Output that a scheduler can read to estimate when a job will finish. OrchAI is the
-  first such consumer: it reads the job's logs, estimates completion, and uses the
-  estimate to show users when their task will be done and to place queued work.
+- Output that a scheduler can read to estimate when a job will finish: it reads the
+  job's logs, estimates completion, and uses the estimate to show users when their task
+  will be done and to place queued work.
 
 ## Non-goals
 
