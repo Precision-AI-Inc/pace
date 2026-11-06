@@ -9,8 +9,8 @@ predict pass. Only global rank 0 writes, whatever ``PACE_ALL_RANKS`` says, so a
 multi-GPU job still produces one record per scope.
 
 Install with ``pip install precisionai-pace[lightning]``. Both ``lightning`` (2.x) and
-the older ``pytorch_lightning`` import names are supported. When both are installed the
-callback is a subclass of both packages' ``Callback``, so either package's ``Trainer``
+the older ``pytorch_lightning`` import names are supported. When both are installed (2.x)
+the callback is a subclass of both packages' ``Callback``, so either package's ``Trainer``
 accepts it.
 """
 
@@ -28,9 +28,15 @@ try:
 except ImportError:
     pass
 try:
+    import pytorch_lightning as _pytorch_lightning  # type: ignore[import]
     from pytorch_lightning.callbacks import Callback as _PytorchLightningCallback  # type: ignore[import]
 
-    _CALLBACK_BASES.append(_PytorchLightningCallback)
+    # Hooks the callback does not override come from the first base. pytorch_lightning 2.x is
+    # the same code as lightning 2.x, so both bases are safe; a 1.x Trainer calls some hooks
+    # with other arguments, so 1.x is a base only when it is the one package installed.
+    _major = str(getattr(_pytorch_lightning, "__version__", "2")).split(".")[0]
+    if not _CALLBACK_BASES or not _major.isdigit() or int(_major) >= 2:
+        _CALLBACK_BASES.append(_PytorchLightningCallback)
 except ImportError:
     pass
 _LIGHTNING_AVAILABLE = bool(_CALLBACK_BASES)

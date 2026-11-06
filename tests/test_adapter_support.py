@@ -197,10 +197,18 @@ def test_the_lightning_adapter_subclasses_both_packages_when_both_are_installed(
         callbacks = types.ModuleType(f"{module or package}.callbacks")
         callbacks.Callback = callback  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, f"{module or package}.callbacks", callbacks)
+    sys.modules["pytorch_lightning"].__version__ = "2.6.0"  # type: ignore[attr-defined]
     fresh = load_fresh(pace_lightning, "pace_lightning_both")
     assert fresh._LIGHTNING_AVAILABLE is True
     assert issubclass(fresh.PaceCallback, NewCallback)
     assert issubclass(fresh.PaceCallback, OldCallback)
+
+    # A 1.x pytorch_lightning calls some hooks with other arguments than lightning 2.x's
+    # Callback takes, so beside lightning it is not a base.
+    sys.modules["pytorch_lightning"].__version__ = "1.9.5"  # type: ignore[attr-defined]
+    older = load_fresh(pace_lightning, "pace_lightning_both_older")
+    assert issubclass(older.PaceCallback, NewCallback)
+    assert not issubclass(older.PaceCallback, OldCallback)
 
 
 def test_the_adapters_degrade_to_a_plain_class_when_nothing_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
