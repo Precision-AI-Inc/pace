@@ -13,6 +13,7 @@ It is written against the ``tqdm`` calls such libraries make, not as a subclass 
 """
 
 import contextlib
+import sys
 from collections.abc import Iterable, Iterator, Sized
 from typing import Any, Self
 
@@ -26,6 +27,28 @@ __all__ = ["PaceTqdm"]
 # it is never reported as zero.
 _MIN_ELAPSED = 1e-6
 
+# tqdm's data attributes that share a name with its constructor argument, with tqdm's
+# defaults. They are set as values so that a caller reading one (huggingface_hub reads
+# ``pos``) gets what tqdm would give, not the do-nothing method ``__getattr__`` returns.
+_TQDM_SETTINGS: dict[str, Any] = {
+    "ascii": None,
+    "bar_format": None,
+    "colour": None,
+    "delay": 0,
+    "dynamic_ncols": False,
+    "gui": False,
+    "leave": True,
+    "lock_args": None,
+    "maxinterval": 10.0,
+    "mininterval": 0.1,
+    "miniters": 0,
+    "ncols": None,
+    "nrows": None,
+    "smoothing": 0.3,
+    "unit_divisor": 1000,
+    "unit_scale": False,
+}
+
 
 def _ignore(*args: Any, **kwargs: Any) -> None:
     """Accept any call and do nothing."""
@@ -38,9 +61,10 @@ class PaceTqdm:
     ``tqdm``'s bar does. It works both ways ``tqdm`` is used: wrapping an iterable
     (``PaceTqdm(items, desc="Render")``) and counting by hand
     (``PaceTqdm(total=100)`` and ``update(n)``). Everything a bar would show other than
-    the count (postfix text, column widths, colours) is accepted and ignored. A
-    ``tqdm`` method this class does not have is accepted and ignored too, so a library
-    that calls an unusual one does not fail because of Pace.
+    the count (postfix text, column widths, colours) is accepted and ignored, but kept
+    under ``tqdm``'s attribute name (``leave``, ``ncols``, ``pos``, ...) so a caller that
+    reads one gets a value. A ``tqdm`` method this class does not have is accepted and
+    ignored too, so a library that calls an unusual one does not fail because of Pace.
 
     Parameters
     ----------
@@ -93,10 +117,24 @@ class PaceTqdm:
         if total is None and isinstance(iterable, Sized):
             with contextlib.suppress(Exception):
                 total = len(iterable)
-        self._iterable = iterable
+        self.iterable = iterable
         self._log = logger or default_logger
         self._started = self._log.clock.monotonic()
         self._total = total
+        for name, default in _TQDM_SETTINGS.items():
+            setattr(self, name, ignored.get(name, default))
+        # As tqdm: no ``miniters`` (or ``None``) is 0 with dynamic miniters; any number is fixed.
+        self.dynamic_miniters = ignored.get("miniters") is None
+        if self.dynamic_miniters:
+            self.miniters = 0
+        # As tqdm: ``fp`` is the stream given or stderr (Pace never writes to it), and ``pos``
+        # stores a given position negated.
+        self.fp = ignored.get("file") or sys.stderr
+        self.pos = -(ignored.get("position") or 0)
+        # tqdm's times are ``time.time()`` values, so a caller compares them with that; Pace's
+        # own rates use the monotonic clock and never read these.
+        self.start_t = self.last_print_t = self._log.clock.wall()
+        self.last_print_n = initial
         self.desc = "" if desc is None else str(desc)
         self.unit = str(unit)
         self.initial = initial
@@ -116,10 +154,10 @@ class PaceTqdm:
         The scope ends when the items run out or the loop is abandoned, and fails when
         the iterable raises, as for :func:`~precisionai.pace.scopes.track`.
         """
-        if self._iterable is None:
+        if self.iterable is None:
             return
         try:
-            for item in self._iterable:
+            for item in self.iterable:
                 yield item
                 self.update()
         except GeneratorExit:
@@ -133,7 +171,7 @@ class PaceTqdm:
 
     def __len__(self) -> int:
         """Return the length of the iterable, or the total when there is none."""
-        count = len(self._iterable) if isinstance(self._iterable, Sized) else self._total
+        count = len(self.iterable) if isinstance(self.iterable, Sized) else self._total
         if count is None:
             raise TypeError("object of type 'PaceTqdm' has no len()")
         return int(count)
@@ -154,7 +192,12 @@ class PaceTqdm:
             self.fail()
 
     def __getattr__(self, name: str) -> Any:
-        """Return a do-nothing method for any other public ``tqdm`` method."""
+        """Return a do-nothing method for any other public ``tqdm`` method.
+
+        Only names the object does not have reach here. ``tqdm``'s data attributes (``n``,
+        ``total``, ``desc``, ``pos``, ``leave``, ``start_t``, ...) are set as values, so
+        reading one gives a value, as with ``tqdm``.
+        """
         if name.startswith("_"):
             raise AttributeError(name)
         return _ignore
@@ -193,6 +236,8 @@ class PaceTqdm:
 
     def refresh(self) -> None:
         """Report the current value of ``n``, which the caller may have set directly."""
+        self.last_print_n = self.n
+        self.last_print_t = self._log.clock.wall()
         if self._scope is not None:
             self._scope.update(self.n)
 
@@ -200,6 +245,7 @@ class PaceTqdm:
         """Start counting again from zero, with a new total when one is given."""
         self.n = 0
         self._started = self._log.clock.monotonic()
+        self.start_t = self._log.clock.wall()
         if total is not None:
             self.total = total
         self.refresh()
@@ -209,6 +255,10 @@ class PaceTqdm:
         self.desc = "" if desc is None else str(desc)
         if self._scope is not None:
             self._scope.description = self.desc
+
+    def set_description_str(self, desc: str | None = None, refresh: bool = True) -> None:
+        """Change the label, as :meth:`set_description` does (``tqdm`` differs only in the bar's text)."""
+        self.set_description(desc, refresh)
 
     def set_postfix(self, ordered_dict: Any = None, refresh: bool = True, **kwargs: Any) -> None:
         """Accept postfix text for compatibility; it is not written."""

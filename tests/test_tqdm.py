@@ -4,6 +4,7 @@
 """Tests for the tqdm-compatible class, including the calls vLLM makes with one."""
 
 import functools
+import sys
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -202,6 +203,82 @@ def test_an_unknown_tqdm_method_is_accepted_and_ignored(quiet: Logger) -> None:
     assert bar.clear() is None
     assert bar.unpause(1, key="x") is None
     assert not hasattr(bar, "_private")
+
+
+def test_tqdm_data_attributes_are_values_not_methods(quiet: Logger, clock: FakeClock) -> None:
+    items = [1, 2]
+    bar = PaceTqdm(items, desc="Run", logger=quiet)
+    assert bar.n == 0
+    assert bar.total == 2
+    assert bar.desc == "Run"
+    assert bar.iterable is items
+    assert bar.leave is True
+    assert bar.pos == 0
+    assert bar.unit_scale is False
+    assert bar.unit_divisor == 1000
+    assert bar.miniters == 0
+    assert bar.dynamic_miniters is True
+    assert bar.ncols is None
+    assert bar.fp is sys.stderr
+    assert bar.start_t == clock.wall
+    assert bar.last_print_n == 0
+    clock.advance(3.0)
+    bar.update(2)
+    assert bar.last_print_n == 2
+    assert bar.last_print_t == clock.wall
+
+
+def test_tqdm_arguments_are_kept_under_their_attribute_names(quiet: Logger) -> None:
+    sink = object()
+    bar = PaceTqdm(
+        total=3,
+        leave=False,
+        position=2,
+        file=sink,
+        unit_scale=True,
+        miniters=5,
+        bar_format="{l_bar}",
+        logger=quiet,
+    )
+    assert bar.leave is False
+    assert bar.pos == -2  # tqdm stores a given position negated
+    assert bar.fp is sink
+    assert bar.unit_scale is True
+    assert bar.miniters == 5
+    assert bar.dynamic_miniters is False
+    assert bar.bar_format == "{l_bar}"
+
+
+def test_explicit_none_and_zero_arguments_are_kept_as_tqdm_keeps_them(quiet: Logger) -> None:
+    unset = PaceTqdm(total=3, leave=None, miniters=None, logger=quiet)
+    assert unset.leave is None
+    assert unset.miniters == 0
+    assert unset.dynamic_miniters is True
+    fixed = PaceTqdm(total=3, miniters=0, logger=quiet)
+    assert fixed.miniters == 0
+    assert fixed.dynamic_miniters is False
+
+
+def test_a_position_can_be_moved_as_huggingface_hub_does(quiet: Logger) -> None:
+    bar = PaceTqdm(total=3, position=4, logger=quiet)
+    bar.pos -= 1
+    bar.refresh()
+    assert bar.pos == -5
+
+
+def test_reset_restarts_the_start_time(quiet: Logger, clock: FakeClock) -> None:
+    bar = PaceTqdm(total=3, logger=quiet)
+    clock.advance(5.0)
+    bar.reset()
+    assert bar.start_t == clock.wall
+
+
+def test_set_description_str_changes_the_label(quiet: Logger, stream: FakeStream) -> None:
+    bar = PaceTqdm(total=3, desc="Downloading bytes", logger=quiet)
+    bar.set_description_str("Download complete")
+    bar.update(1)
+    assert bar.desc == "Download complete"
+    assert "Download complete" in stream.lines()[-1]
 
 
 def test_write_goes_through_the_pace_logger(capsys: pytest.CaptureFixture[str]) -> None:

@@ -10,7 +10,7 @@ details and examples.
 | Environment variable | `configure(...)` | Values | Default | Effect |
 |---|---|---|---|---|
 | `PACE_LEVEL` | `level=` | `debug`, `info`, `success`, `warning`, `error`, `critical` (any case); `configure` also takes a number | `info` | Lowest level written. Progress lines are never filtered by it. |
-| `PACE_STREAM` | `stream=` | `stdout`, `stderr`; `configure` also takes any object with `write` and `flush` | `stdout` | Where lines go. Any other value of the variable means `stdout`. |
+| `PACE_STREAM` | `stream=` | `stdout`, `stderr`; `configure` also takes any object with `write` and `flush` | `stdout` | Where lines go. Any other value of the variable means `stdout`, silently; any other name passed to `configure` also means `stdout`, with a `UserWarning`. |
 | `PACE_COLOR` | `color=` | `auto`, `always`, `never` | `auto` | Colour of the level label. `auto` is colour on a terminal unless `NO_COLOR` is set. |
 | `NO_COLOR` | none | any non-empty value | unset | Turns colour off in `auto` mode. An explicit `always` still wins. |
 | `PACE_BAR` | `bar=` | `auto`, `always`, `never` | `auto` | The in-place progress bar. `auto` is a bar on a terminal and normal lines otherwise. |
@@ -23,7 +23,9 @@ Rules that apply to all of them:
 - Values are read case-insensitively with surrounding whitespace removed. An empty
   variable is the same as an unset one.
 - A value that is not valid is ignored and the default applies; the environment never
-  raises. `configure` is stricter: an invalid level, mode or interval raises `ValueError`.
+  raises. `configure` is stricter: an invalid level, mode or interval raises `ValueError`,
+  and an unknown `stream` name warns and means `stdout` (it does not raise, because 1.0.0
+  accepted any name that way).
 - Environment variables are read each time a line is written, so a change made while the
   process runs applies from the next line.
 

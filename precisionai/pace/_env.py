@@ -13,6 +13,7 @@ import contextlib
 import math
 import os
 import sys
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -34,6 +35,7 @@ DEFAULT_LEVEL = LEVELS["INFO"]
 # Global ranks first: LOCAL_RANK counts from 0 on every node, so it is the last resort.
 _RANK_VARIABLES = ("RANK", "OMPI_COMM_WORLD_RANK", "PMI_RANK", "SLURM_PROCID", "LOCAL_RANK")
 _COLOR_MODES = ("auto", "always", "never")
+_STREAM_NAMES = ("stdout", "stderr")
 _TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
 
 
@@ -143,6 +145,31 @@ def _same(value: Any) -> Any:
     return value
 
 
+def _check_stream(value: Any) -> Any:
+    """Accept a stream name in any case, or an object; warn about any other name and use ``stdout``.
+
+    Up to 1.0.0 an unknown name meant stdout without a word, so it warns rather than raises:
+    a caller that passed one keeps running as before. The frames above this one are
+    ``Settings.update`` and ``Logger.configure``, so the warning points at their caller.
+    """
+    if not isinstance(value, str):
+        return value
+    name = value.strip().lower()
+    if name not in _STREAM_NAMES:
+        warnings.warn(
+            f"stream must be 'stdout', 'stderr' or a file-like object, got {value!r}; writing to stdout",
+            UserWarning,
+            stacklevel=4,
+        )
+        return "stdout"
+    return name
+
+
+def _stream_name(text: str) -> str:
+    """Read ``PACE_STREAM``: ``stderr`` means stderr and any other value stdout, without a warning."""
+    return text if text in _STREAM_NAMES else "stdout"
+
+
 def _stream(value: Any) -> Any:
     """Look up a stream name now, so that a redirected ``sys.stdout`` is honoured; an object is used as is."""
     if not isinstance(value, str):
@@ -168,7 +195,7 @@ class _Option:
 
 _OPTIONS: dict[str, _Option] = {
     "level": _Option("PACE_LEVEL", _check_level, DEFAULT_LEVEL),
-    "stream": _Option("PACE_STREAM", _same, "stdout", finish=_stream),
+    "stream": _Option("PACE_STREAM", _check_stream, "stdout", _stream_name, _stream),
     "color": _Option("PACE_COLOR", partial(_check_mode, "color"), "auto"),
     "bar": _Option("PACE_BAR", partial(_check_mode, "bar"), "auto"),
     "min_interval": _Option("PACE_MIN_INTERVAL", partial(_check_seconds, "min_interval"), DEFAULT_MIN_INTERVAL, float),
@@ -201,7 +228,12 @@ class Settings:
         ValueError
             If a value is not valid for its setting.
         """
-        checked = {name: _OPTIONS[name].check(value) for name, value in values.items() if value is not None}
+        # A loop, not a comprehension: a comprehension is a frame of its own before Python 3.12,
+        # which would move the caller a warning from ``check`` points at.
+        checked: dict[str, Any] = {}
+        for name, value in values.items():
+            if value is not None:
+                checked[name] = _OPTIONS[name].check(value)
         for name, value in checked.items():
             setattr(self, name, value)
 
