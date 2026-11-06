@@ -141,7 +141,7 @@ the root, evaluation pauses, early stopping, lock files, wrappers with no hook, 
 config keys. If the job's length is a flag (`--epochs`, `--steps`), say that a run of a
 couple of minutes may finish before any estimate appears: a demo needs about five minutes
 of work, or a lower `PACE_MIN_INTERVAL`, to show a live estimate. Point the user at
-[Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md)
+[Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/running-on-a-scheduler.md)
 for the same steps by hand.
 
 An honest "unknown" beats an invented total. If Pace is not on the index the repo installs

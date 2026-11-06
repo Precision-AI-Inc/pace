@@ -13,7 +13,7 @@ the main loop, one `root` scope), runs a short smoke test and checks the output 
 `verify.py`.
 
 The same steps by hand, for a job that runs in a container or under a scheduler, are in
-[Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/orchai.md).
+[Running Pace on a cluster or scheduler](https://github.com/Precision-AI-Inc/pace/blob/main/docs/running-on-a-scheduler.md).
 
 ### Install
 

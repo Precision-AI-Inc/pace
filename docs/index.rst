@@ -19,7 +19,7 @@ Contents
 
    readme
    getting-started
-   orchai
+   running-on-a-scheduler
    logging
    progress
    frameworks

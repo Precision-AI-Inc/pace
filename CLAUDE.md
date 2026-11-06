@@ -226,7 +226,7 @@ docs/
 ```
 
 - `conf.py` copies root `README.md` → `docs/readme.md` at build time
-- `docs/orchai.md` is the generic "Running Pace on a cluster or scheduler" page; it keeps that filename because other projects link to its URL. Keep it free of any one platform's details.
+- `docs/running-on-a-scheduler.md` is the generic "Running Pace on a cluster or scheduler" page; keep it free of any one platform's details. `docs/orchai.md` is an `orphan` stub (out of the toctree) that only points to it, kept because downstream repos still link to the old URL; delete it once none does.
 - The docs and `skills/` are for any public user: no product-specific pages, and no links to private repositories
 - Version read from `git describe --tags --exact-match`, falls back to `0.0.0`
 

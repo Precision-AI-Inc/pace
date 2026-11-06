@@ -6,7 +6,7 @@ use any logger. Each progress line also ends with a short machine-readable trail
 You do not have to do anything extra for that.
 
 Running jobs in containers or under a scheduler?
-[Running Pace on a cluster or scheduler](orchai.md) is the short path: the dependency,
+[Running Pace on a cluster or scheduler](running-on-a-scheduler.md) is the short path: the dependency,
 one root scope, and a local check before you submit.
 
 ## Install
@@ -136,7 +136,7 @@ removes the duplicates; see [Reading Pace output](reading-output.md).
 
 - [Examples](https://github.com/Precision-AI-Inc/pace/blob/main/examples/README.md): one
   runnable script per style of logging and progress. Copy the one that matches your job.
-- [Running Pace on a cluster or scheduler](orchai.md): the five steps for a job that
+- [Running Pace on a cluster or scheduler](running-on-a-scheduler.md): the five steps for a job that
   runs in a container or under a scheduler, and the `adopt-pace` skill that makes them
   for you.
 - [Logging](logging.md): levels, `exception`, configuration, capturing the
