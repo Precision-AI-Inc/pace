@@ -188,13 +188,37 @@ def test_splitter_returns_empty_lines() -> None:
 
 def test_splitter_handles_crlf_and_lone_cr() -> None:
     splitter = LineSplitter()
-    assert splitter.feed(b"one\r\ntwo\rstill two\r\n") == ["one", "two\rstill two"]
+    assert splitter.feed(b"one\r\ntwo\rstill two\r\n") == ["one", "two", "still two"]
 
 
 def test_splitter_crlf_split_across_chunks() -> None:
     splitter = LineSplitter()
-    assert splitter.feed(b"one\r") == []
-    assert splitter.feed(b"\ntwo\r\n") == ["one", "two"]
+    assert splitter.feed(b"one\r") == ["one"]
+    # The "\n" completes that "\r\n": no empty line for it.
+    assert splitter.feed(b"\ntwo\r\n") == ["two"]
+
+
+def test_splitter_reset_forgets_a_carriage_return_at_the_end_of_a_chunk() -> None:
+    splitter = LineSplitter()
+    assert splitter.feed(b"one\r") == ["one"]
+    splitter.reset()
+    assert splitter.feed(b"\ntwo\n") == ["", "two"]
+
+
+def test_splitter_reads_a_trailer_written_after_a_progress_bar() -> None:
+    # A tqdm bar on the same stream redraws with "\r" and no "\n", and Pace's line lands at
+    # the end of the last redraw: up to the "\n" that is far past the line limit.
+    redraws = b"".join(
+        b"\rEpoch 0:   2%%|1        | %d/5978 [02:00<1:50:52,  0.88it/s, loss=12.8]" % i for i in range(120)
+    )
+    assert len(redraws) > _MAX_LINE_BYTES
+    stream = redraws + b"Train 106/12000 [pace fit c=106 t=12000 e=120.1 q=2 r=878dccad]\n"
+    splitter = LineSplitter()
+    lines = [line for i in range(0, len(stream), 1000) for line in splitter.feed(stream[i : i + 1000])]
+    assert len(lines) == 121
+    record = parse_line(lines[-1])
+    assert record is not None
+    assert (record.scope, record.completed) == ("fit", 106)
 
 
 def test_splitter_multibyte_character_split_across_chunks() -> None:
@@ -235,13 +259,14 @@ def test_splitter_tail_memory_is_bounded() -> None:
     splitter = LineSplitter()
     for _ in range(100):
         splitter.feed(b"x" * 1000)
-        assert len(splitter._tail) <= _MAX_LINE_BYTES + 1
+        assert len(splitter._tail) <= _MAX_LINE_BYTES
 
 
 def test_splitter_line_of_exactly_the_limit_survives_split_crlf() -> None:
     splitter = LineSplitter()
-    assert splitter.feed(b"x" * _MAX_LINE_BYTES + b"\r") == []
-    assert splitter.feed(b"\n") == ["x" * _MAX_LINE_BYTES]
+    assert splitter.feed(b"x" * _MAX_LINE_BYTES) == []
+    assert splitter.feed(b"\r") == ["x" * _MAX_LINE_BYTES]
+    assert splitter.feed(b"\n") == []
 
 
 def test_splitter_reset_drops_partial_line() -> None:

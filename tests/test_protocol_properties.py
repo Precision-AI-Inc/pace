@@ -9,6 +9,7 @@ the same examples on every machine, so a failure is reproducible rather than fla
 """
 
 import math
+import re
 from typing import Any
 
 import pytest
@@ -150,10 +151,9 @@ def test_a_damaged_trailer_is_a_record_or_nothing_and_never_an_error(
 
 def reference_lines(data: bytes) -> list[str]:
     """What a stream of ``data`` holds, by the splitter's rules, computed without any chunking."""
-    *complete, rest = data.split(b"\n")
+    *complete, rest = re.split(rb"\r\n|\r|\n", data)
     lines = []
-    for line, final in [(line, False) for line in complete] + [(rest, True)]:
-        raw = line[:-1] if line.endswith(b"\r") else line
+    for raw, final in [(line, False) for line in complete] + [(rest, True)]:
         if len(raw) <= _MAX_LINE_BYTES and not (final and not raw):
             lines.append(raw.decode("utf-8", errors="replace"))
     return lines

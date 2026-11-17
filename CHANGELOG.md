@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Progress lines written while a progress bar is on the same stream are read. A bar (tqdm's, PyTorch Lightning's) redraws its line with `\r` and no `\n`, and Pace's line lands at the end of the last redraw. `LineSplitter` only ended a line at `\n`, so between two of Pace's lines it saw one line of hundreds of redraws, over the 4096-byte limit, and dropped it with the trailer at its end. A reader then saw only the occasional record that followed a newline, such as the first after a validation pass, and an estimate could stay in Learning for the whole run. A lone `\r` now ends a line too, as the specification says; `\r\n` is still one line ending.
+
 ## [1.0.3] - 2026-11-10
 
 ### Changed
