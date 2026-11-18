@@ -205,6 +205,20 @@ def test_splitter_reset_forgets_a_carriage_return_at_the_end_of_a_chunk() -> Non
     assert splitter.feed(b"\ntwo\n") == ["", "two"]
 
 
+def test_splitter_empty_chunk_between_cr_and_lf_keeps_one_line_ending() -> None:
+    splitter = LineSplitter()
+    assert splitter.feed(b"a\r") == ["a"]
+    assert splitter.feed(b"") == []
+    assert splitter.feed(b"\n") == []
+
+
+def test_splitter_forgets_a_carriage_return_once_another_byte_follows() -> None:
+    splitter = LineSplitter()
+    assert splitter.feed(b"a\r") == ["a"]
+    assert splitter.feed(b"b") == []
+    assert splitter.feed(b"\nc\n") == ["b", "c"]
+
+
 def test_splitter_reads_a_trailer_written_after_a_progress_bar() -> None:
     # A tqdm bar on the same stream redraws with "\r" and no "\n", and Pace's line lands at
     # the end of the last redraw: up to the "\n" that is far past the line limit.

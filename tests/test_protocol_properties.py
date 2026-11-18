@@ -194,6 +194,24 @@ def test_line_splitter_result_does_not_depend_on_where_the_chunks_fall(
     assert run_splitter(split_at(data, cuts)) == run_splitter([data]) == reference_lines(data)
 
 
+@PROFILE
+@hypothesis.given(
+    st.lists(st.tuples(line_bytes(), st.sampled_from([b"\n", b"\r", b"\r\n", b""])), max_size=8),
+    st.lists(st.integers(0, 40_000), max_size=12),
+    st.booleans(),
+)
+def test_line_splitter_with_mixed_line_endings_and_empty_chunks(
+    pieces: list[tuple[bytes, bytes]], cuts: list[int], empty_chunks: bool
+) -> None:
+    # A "\r" followed by anything but "\n", and an empty chunk between "\r" and "\n", are the
+    # cases the newline-joined test above almost never draws.
+    data = b"".join(piece + end for piece, end in pieces)
+    chunks = split_at(data, cuts)
+    if empty_chunks:
+        chunks = [part for chunk in chunks for part in (chunk, b"")]
+    assert run_splitter(chunks) == run_splitter([data]) == reference_lines(data)
+
+
 @st.composite
 def estimator_streams(draw: Any) -> list[tuple[float, Record]]:
     names = ["a", "b", "c"]

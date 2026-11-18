@@ -90,9 +90,10 @@ splitter.flush()                   # [] : nothing left over
 
 - The chunk may end anywhere: inside a multi-byte character, or between `\r` and `\n`.
   The result does not depend on where the chunks fall.
-- `\n` and `\r\n` end a line. A bare `\r` does not, so the frames of an in-place terminal
-  bar (separated by `\r`) arrive as one long piece of text. If you read a pseudo-terminal,
-  have the job set `PACE_BAR=never`.
+- `\n`, `\r\n` and a bare `\r` each end a line, so each frame of an in-place bar (tqdm's,
+  a framework's) is a line of its own, and a Pace line written right after one is read
+  whole. `feed(b"two\rstill two\r\n")` returns `['two', 'still two']`. If you read a
+  pseudo-terminal, have the job set `PACE_BAR=never`.
 - Lines are decoded as UTF-8, with undecodable bytes replaced.
 - Memory is bounded. A line longer than 4096 bytes cannot hold a valid trailer, so it is
   dropped instead of buffered, however hostile the stream is.
