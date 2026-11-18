@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-11-18
+
 ### Fixed
 
 - Progress lines written while a progress bar is on the same stream are read. A bar (tqdm's, PyTorch Lightning's) redraws its line with `\r` and no `\n`, and Pace's line lands at the end of the last redraw. `LineSplitter` only ended a line at `\n`, so between two of Pace's lines it saw one line of hundreds of redraws, over the 4096-byte limit, and dropped it with the trailer at its end. A reader then saw only the occasional record that followed a newline, such as the first after a validation pass, and an estimate could stay in Learning for the whole run. A lone `\r` now ends a line too, and `docs/design.md` now says where a line ends; `\r\n` is still one line ending. A program that calls `LineSplitter` itself gets `"a\rb\n"` back as two lines where it used to get one.
@@ -137,7 +139,8 @@ The public API is trimmed before it is frozen. Every public submodule now has an
 - Runnable examples, one per style of logging and progress (plain loops, epochs, concurrent work, phases and a plan, resuming, unknown totals, nested scopes, `logging` capture, distributed ranks, and reading the output).
 - User documentation: getting started, logging, progress, framework integrations, migration guides (`print`, `tqdm`, Loguru, `logging`), configuration, a guide for programs that read Pace output, and a FAQ.
 
-[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Precision-AI-Inc/pace/compare/v1.0.0...v1.0.1
