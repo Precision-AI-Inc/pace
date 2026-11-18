@@ -9,6 +9,7 @@ the same examples on every machine, so a failure is reproducible rather than fla
 """
 
 import math
+import re
 from typing import Any
 
 import pytest
@@ -150,10 +151,9 @@ def test_a_damaged_trailer_is_a_record_or_nothing_and_never_an_error(
 
 def reference_lines(data: bytes) -> list[str]:
     """What a stream of ``data`` holds, by the splitter's rules, computed without any chunking."""
-    *complete, rest = data.split(b"\n")
+    *complete, rest = re.split(rb"\r\n|\r|\n", data)
     lines = []
-    for line, final in [(line, False) for line in complete] + [(rest, True)]:
-        raw = line[:-1] if line.endswith(b"\r") else line
+    for raw, final in [(line, False) for line in complete] + [(rest, True)]:
         if len(raw) <= _MAX_LINE_BYTES and not (final and not raw):
             lines.append(raw.decode("utf-8", errors="replace"))
     return lines
@@ -192,6 +192,24 @@ def test_line_splitter_result_does_not_depend_on_where_the_chunks_fall(
 ) -> None:
     data = b"\n".join(pieces) + (b"\n" if ends_with_newline else b"")
     assert run_splitter(split_at(data, cuts)) == run_splitter([data]) == reference_lines(data)
+
+
+@PROFILE
+@hypothesis.given(
+    st.lists(st.tuples(line_bytes(), st.sampled_from([b"\n", b"\r", b"\r\n", b""])), max_size=8),
+    st.lists(st.integers(0, 40_000), max_size=12),
+    st.booleans(),
+)
+def test_line_splitter_with_mixed_line_endings_and_empty_chunks(
+    pieces: list[tuple[bytes, bytes]], cuts: list[int], empty_chunks: bool
+) -> None:
+    # A "\r" followed by anything but "\n", and an empty chunk between "\r" and "\n", are the
+    # cases the newline-joined test above almost never draws.
+    data = b"".join(piece + end for piece, end in pieces)
+    chunks = split_at(data, cuts)
+    if empty_chunks:
+        chunks = [part for chunk in chunks for part in (chunk, b"")]
+    assert run_splitter(chunks) == run_splitter([data]) == reference_lines(data)
 
 
 @st.composite

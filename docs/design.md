@@ -187,6 +187,10 @@ value    = "?" / 1*( ALPHA / DIGIT / "." / "_" / "-" / ":" / "," / "%" HEXDIG HE
 ```
 
 Items may come in any order; the writer uses the order of the fields table below. A
+line ends at `\n`, `\r\n` or a lone `\r`. A progress bar on the same stream redraws
+its line with `\r` and no `\n`, so a line written while one is on screen ends up
+after the last redraw. A consumer reading up to the next `\n` would see the redraws
+and the trailer as one line, far over the limit below. A
 consumer matches the trailer only at the end of the line, after removing ANSI escape
 sequences and trailing whitespace. Any character outside the value alphabet is
 percent-encoded (UTF-8, `%XX`). A line longer than 4096 bytes, more than 32 items (the head included), a repeated key or word, a missing required field, a key or

@@ -518,18 +518,28 @@ _parse_unit = partial(_parse_text, limit=_MAX_UNIT_CHARS, what="unit")
 _parse_label = partial(_parse_text, limit=_MAX_LABEL_CHARS, what="label")
 
 
+# Each of these ends a line; "\r\n" is one ending, not two.
+_LINE_END = re.compile(rb"\r\n?|\n")
+
+
 class LineSplitter:
     r"""Cut a byte stream read in arbitrary chunks into text lines.
 
     Memory stays bounded however hostile the stream: a line longer than
     4096 bytes cannot hold a valid trailer, so it is dropped rather
     than buffered, and the result does not depend on where the chunks fall.
-    ``\n`` and ``\r\n`` both end a line.
+    ``\n``, ``\r\n`` and a lone ``\r`` each end a line. A progress bar
+    (tqdm's, a framework's) redraws its line with ``\r`` and no ``\n``, and
+    a line written while it is on screen lands at the end of the last redraw.
+    Up to the next ``\n`` that is hundreds of redraws, past the limit, and
+    the trailer at its end would be dropped with them.
     """
 
     def __init__(self) -> None:
         self._tail = bytearray()
         self._skipping = False
+        # The last chunk ended in "\r": a "\n" opening the next one completes that "\r\n".
+        self._after_cr = False
 
     def feed(self, chunk: bytes) -> list[str]:
         r"""Add ``chunk`` and return the lines it completes.
@@ -547,13 +557,13 @@ class LineSplitter:
             replaced, without its line ending. Over-long lines are omitted.
         """
         lines: list[str] = []
-        start = 0
-        while True:
-            end = chunk.find(b"\n", start)
-            if end < 0:
-                break
-            self._complete(chunk, start, end, lines)
-            start = end + 1
+        if not chunk:
+            return lines
+        start = 1 if self._after_cr and chunk.startswith(b"\n") else 0
+        for match in _LINE_END.finditer(chunk, start):
+            self._complete(chunk, start, match.start(), lines)
+            start = match.end()
+        self._after_cr = chunk.endswith(b"\r")
         self._keep(chunk[start:])
         return lines
 
@@ -561,6 +571,7 @@ class LineSplitter:
         """Drop the partial line, for when the consumer detects a gap in the log."""
         self._tail.clear()
         self._skipping = False
+        self._after_cr = False
 
     def flush(self) -> list[str]:
         """Return the partial line left at the end of the stream, if any.
@@ -598,13 +609,10 @@ class LineSplitter:
         self._tail += rest
 
     def _too_long(self, extra: int) -> bool:
-        # One byte of slack: a line of exactly _MAX_LINE_BYTES waits here with its "\r".
-        return len(self._tail) + extra > _MAX_LINE_BYTES + 1
+        return len(self._tail) + extra > _MAX_LINE_BYTES
 
     @staticmethod
     def _emit(data: bytes, lines: list[str], *, drop_empty: bool = False) -> None:
-        if data.endswith(b"\r"):
-            data = data[:-1]
         if len(data) > _MAX_LINE_BYTES or (drop_empty and not data):
             return
         lines.append(data.decode("utf-8", errors="replace"))
